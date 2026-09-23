@@ -169,5 +169,4 @@ void main() {
     expect(source, contains("'stars': _stars"));
     expect(source, contains('_payloadSignature != payloadSignature'));
   });
-
 }

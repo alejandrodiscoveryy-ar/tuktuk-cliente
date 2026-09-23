@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -51,7 +52,9 @@ String? _marketText(Object? value) {
 
 @visibleForTesting
 bool isMarketplaceCustomerEntryUri(Uri uri) =>
-    uri.path == '/cliente/tuk' || uri.path == '/cliente/tuk/';
+    uri.queryParameters['mode'] == 'customer' ||
+    uri.path == '/cliente/tuk' ||
+    uri.path == '/cliente/tuk/';
 
 ThemeData buildAppTheme(Brightness brightness) => ThemeData(
       colorScheme: const ColorScheme.dark(
