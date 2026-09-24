@@ -194,9 +194,15 @@ class CustomerBookingFlowController extends ChangeNotifier {
 
 class MarketplaceCustomerBookingFlow extends StatefulWidget {
   const MarketplaceCustomerBookingFlow(
-      {required this.service, required this.session, super.key});
+      {required this.service,
+      required this.session,
+      this.controller,
+      this.onEditCustomer,
+      super.key});
   final MarketplaceCustomerService service;
   final MarketplaceCustomerSessionSnapshot session;
+  final CustomerBookingFlowController? controller;
+  final VoidCallback? onEditCustomer;
 
   @override
   State<MarketplaceCustomerBookingFlow> createState() =>
@@ -206,6 +212,7 @@ class MarketplaceCustomerBookingFlow extends StatefulWidget {
 class _MarketplaceCustomerBookingFlowState
     extends State<MarketplaceCustomerBookingFlow> {
   late final CustomerBookingFlowController flow;
+  bool _ownsFlow = false;
   final noteController = TextEditingController();
   final weightController = TextEditingController();
   final volumeController = TextEditingController();
@@ -215,11 +222,13 @@ class _MarketplaceCustomerBookingFlowState
   @override
   void initState() {
     super.initState();
-    flow = CustomerBookingFlowController(
-      MarketplaceMapService(widget.service._client),
-      widget.service,
-      widget.session,
-    )..addListener(_changed);
+    flow = widget.controller ??
+        CustomerBookingFlowController(
+            MarketplaceMapService(widget.service._client),
+            widget.service,
+            widget.session);
+    _ownsFlow = widget.controller == null;
+    flow.addListener(_changed);
   }
 
   void _changed() {
@@ -229,7 +238,7 @@ class _MarketplaceCustomerBookingFlowState
   @override
   void dispose() {
     flow.removeListener(_changed);
-    flow.dispose();
+    if (_ownsFlow) flow.dispose();
     noteController.dispose();
     weightController.dispose();
     volumeController.dispose();
@@ -249,7 +258,13 @@ class _MarketplaceCustomerBookingFlowState
           showRelief: showRelief,
           child: Column(
             children: [
-              TuktukFlowHeader(step: number),
+              Row(children: [
+                TextButton.icon(
+                    onPressed: _goBack,
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    label: const Text('Volver')),
+                Expanded(child: TuktukFlowHeader(step: number)),
+              ]),
               Expanded(
                 child: switch (step) {
                   MarketplaceBookingStep.location => _locationIntro(),
@@ -258,7 +273,8 @@ class _MarketplaceCustomerBookingFlowState
                       title: 'Elige el origen',
                       onConfirm: flow.setOrigin,
                     ),
-                  MarketplaceBookingStep.destination => MarketplaceLocationPicker(
+                  MarketplaceBookingStep.destination =>
+                    MarketplaceLocationPicker(
                       service: flow.mapService,
                       title: 'Elige el destino',
                       origin: flow.origin,
@@ -273,6 +289,26 @@ class _MarketplaceCustomerBookingFlowState
         ),
       ),
     );
+  }
+
+  void _goBack() {
+    switch (flow.step) {
+      case MarketplaceBookingStep.location:
+        widget.onEditCustomer?.call();
+        break;
+      case MarketplaceBookingStep.origin:
+        flow.setStep(MarketplaceBookingStep.location);
+        break;
+      case MarketplaceBookingStep.destination:
+        flow.setStep(MarketplaceBookingStep.origin);
+        break;
+      case MarketplaceBookingStep.quote:
+        flow.setStep(MarketplaceBookingStep.destination);
+        break;
+      case MarketplaceBookingStep.confirm:
+        flow.setStep(MarketplaceBookingStep.quote);
+        break;
+    }
   }
 
   Widget _locationIntro() => LayoutBuilder(
@@ -291,8 +327,7 @@ class _MarketplaceCustomerBookingFlowState
                     message: 'Activar ubicación',
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: () =>
-                          flow.setStep(MarketplaceBookingStep.origin),
+                      onTap: () => flow.setStep(MarketplaceBookingStep.origin),
                       child: const Padding(
                         padding: EdgeInsets.all(10),
                         child: _TuktukGeoActivationButton(),
@@ -343,14 +378,12 @@ class _MarketplaceCustomerBookingFlowState
                 ),
                 const SizedBox(height: 24),
                 TuktukPrimaryButton(
-                  onPressed: () =>
-                      flow.setStep(MarketplaceBookingStep.origin),
+                  onPressed: () => flow.setStep(MarketplaceBookingStep.origin),
                   label: 'Continuar',
                 ),
                 const SizedBox(height: 6),
                 TextButton(
-                  onPressed: () =>
-                      flow.setStep(MarketplaceBookingStep.origin),
+                  onPressed: () => flow.setStep(MarketplaceBookingStep.origin),
                   child: const Text(
                     'Elegir ubicación manualmente',
                     style: TextStyle(color: TuktukTheme.muted),
@@ -680,8 +713,7 @@ class _MarketplaceCustomerBookingFlowState
                         onPressed: route != null &&
                                 flow.selectedPrice != null &&
                                 !flow.loading
-                            ? () =>
-                                flow.setStep(MarketplaceBookingStep.confirm)
+                            ? () => flow.setStep(MarketplaceBookingStep.confirm)
                             : null,
                         label: 'Continuar',
                       ),
@@ -721,9 +753,7 @@ class _MarketplaceCustomerBookingFlowState
     if (value is Map) {
       return '${value['recommended_price']} ${value['currency'] ?? 'CUP'}';
     }
-    return code == 'cargo'
-        ? 'Indica peso o volumen'
-        : 'Calculando…';
+    return code == 'cargo' ? 'Indica peso o volumen' : 'Calculando…';
   }
 
   Future<void> _showStopsSheet() async {
@@ -917,8 +947,7 @@ class _MarketplaceCustomerBookingFlowState
                   TuktukSummaryRow(
                     icon: Icons.payments_outlined,
                     label: 'Precio estimado',
-                    value:
-                        _priceLabel(flow.selectedPrice, flow.serviceCode),
+                    value: _priceLabel(flow.selectedPrice, flow.serviceCode),
                     iconColor: TuktukTheme.gold,
                   ),
                 ],
@@ -1012,6 +1041,10 @@ class _MarketplaceCustomerBookingFlowState
                 style: TextStyle(color: TuktukTheme.mint),
               ),
             ),
+            TextButton.icon(
+                onPressed: widget.onEditCustomer,
+                icon: const Icon(Icons.person_outline),
+                label: const Text('Editar datos del cliente')),
             const TuktukFooterLabel('Confirmación final'),
           ],
         ),
@@ -1132,6 +1165,7 @@ class _MiniFact extends StatelessWidget {
         ],
       );
 }
+
 class _TuktukGeoActivationButton extends StatefulWidget {
   const _TuktukGeoActivationButton();
 
@@ -1140,8 +1174,7 @@ class _TuktukGeoActivationButton extends StatefulWidget {
       _TuktukGeoActivationButtonState();
 }
 
-class _TuktukGeoActivationButtonState
-    extends State<_TuktukGeoActivationButton>
+class _TuktukGeoActivationButtonState extends State<_TuktukGeoActivationButton>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _breath;
@@ -1178,7 +1211,8 @@ class _TuktukGeoActivationButtonState
 
   @override
   Widget build(BuildContext context) {
-    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     if (reduceMotion && _controller.isAnimating) {
       _controller.stop();

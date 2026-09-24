@@ -50,6 +50,9 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
   String? _activeJobId;
 
   bool _loading = false;
+  CustomerBookingFlowController? _bookingFlow;
+  bool _editingExistingSession = false;
+  MarketplaceBookingStep? _resumeBookingStep;
   String? _error;
 
   @override
@@ -76,6 +79,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
 
   @override
   void dispose() {
+    _bookingFlow?.dispose();
     _nameController.dispose();
     _whatsappController.dispose();
     super.dispose();
@@ -108,6 +112,15 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
 
   Future<void> _continue() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_existingSession != null && _editingExistingSession) {
+      final resumeStep = _resumeBookingStep ?? MarketplaceBookingStep.location;
+      setState(() {
+        _editingExistingSession = false;
+        _resumeBookingStep = null;
+      });
+      _bookingFlow?.setStep(resumeStep);
+      return;
+    }
 
     setState(() {
       _loading = true;
@@ -138,6 +151,8 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
 
       setState(() {
         _existingSession = snapshot;
+        _bookingFlow = CustomerBookingFlowController(
+            MarketplaceMapService(_service._client), _service, snapshot);
       });
     } catch (_) {
       if (!mounted) return;
@@ -181,9 +196,17 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
         );
       }
 
+      _bookingFlow ??= CustomerBookingFlowController(
+          MarketplaceMapService(_service._client), _service, existingSession);
+      if (_editingExistingSession) return _editCustomerScreen();
       return MarketplaceCustomerBookingFlow(
         service: _service,
         session: existingSession,
+        controller: _bookingFlow,
+        onEditCustomer: () => setState(() {
+          _resumeBookingStep = _bookingFlow!.step;
+          _editingExistingSession = true;
+        }),
       );
     }
 
@@ -242,8 +265,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
                                       suffixIcon: IconButton(
                                         tooltip: 'Limpiar',
                                         onPressed: _nameController.clear,
-                                        icon:
-                                            const Icon(Icons.cancel_outlined),
+                                        icon: const Icon(Icons.cancel_outlined),
                                       ),
                                     ),
                                     validator: _validateName,
@@ -266,8 +288,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
                                       suffixIcon: IconButton(
                                         tooltip: 'Limpiar',
                                         onPressed: _whatsappController.clear,
-                                        icon:
-                                            const Icon(Icons.cancel_outlined),
+                                        icon: const Icon(Icons.cancel_outlined),
                                       ),
                                     ),
                                     validator: _validateWhatsapp,
@@ -332,6 +353,60 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
       ),
     );
   }
+
+  Widget _editCustomerScreen() => Scaffold(
+        body: SafeArea(
+          child: TuktukHavanaBackdrop(
+            showRelief: true,
+            child: Column(
+              children: [
+                const TuktukFlowHeader(step: 1),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Text(
+                            'Edita tus datos',
+                            style: TextStyle(
+                              fontSize: 32,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          TextFormField(
+                            controller: _nameController,
+                            decoration: const InputDecoration(
+                              labelText: 'Nombre',
+                            ),
+                            validator: _validateName,
+                          ),
+                          const SizedBox(height: 14),
+                          TextFormField(
+                            controller: _whatsappController,
+                            decoration: const InputDecoration(
+                              labelText: 'WhatsApp o teléfono',
+                            ),
+                            validator: _validateWhatsapp,
+                          ),
+                          const Spacer(),
+                          TuktukPrimaryButton(
+                            label: 'Continuar',
+                            onPressed: _continue,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
 }
 
 class MarketplaceCustomerRequestScreen extends StatefulWidget {
