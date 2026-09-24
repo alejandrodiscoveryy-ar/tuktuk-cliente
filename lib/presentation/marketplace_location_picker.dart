@@ -27,7 +27,27 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
   MarketplaceMapPoint? selected;
   List<MarketplaceMapPoint> results = const [];
   String? message;
+  bool tilesFailed = false;
   bool busy = false;
+  bool searchOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Solo para el origen. Al entrar al Paso 3 desde «Activa tu ubicación»,
+    // intentamos localizar al cliente automáticamente.
+    if (widget.origin == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _autoLocateOrigin();
+      });
+    }
+  }
+
+  Future<void> _autoLocateOrigin() async {
+    if (busy || selected != null) return;
+    await usePosition();
+  }
 
   @override
   void dispose() {
@@ -99,8 +119,22 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
         throw StateError('LOCATION_DENIED');
       }
       final position = await Geolocator.getCurrentPosition();
-      controller.move(LatLng(position.latitude, position.longitude), 15);
-      await select(LatLng(position.latitude, position.longitude));
+      final point = LatLng(position.latitude, position.longitude);
+
+      // El mapa puede estar terminando de montarse en el primer frame.
+      // Programamos el centrado para el frame siguiente, pero seleccionamos
+      // el punto de inmediato para no añadir otro paso al flujo.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        try {
+          controller.move(point, 15);
+        } catch (_) {
+          // Si el controlador todavía no está listo, el punto seleccionado
+          // sigue siendo válido y el usuario puede ajustar el pin.
+        }
+      });
+
+      await select(point);
     } catch (_) {
       if (mounted) {
         setState(() => message =
@@ -115,124 +149,504 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
   Widget build(BuildContext context) {
     const token = MarketplaceMapService.publicToken;
     final center = widget.origin?.latLng ?? const LatLng(23.1136, -82.3666);
-    return Column(children: [
-      Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
-              if (widget.origin != null)
-                Text('Origen: ${widget.origin!.label}'),
-              TextField(
-                  controller: searchController,
-                  onChanged: search,
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    hintText: 'Buscar dirección o lugar',
-                  )),
-              if (results.isNotEmpty)
-                SizedBox(
-                    height: 160,
-                    child: ListView.builder(
-                      itemCount: results.length,
-                      itemBuilder: (context, index) => ListTile(
-                        title: Text(results[index].label),
-                        onTap: () {
-                          final point = results[index];
-                          controller.move(point.latLng, 15);
-                          setState(() {
-                            selected = point;
-                            results = const [];
-                            searchController.text = point.label;
-                          });
+    final destination = widget.origin != null;
+
+    return LayoutBuilder(
+      builder: (context, constraints) => Stack(
+        children: [
+          Positioned.fill(
+            child: token.isEmpty
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text(
+                        'Configura MAPBOX_PUBLIC_TOKEN para mostrar el mapa. Puedes buscar lugares y elegir un punto manualmente.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  )
+                : FlutterMap(
+                    mapController: controller,
+                    options: MapOptions(
+                      backgroundColor: TuktukTheme.background,
+                      initialCenter: center,
+                      initialZoom: destination ? 13 : 12,
+                      onTap: (_, point) => select(point),
+                      onPositionChanged: (camera, hasGesture) {
+                        if (!hasGesture) return;
+                        reverseDebounce?.cancel();
+                        setState(
+                          () => selected = MarketplaceMapPoint(
+                            label: 'Ubicación seleccionada',
+                            lat: camera.center.latitude,
+                            lon: camera.center.longitude,
+                          ),
+                        );
+                        reverseDebounce =
+                            Timer(const Duration(milliseconds: 700), () {
+                          if (selected != null) select(selected!.latLng);
+                        });
+                      },
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate:
+                            'https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/256/{z}/{x}/{y}?access_token=$token',
+                        userAgentPackageName: 'com.vrixora.tuktuk',
+                        errorTileCallback: (_, __, ___) {
+                          if (mounted && !tilesFailed) {
+                            setState(() => tilesFailed = true);
+                          }
                         },
                       ),
-                    )),
-            ],
-          )),
-      Expanded(
-          child: Stack(children: [
-        if (token.isEmpty)
-          const Center(
-              child: Text(
-                  'Configura MAPBOX_PUBLIC_TOKEN para mostrar el mapa. Puedes buscar lugares arriba.'))
-        else
-          FlutterMap(
-            mapController: controller,
-            options: MapOptions(
-                initialCenter: center,
-                initialZoom: 12,
-                onTap: (_, point) => select(point),
-                onPositionChanged: (camera, hasGesture) {
-                  if (!hasGesture) return;
-                  reverseDebounce?.cancel();
-                  setState(() => selected = MarketplaceMapPoint(
-                        label: 'Ubicación seleccionada',
-                        lat: camera.center.latitude,
-                        lon: camera.center.longitude,
-                      ));
-                  reverseDebounce =
-                      Timer(const Duration(milliseconds: 700), () {
-                    if (selected != null) select(selected!.latLng);
-                  });
-                }),
-            children: [
-              TileLayer(
-                urlTemplate:
-                    'https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/256/{z}/{x}/{y}?access_token=$token',
-                userAgentPackageName: 'com.vrixora.tuktuk',
-              ),
-              if (selected != null)
-                MarkerLayer(markers: [
-                  Marker(
-                    point: selected!.latLng,
-                    width: 50,
-                    height: 50,
-                    child: Icon(Icons.location_pin,
-                        size: 44,
-                        color: widget.origin == null
-                            ? Colors.tealAccent
-                            : Colors.redAccent),
-                  )
-                ]),
-              marketplaceMapAttribution(selected?.latLng ?? center),
-            ],
+                      if (selected != null)
+                        MarkerLayer(
+                          markers: [
+                            Marker(
+                              point: selected!.latLng,
+                              width: 64,
+                              height: 64,
+                              child: _PremiumMapPin(destination: destination),
+                            ),
+                          ],
+                        ),
+                      marketplaceMapAttribution(selected?.latLng ?? center),
+                    ],
+                  ),
           ),
-      ])),
-      if (message != null)
-        Padding(padding: const EdgeInsets.all(8), child: Text(message!)),
-      Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(children: [
-            if (widget.origin == null)
-              Expanded(
-                  child: OutlinedButton.icon(
-                onPressed: busy ? null : usePosition,
-                icon: const Icon(Icons.my_location),
-                label: const Text('Usar mi ubicación'),
-              )),
-            if (widget.origin == null) const SizedBox(width: 8),
-            Expanded(
-                child: FilledButton(
-              onPressed: selected == null || busy
-                  ? null
-                  : () => widget.onConfirm(selected!),
-              child: Text(widget.origin == null
-                  ? 'Confirmar origen'
-                  : 'Confirmar destino'),
-            )),
-          ])),
-    ]);
+          if (token.isNotEmpty)
+            const Positioned.fill(
+              child: TuktukMapLoadingOverlay(),
+            ),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.center,
+                    colors: [
+                      TuktukTheme.background.withValues(alpha: .45),
+                      Colors.transparent,
+                    ],
+                    stops: const [0, .24],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (!destination)
+            Positioned(
+              left: 14,
+              right: 14,
+              top: 12,
+              child: Column(
+                children: [
+                  TuktukGlassCard(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 13,
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.location_on_outlined,
+                          color: TuktukTheme.mint,
+                          size: 30,
+                        ),
+                        const SizedBox(width: 13),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                '¿Dónde te recogemos?',
+                                style: TextStyle(
+                                  color: TuktukTheme.muted,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                selected?.label ?? 'Elige el origen',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Buscar dirección',
+                          onPressed: () =>
+                              setState(() => searchOpen = !searchOpen),
+                          icon: const Icon(Icons.edit_outlined),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (searchOpen) ...[
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: searchController,
+                      autofocus: true,
+                      onChanged: search,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search),
+                        hintText: 'Buscar dirección o lugar',
+                      ),
+                    ),
+                    if (results.isNotEmpty)
+                      Container(
+                        constraints: const BoxConstraints(maxHeight: 180),
+                        margin: const EdgeInsets.only(top: 6),
+                        decoration: BoxDecoration(
+                          color: TuktukTheme.surfaceStrong,
+                          border: Border.all(color: TuktukTheme.border),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: results.length,
+                          separatorBuilder: (_, __) =>
+                              const Divider(height: 1),
+                          itemBuilder: (context, index) => ListTile(
+                            dense: true,
+                            title: Text(results[index].label),
+                            onTap: () => _chooseSearchResult(results[index]),
+                          ),
+                        ),
+                      ),
+                  ],
+                ],
+              ),
+            ),
+          if (destination)
+            Positioned(
+              left: 14,
+              right: 14,
+              top: 12,
+              child: TuktukGlassCard(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+                child: Row(
+                  children: [
+                    const SizedBox(
+                      width: 28,
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.circle,
+                            size: 14,
+                            color: TuktukTheme.mint,
+                          ),
+                          Text(
+                            '⋮',
+                            style: TextStyle(
+                              color: TuktukTheme.muted,
+                              height: .75,
+                            ),
+                          ),
+                          Icon(
+                            Icons.circle,
+                            size: 14,
+                            color: TuktukTheme.danger,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.origin?.label ?? 'Origen',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 9),
+                          Text(
+                            selected?.label ?? '¿A dónde vas?',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: selected == null
+                                  ? FontWeight.w500
+                                  : FontWeight.w800,
+                              color: selected == null
+                                  ? TuktukTheme.muted
+                                  : TuktukTheme.text,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          if (!destination)
+            Positioned(
+              left: 14,
+              right: 14,
+              bottom: 10,
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TuktukMapButton(
+                          label: 'Centrar en mí',
+                          icon: Icons.my_location_rounded,
+                          onPressed: busy ? null : usePosition,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TuktukMapButton(
+                          label: 'Mover pin',
+                          icon: Icons.location_on_rounded,
+                          onPressed: () => setState(
+                            () => message =
+                                'Mueve el mapa o toca un punto para ajustar el origen.',
+                          ),
+                          active: selected != null,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  TuktukGlassCard(
+                    padding: const EdgeInsets.all(15),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.info_outline_rounded,
+                          color: TuktukTheme.mint,
+                          size: 27,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            selected == null
+                                ? 'Usaremos el punto elegido como origen del viaje. Puedes mover el mapa o usar tu ubicación actual.'
+                                : selected!.label,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: TuktukTheme.muted,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (message != null) ...[
+                    const SizedBox(height: 7),
+                    Text(
+                      message!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: TuktukTheme.muted,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ],
+                  if (tilesFailed) ...[
+                    const SizedBox(height: 7),
+                    const Text(
+                      'El mapa no pudo cargar todas las teselas. Aún puedes buscar o seleccionar un punto.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: TuktukTheme.gold,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  TuktukPrimaryButton(
+                    onPressed: selected == null || busy
+                        ? null
+                        : () => widget.onConfirm(selected!),
+                    label: 'Confirmar origen',
+                  ),
+                  const TuktukFooterLabel('Origen del viaje'),
+                ],
+              ),
+            ),
+          if (destination)
+            Positioned(
+              left: 10,
+              right: 10,
+              bottom: 8,
+              child: ConstrainedBox(
+                constraints:
+                    BoxConstraints(maxHeight: constraints.maxHeight * .54),
+                child: TuktukSectionSheet(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          '¿A dónde vas?',
+                          style: TextStyle(
+                            fontSize: 31,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: searchController,
+                          onChanged: search,
+                          decoration: const InputDecoration(
+                            prefixIcon: Icon(Icons.location_on_outlined),
+                            suffixIcon: Icon(
+                              Icons.search_rounded,
+                              color: TuktukTheme.gold,
+                            ),
+                            hintText: 'Introduce la dirección de destino',
+                          ),
+                        ),
+                        if (results.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 150),
+                            child: TuktukGlassCard(
+                              padding: EdgeInsets.zero,
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                itemCount: results.length,
+                                separatorBuilder: (_, __) =>
+                                    const Divider(height: 1),
+                                itemBuilder: (context, index) => ListTile(
+                                  dense: true,
+                                  title: Text(results[index].label),
+                                  trailing:
+                                      const Icon(Icons.chevron_right_rounded),
+                                  onTap: () =>
+                                      _chooseSearchResult(results[index]),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 10),
+                        const Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline_rounded,
+                              color: TuktukTheme.mint,
+                            ),
+                            SizedBox(width: 9),
+                            Expanded(
+                              child: Text(
+                                'También puedes tocar o mover el mapa para elegir el destino.',
+                                style: TextStyle(
+                                  color: TuktukTheme.muted,
+                                  fontSize: 13.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (message != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            message!,
+                            style: const TextStyle(
+                              color: TuktukTheme.muted,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ],
+                        if (tilesFailed) ...[
+                          const SizedBox(height: 8),
+                          const Text(
+                            'El mapa no pudo cargar todas las teselas. Puedes continuar usando la búsqueda.',
+                            style: TextStyle(
+                              color: TuktukTheme.gold,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 14),
+                        TuktukPrimaryButton(
+                          onPressed: selected == null || busy
+                              ? null
+                              : () => widget.onConfirm(selected!),
+                          label: 'Confirmar destino',
+                        ),
+                        const TuktukFooterLabel('Destino del viaje'),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _chooseSearchResult(MarketplaceMapPoint point) {
+    controller.move(point.latLng, 15);
+    setState(() {
+      selected = point;
+      results = const [];
+      searchController.text = point.label;
+      searchOpen = false;
+      message = null;
+    });
   }
 }
 
+class _PremiumMapPin extends StatelessWidget {
+  const _PremiumMapPin({required this.destination});
+  final bool destination;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              color: (destination ? TuktukTheme.danger : TuktukTheme.mint)
+                  .withValues(alpha: .18),
+              shape: BoxShape.circle,
+            ),
+          ),
+          Icon(
+            Icons.location_on_rounded,
+            color: destination ? TuktukTheme.danger : TuktukTheme.mint,
+            size: 48,
+          ),
+        ],
+      );
+}
+
 class MarketplaceRouteMap extends StatelessWidget {
-  const MarketplaceRouteMap(
-      {required this.origin,
-      required this.destination,
-      required this.route,
-      super.key});
+  const MarketplaceRouteMap({
+    required this.origin,
+    required this.destination,
+    required this.route,
+    super.key,
+  });
+
   final MarketplaceMapPoint? origin;
   final MarketplaceMapPoint? destination;
   final MarketplaceRouteQuote? route;
@@ -240,40 +654,76 @@ class MarketplaceRouteMap extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const token = MarketplaceMapService.publicToken;
-    if (token.isEmpty) return const Center(child: Text('Mapa no configurado'));
-    return FlutterMap(
-      options: MapOptions(
-          initialCenter: origin?.latLng ?? const LatLng(23.1136, -82.3666),
-          initialZoom: 12),
+    if (token.isEmpty) {
+      return const Center(child: Text('Mapa no configurado'));
+    }
+
+    final center = origin != null && destination != null
+        ? LatLng(
+            (origin!.lat + destination!.lat) / 2,
+            (origin!.lon + destination!.lon) / 2,
+          )
+        : origin?.latLng ?? const LatLng(23.1136, -82.3666);
+    final distance = route?.distanceKm ?? 0;
+    final zoom = distance <= 3
+        ? 13.2
+        : distance <= 8
+            ? 12.2
+            : distance <= 18
+                ? 11.4
+                : 10.7;
+
+    return Stack(
+      fit: StackFit.expand,
       children: [
-        TileLayer(
-            urlTemplate:
-                'https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/256/{z}/{x}/{y}?access_token=$token',
-            userAgentPackageName: 'com.vrixora.tuktuk'),
-        if (route != null)
-          PolylineLayer(polylines: [
-            Polyline(
-              points: route!.routePoints
-                  .map((point) => point.latLng)
-                  .toList(growable: false),
-              color: Colors.tealAccent,
-              strokeWidth: 5,
-            )
-          ]),
-        MarkerLayer(markers: [
-          if (origin != null)
-            Marker(
-                point: origin!.latLng,
-                child: const Icon(Icons.location_pin,
-                    color: Colors.tealAccent, size: 40)),
-          if (destination != null)
-            Marker(
-                point: destination!.latLng,
-                child: const Icon(Icons.location_pin,
-                    color: Colors.redAccent, size: 40)),
-        ]),
-        marketplaceMapAttribution(
-            origin?.latLng ?? const LatLng(23.1136, -82.3666)),
+        FlutterMap(
+          options: MapOptions(
+            backgroundColor: TuktukTheme.background,
+            initialCenter: center,
+            initialZoom: zoom,
+          ),
+          children: [
+            TileLayer(
+              urlTemplate:
+                  'https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/256/{z}/{x}/{y}?access_token=$token',
+              userAgentPackageName: 'com.vrixora.tuktuk',
+            ),
+            if (route != null)
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: route!.routePoints
+                        .map((point) => point.latLng)
+                        .toList(growable: false),
+                    color: TuktukTheme.mint,
+                    strokeWidth: 6,
+                  ),
+                ],
+              ),
+            MarkerLayer(
+              markers: [
+                if (origin != null)
+                  Marker(
+                    point: origin!.latLng,
+                    width: 52,
+                    height: 52,
+                    child: const _PremiumMapPin(destination: false),
+                  ),
+                if (destination != null)
+                  Marker(
+                    point: destination!.latLng,
+                    width: 52,
+                    height: 52,
+                    child: const _PremiumMapPin(destination: true),
+                  ),
+              ],
+            ),
+            marketplaceMapAttribution(
+              origin?.latLng ?? const LatLng(23.1136, -82.3666),
+            ),
+          ],
+        ),
+        const TuktukMapLoadingOverlay(),
       ],
     );
   }
@@ -286,19 +736,28 @@ Widget marketplaceMapAttribution(LatLng point) => RichAttributionWidget(
             'https://cdn.prod.website-files.com/6050a76fa6a633d5d54ae714/657a891ba7274ba4f8b3a168_img-main-logo.png',
             fit: BoxFit.contain,
           ),
-          height: 30,
+          height: 26,
           tooltip: 'Mapbox',
           onTap: () => launchUrl(Uri.parse('https://www.mapbox.com/')),
         ),
-        TextSourceAttribution('Mapbox',
-            onTap: () =>
-                launchUrl(Uri.parse('https://www.mapbox.com/about/maps'))),
-        TextSourceAttribution('OpenStreetMap',
-            onTap: () => launchUrl(
-                Uri.parse('https://www.openstreetmap.org/copyright'))),
-        TextSourceAttribution('Mejorar este mapa',
-            prependCopyright: false,
-            onTap: () => launchUrl(Uri.parse(
-                'https://apps.mapbox.com/feedback/#/${point.longitude}/${point.latitude}/12'))),
+        TextSourceAttribution(
+          'Mapbox',
+          onTap: () =>
+              launchUrl(Uri.parse('https://www.mapbox.com/about/maps')),
+        ),
+        TextSourceAttribution(
+          'OpenStreetMap',
+          onTap: () =>
+              launchUrl(Uri.parse('https://www.openstreetmap.org/copyright')),
+        ),
+        TextSourceAttribution(
+          'Mejorar este mapa',
+          prependCopyright: false,
+          onTap: () => launchUrl(
+            Uri.parse(
+              'https://apps.mapbox.com/feedback/#/${point.longitude}/${point.latitude}/12',
+            ),
+          ),
+        ),
       ],
     );

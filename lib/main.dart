@@ -17,6 +17,7 @@ part 'presentation/marketplace_customer.dart';
 part 'presentation/marketplace_customer_booking_flow.dart';
 part 'presentation/marketplace_customer_tracking.dart';
 part 'presentation/marketplace_location_picker.dart';
+part 'presentation/tuktuk_ui.dart';
 
 const _metaBox = 'marketplace_customer_meta';
 const kPrimary = Color(0xFF2DD4A3);
@@ -64,9 +65,9 @@ ThemeData buildAppTheme(Brightness brightness) => ThemeData(
           error: kDanger),
       brightness: brightness,
       useMaterial3: true,
-      scaffoldBackgroundColor: const Color(0xFF0B1220),
-      inputDecorationTheme:
-          const InputDecorationTheme(border: OutlineInputBorder()),
+      scaffoldBackgroundColor: TuktukTheme.background,
+      appBarTheme: const AppBarTheme(backgroundColor: Colors.transparent),
+      inputDecorationTheme: TuktukTheme.inputDecoration,
     );
 
 class _ConfigurationRequiredApp extends StatelessWidget {

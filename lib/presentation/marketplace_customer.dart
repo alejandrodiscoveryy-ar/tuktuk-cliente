@@ -189,99 +189,144 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
 
     return Scaffold(
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Icon(
-                      Icons.local_taxi_rounded,
-                      size: 56,
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      '¿Cómo quieres que te llamemos?',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Conecta con un transportista disponible desde TUKTUK.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyLarge
-                          ?.copyWith(color: kMuted),
-                    ),
-                    const SizedBox(height: 32),
-                    TextFormField(
-                      controller: _nameController,
-                      textInputAction: TextInputAction.next,
-                      autofillHints: const [
-                        AutofillHints.name,
-                      ],
-                      decoration: const InputDecoration(
-                        labelText: 'Nombre',
-                        prefixIcon: Icon(Icons.person_outline),
+        child: TuktukHavanaBackdrop(
+          showRelief: true,
+          child: Column(
+            children: [
+              const TuktukFlowHeader(step: 1),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) => SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(22, 8, 22, 18),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight - 18,
                       ),
-                      validator: _validateName,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _whatsappController,
-                      keyboardType: TextInputType.phone,
-                      autofillHints: const [
-                        AutofillHints.telephoneNumber,
-                      ],
-                      decoration: const InputDecoration(
-                        labelText: 'WhatsApp',
-                        hintText: '+5355555555',
-                        prefixIcon: Icon(Icons.chat_bubble_outline),
-                      ),
-                      validator: _validateWhatsapp,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Usaremos este número únicamente como contacto operativo del servicio.',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: kMuted),
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        _error!,
-                        style: const TextStyle(
-                          color: kDanger,
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 600),
+                          child: Form(
+                            key: _formKey,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const Text(
+                                  '¿Cómo quieres que\nte llamemos?',
+                                  style: TextStyle(
+                                    fontSize: 41,
+                                    fontWeight: FontWeight.w900,
+                                    height: 1.03,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                const Text(
+                                  'Usaremos estos datos para identificar tu solicitud.',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    height: 1.4,
+                                    color: TuktukTheme.muted,
+                                  ),
+                                ),
+                                const SizedBox(height: 28),
+                                TuktukGlassCard(
+                                  padding: EdgeInsets.zero,
+                                  child: TextFormField(
+                                    controller: _nameController,
+                                    textInputAction: TextInputAction.next,
+                                    autofillHints: const [AutofillHints.name],
+                                    decoration: InputDecoration(
+                                      labelText: 'Nombre',
+                                      hintText: 'Tu nombre',
+                                      prefixIcon:
+                                          const Icon(Icons.person_outline),
+                                      suffixIcon: IconButton(
+                                        tooltip: 'Limpiar',
+                                        onPressed: _nameController.clear,
+                                        icon:
+                                            const Icon(Icons.cancel_outlined),
+                                      ),
+                                    ),
+                                    validator: _validateName,
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                TuktukGlassCard(
+                                  padding: EdgeInsets.zero,
+                                  child: TextFormField(
+                                    controller: _whatsappController,
+                                    keyboardType: TextInputType.phone,
+                                    autofillHints: const [
+                                      AutofillHints.telephoneNumber,
+                                    ],
+                                    decoration: InputDecoration(
+                                      labelText: 'WhatsApp o teléfono',
+                                      hintText: '+53 5 123 4567',
+                                      prefixIcon:
+                                          const Icon(Icons.phone_outlined),
+                                      suffixIcon: IconButton(
+                                        tooltip: 'Limpiar',
+                                        onPressed: _whatsappController.clear,
+                                        icon:
+                                            const Icon(Icons.cancel_outlined),
+                                      ),
+                                    ),
+                                    validator: _validateWhatsapp,
+                                  ),
+                                ),
+                                const SizedBox(height: 18),
+                                const Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      Icons.info_outline_rounded,
+                                      color: TuktukTheme.mint,
+                                      size: 30,
+                                    ),
+                                    SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'El conductor usará tu nombre y tu contacto para coordinar el servicio.',
+                                        style: TextStyle(
+                                          color: TuktukTheme.muted,
+                                          fontSize: 15.5,
+                                          height: 1.35,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (_error != null) ...[
+                                  const SizedBox(height: 14),
+                                  TuktukGlassCard(
+                                    padding: const EdgeInsets.all(14),
+                                    borderColor: TuktukTheme.danger,
+                                    child: Text(
+                                      _error!,
+                                      style: const TextStyle(
+                                        color: TuktukTheme.danger,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: 78),
+                                TuktukPrimaryButton(
+                                  onPressed: _loading ? null : _continue,
+                                  label:
+                                      _loading ? 'Conectando...' : 'Continuar',
+                                ),
+                                const TuktukFooterLabel(
+                                  'Identificación del cliente',
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                    ],
-                    const SizedBox(height: 24),
-                    FilledButton(
-                      onPressed: _loading ? null : _continue,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        child: _loading
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text('Continuar'),
-                      ),
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
         ),
       ),
