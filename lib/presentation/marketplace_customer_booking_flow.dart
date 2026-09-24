@@ -19,7 +19,7 @@ class CustomerBookingFlowController extends ChangeNotifier {
 
   final MarketplaceMapService mapService;
   final MarketplaceCustomerService customerService;
-  final MarketplaceCustomerSessionSnapshot session;
+  MarketplaceCustomerSessionSnapshot session;
 
   MarketplaceBookingStep step = MarketplaceBookingStep.location;
   MarketplaceMapPoint? origin;
@@ -60,6 +60,11 @@ class CustomerBookingFlowController extends ChangeNotifier {
 
   void setStep(MarketplaceBookingStep value) {
     step = value;
+    notifyListeners();
+  }
+
+  void replaceSession(MarketplaceCustomerSessionSnapshot value) {
+    session = value;
     notifyListeners();
   }
 
@@ -228,6 +233,9 @@ class _MarketplaceCustomerBookingFlowState
             widget.service,
             widget.session);
     _ownsFlow = widget.controller == null;
+    noteController.text = flow.note;
+    weightController.text = flow.cargoWeightKg?.toString() ?? '';
+    volumeController.text = flow.cargoVolumeM3?.toString() ?? '';
     flow.addListener(_changed);
   }
 

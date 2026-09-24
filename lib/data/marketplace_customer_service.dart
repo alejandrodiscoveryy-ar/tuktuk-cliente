@@ -192,12 +192,16 @@ class MarketplaceCustomerSessionSnapshot {
     required this.customerId,
     required this.token,
     this.expiresAt,
+    this.displayName,
+    this.whatsappPhone,
   });
 
   final String sessionId;
   final String customerId;
   final String token;
   final DateTime? expiresAt;
+  final String? displayName;
+  final String? whatsappPhone;
 }
 
 class MarketplaceCustomerSessionStore {
@@ -209,6 +213,8 @@ class MarketplaceCustomerSessionStore {
   static const _customerIdKey = 'marketplace_customer_customer_id';
   static const _tokenKey = 'marketplace_customer_session_token';
   static const _expiresAtKey = 'marketplace_customer_session_expires_at';
+  static const _displayNameKey = 'marketplace_customer_display_name';
+  static const _whatsappPhoneKey = 'marketplace_customer_whatsapp_phone';
   static const _activeJobIdKey = 'marketplace_customer_active_job_id';
 
   MarketplaceCustomerSessionSnapshot? read() {
@@ -225,18 +231,24 @@ class MarketplaceCustomerSessionStore {
       customerId: customerId,
       token: token,
       expiresAt: _marketDate(_box.get(_expiresAtKey)),
+      displayName: _marketText(_box.get(_displayNameKey)),
+      whatsappPhone: _marketText(_box.get(_whatsappPhoneKey)),
     );
   }
 
   Future<void> save({
     required MarketplaceCustomerSession session,
     required String token,
+    required String displayName,
+    required String whatsappPhone,
   }) async {
     await _box.putAll({
       _sessionIdKey: session.sessionId,
       _customerIdKey: session.customerId,
       _tokenKey: token,
       _expiresAtKey: session.expiresAt?.toIso8601String(),
+      _displayNameKey: displayName,
+      _whatsappPhoneKey: whatsappPhone,
     });
   }
 
@@ -256,6 +268,8 @@ class MarketplaceCustomerSessionStore {
       _customerIdKey,
       _tokenKey,
       _expiresAtKey,
+      _displayNameKey,
+      _whatsappPhoneKey,
       _activeJobIdKey,
     ]);
   }

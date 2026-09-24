@@ -53,6 +53,8 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
   CustomerBookingFlowController? _bookingFlow;
   bool _editingExistingSession = false;
   MarketplaceBookingStep? _resumeBookingStep;
+  String? _editSessionToken;
+  String? _editIdempotencyKey;
   String? _error;
 
   @override
@@ -69,6 +71,8 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
         (expiresAt == null || expiresAt.isAfter(DateTime.now().toUtc()))) {
       _existingSession = saved;
       _activeJobId = _sessionStore.readActiveJobId();
+      _nameController.text = saved.displayName ?? '';
+      _whatsappController.text = saved.whatsappPhone ?? '';
     } else if (saved != null) {
       _sessionStore.clear();
     }
@@ -113,12 +117,80 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
   Future<void> _continue() async {
     if (!_formKey.currentState!.validate()) return;
     if (_existingSession != null && _editingExistingSession) {
+      final existingSession = _existingSession!;
+      final displayName = _nameController.text.trim();
+      final whatsappPhone = _whatsappController.text.trim();
       final resumeStep = _resumeBookingStep ?? MarketplaceBookingStep.location;
+
+      if (existingSession.displayName == displayName &&
+          existingSession.whatsappPhone == whatsappPhone) {
+        setState(() {
+          _editingExistingSession = false;
+          _resumeBookingStep = null;
+          _editSessionToken = null;
+          _editIdempotencyKey = null;
+        });
+        _bookingFlow?.setStep(resumeStep);
+        return;
+      }
+
+      final editToken =
+          _editSessionToken ??= marketplaceCustomerSessionToken();
+      final editIdempotencyKey = _editIdempotencyKey ??= _marketplaceUuid();
+
       setState(() {
-        _editingExistingSession = false;
-        _resumeBookingStep = null;
+        _loading = true;
+        _error = null;
       });
-      _bookingFlow?.setStep(resumeStep);
+
+      try {
+        final session = await _service.startSession(
+          displayName: displayName,
+          whatsappPhone: whatsappPhone,
+          sessionToken: editToken,
+          idempotencyKey: editIdempotencyKey,
+        );
+
+        final snapshot = MarketplaceCustomerSessionSnapshot(
+          sessionId: session.sessionId,
+          customerId: session.customerId,
+          token: editToken,
+          expiresAt: session.expiresAt,
+          displayName: displayName,
+          whatsappPhone: whatsappPhone,
+        );
+
+        await _sessionStore.save(
+          session: session,
+          token: editToken,
+          displayName: displayName,
+          whatsappPhone: whatsappPhone,
+        );
+
+        if (!mounted) return;
+
+        _bookingFlow?.replaceSession(snapshot);
+        setState(() {
+          _existingSession = snapshot;
+          _editingExistingSession = false;
+          _resumeBookingStep = null;
+          _editSessionToken = null;
+          _editIdempotencyKey = null;
+        });
+        _bookingFlow?.setStep(resumeStep);
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _error =
+              'No pudimos actualizar los datos del cliente. Revisa la conexión e inténtalo otra vez.';
+        });
+      } finally {
+        if (mounted) {
+          setState(() {
+            _loading = false;
+          });
+        }
+      }
       return;
     }
 
@@ -135,16 +207,23 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
         idempotencyKey: _startIdempotencyKey,
       );
 
+      final displayName = _nameController.text.trim();
+      final whatsappPhone = _whatsappController.text.trim();
+
       final snapshot = MarketplaceCustomerSessionSnapshot(
         sessionId: session.sessionId,
         customerId: session.customerId,
         token: _sessionToken,
         expiresAt: session.expiresAt,
+        displayName: displayName,
+        whatsappPhone: whatsappPhone,
       );
 
       await _sessionStore.save(
         session: session,
         token: _sessionToken,
+        displayName: displayName,
+        whatsappPhone: whatsappPhone,
       );
 
       if (!mounted) return;
@@ -205,6 +284,11 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
         controller: _bookingFlow,
         onEditCustomer: () => setState(() {
           _resumeBookingStep = _bookingFlow!.step;
+          _editSessionToken = marketplaceCustomerSessionToken();
+          _editIdempotencyKey = _marketplaceUuid();
+          _nameController.text = existingSession.displayName ?? '';
+          _whatsappController.text = existingSession.whatsappPhone ?? '';
+          _error = null;
           _editingExistingSession = true;
         }),
       );
@@ -392,10 +476,19 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
                             ),
                             validator: _validateWhatsapp,
                           ),
+                          if (_error != null) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              _error!,
+                              style: const TextStyle(
+                                color: TuktukTheme.danger,
+                              ),
+                            ),
+                          ],
                           const Spacer(),
                           TuktukPrimaryButton(
-                            label: 'Continuar',
-                            onPressed: _continue,
+                            label: _loading ? 'Guardando...' : 'Continuar',
+                            onPressed: _loading ? null : _continue,
                           ),
                         ],
                       ),

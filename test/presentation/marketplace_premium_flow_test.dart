@@ -154,4 +154,81 @@ void main() {
       contains('flow.setStep(MarketplaceBookingStep.location);'),
     );
   });
+
+  test('replacing customer session preserves the complete booking draft', () {
+    final client = SupabaseClient('https://example.supabase.co', 'test-key');
+    final flow = CustomerBookingFlowController(
+      MarketplaceMapService(client),
+      MarketplaceCustomerService(client),
+      const MarketplaceCustomerSessionSnapshot(
+        sessionId: 'old-session',
+        customerId: 'old-customer',
+        token: 'old-token',
+        displayName: 'Cliente A',
+        whatsappPhone: '+5351111111',
+      ),
+    );
+    const origin = MarketplaceMapPoint(label: 'Origen', lat: 23.1, lon: -82.3);
+    const destination =
+        MarketplaceMapPoint(label: 'Destino', lat: 23.2, lon: -82.4);
+    const route = MarketplaceRouteQuote(
+      distanceKm: 8.7,
+      durationSeconds: 1440,
+      routePoints: [origin, destination],
+      routeToken: 'route-token',
+      prices: {
+        'passenger': {'recommended_price': 3350, 'currency': 'CUP'},
+      },
+    );
+
+    flow.origin = origin;
+    flow.destination = destination;
+    flow.route = route;
+    flow.serviceCode = 'passenger';
+    flow.passengerCount = 2;
+    flow.stopCount = 1;
+    flow.urgent = true;
+    flow.scheduledFor = DateTime(2026, 9, 25, 10);
+    flow.note = 'Llamar al llegar';
+    flow.setStep(MarketplaceBookingStep.confirm);
+
+    flow.replaceSession(
+      const MarketplaceCustomerSessionSnapshot(
+        sessionId: 'new-session',
+        customerId: 'new-customer',
+        token: 'new-token',
+        displayName: 'Otra persona',
+        whatsappPhone: '+5352222222',
+      ),
+    );
+
+    expect(flow.session.sessionId, 'new-session');
+    expect(flow.session.customerId, 'new-customer');
+    expect(flow.session.token, 'new-token');
+    expect(flow.session.displayName, 'Otra persona');
+    expect(flow.session.whatsappPhone, '+5352222222');
+    expect(flow.step, MarketplaceBookingStep.confirm);
+    expect(flow.origin, same(origin));
+    expect(flow.destination, same(destination));
+    expect(flow.route, same(route));
+    expect(flow.serviceCode, 'passenger');
+    expect(flow.passengerCount, 2);
+    expect(flow.stopCount, 1);
+    expect(flow.urgent, isTrue);
+    expect(flow.scheduledFor, DateTime(2026, 9, 25, 10));
+    expect(flow.note, 'Llamar al llegar');
+  });
+
+  test('editing identification creates and rebinds a fresh customer session',
+      () {
+    final source =
+        File('lib/presentation/marketplace_customer.dart').readAsStringSync();
+    expect(source, contains('_editSessionToken'));
+    expect(source, contains('_editIdempotencyKey'));
+    expect(source, contains('await _service.startSession('));
+    expect(source, contains('_bookingFlow?.replaceSession(snapshot)'));
+    expect(source, contains('displayName: displayName'));
+    expect(source, contains('whatsappPhone: whatsappPhone'));
+  });
+
 }
