@@ -332,6 +332,7 @@ class _MarketplaceCustomerTrackingScreenState
       ),
     );
   }
+
   Widget _driverCard(
     BuildContext context,
     MarketplaceCustomerJob job,
@@ -429,6 +430,7 @@ class _MarketplaceCustomerTrackingScreenState
       ),
     );
   }
+
   IconData _statusIcon(String status) => switch (status) {
         'published' => Icons.radar_rounded,
         'accepted' => Icons.person_pin_circle_outlined,
@@ -436,7 +438,8 @@ class _MarketplaceCustomerTrackingScreenState
         'pickup' => Icons.location_on_outlined,
         'in_progress' => Icons.alt_route_rounded,
         'completed' || 'settled' => Icons.check_circle_outline_rounded,
-        'cancelled_by_customer' || 'cancelled_by_driver' =>
+        'cancelled_by_customer' ||
+        'cancelled_by_driver' =>
           Icons.cancel_outlined,
         'expired' => Icons.timer_off_outlined,
         'incident' => Icons.warning_amber_rounded,
@@ -656,9 +659,6 @@ class _MarketplaceCustomerTrackingScreenState
                                         ),
                                       ),
                                     ],
-                                    const TuktukFooterLabel(
-                                      'Seguimiento de la solicitud',
-                                    ),
                                   ],
                                 ),
                     ),
@@ -671,6 +671,7 @@ class _MarketplaceCustomerTrackingScreenState
       ),
     );
   }
+
   Future<void> _openRating(MarketplaceCustomerJob job) async {
     final rating = await Navigator.of(context).push<MarketplaceCustomerRating>(
       MaterialPageRoute(

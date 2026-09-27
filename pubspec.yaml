@@ -23,5 +23,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/branding/tuktuk_identity.png
     - assets/branding/tuktuk_havana_morro_tracking.png
     - assets/branding/tuktuk_havana_shadow_relief.jpg

@@ -48,7 +48,88 @@ class MarketplaceMapService {
   MarketplaceMapService(this._client);
   final SupabaseClient _client;
 
-  static const publicToken = String.fromEnvironment('MAPBOX_PUBLIC_TOKEN');
+  static String _publicToken =
+      const String.fromEnvironment('MAPBOX_PUBLIC_TOKEN');
+  static String _mapStyle = 'mapbox/dark-v11';
+  static int _tileSize = 256;
+
+  static String get publicToken => _publicToken;
+
+  static String get tileUrlTemplate =>
+      'https://api.mapbox.com/styles/v1/$_mapStyle/tiles/$_tileSize/{z}/{x}/{y}?access_token=$_publicToken';
+
+  static Future<void> loadPublicConfiguration(SupabaseClient client) async {
+    try {
+      final value = await client.rpc(
+        'get_public_marketplace_map_capabilities_by_slug',
+        params: {
+          'target_project_slug': 'tuktuk-control',
+        },
+      );
+
+      if (value is! Map) return;
+
+      final capabilities = value['capabilities'];
+      if (capabilities is! List) return;
+
+      for (final item in capabilities) {
+        if (item is! Map) continue;
+        if (item['capability']?.toString() != 'map_visual') continue;
+        if (item['enabled'] != true) continue;
+        if (item['provider_code']?.toString() != 'mapbox') continue;
+
+        final token = item['public_token']?.toString().trim() ?? '';
+
+        if (token.isNotEmpty) {
+          _publicToken = token;
+        }
+
+        final capabilityConfig = item['config'];
+        final publicConfig = item['public_config'];
+
+        String? configuredStyle;
+
+        if (capabilityConfig is Map) {
+          configuredStyle = capabilityConfig['style']?.toString().trim();
+        }
+
+        if ((configuredStyle == null || configuredStyle.isEmpty) &&
+            publicConfig is Map) {
+          configuredStyle = publicConfig['style']?.toString().trim();
+        }
+
+        if (configuredStyle != null &&
+            RegExp(r'^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$')
+                .hasMatch(configuredStyle)) {
+          _mapStyle = configuredStyle;
+        }
+
+        Object? configuredTileSize;
+
+        if (capabilityConfig is Map) {
+          configuredTileSize = capabilityConfig['tile_size'];
+        }
+
+        if (configuredTileSize == null && publicConfig is Map) {
+          configuredTileSize = publicConfig['tile_size'];
+        }
+
+        final tileSize = configuredTileSize is num
+            ? configuredTileSize.toInt()
+            : int.tryParse('$configuredTileSize');
+
+        if (tileSize == 256 || tileSize == 512) {
+          _tileSize = tileSize!;
+        }
+
+        break;
+      }
+    } catch (_) {
+      // Si la configuración remota no está disponible, la aplicación
+      // continúa funcionando. El mapa utilizará el fallback de compilación
+      // si existe; de lo contrario mostrará el estado no configurado.
+    }
+  }
 
   Future<dynamic> _invoke(
       String operation, Map<String, dynamic> arguments) async {

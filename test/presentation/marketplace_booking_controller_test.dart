@@ -1,9 +1,10 @@
-import 'package:tuktuk_cliente/main.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:tuktuk_cliente/main.dart';
 
 class FakeMapService extends MarketplaceMapService {
   FakeMapService(super.client);
+
   int routeCalls = 0;
   int priceCalls = 0;
   int createCalls = 0;
@@ -15,13 +16,21 @@ class FakeMapService extends MarketplaceMapService {
     required Map<String, dynamic> pricing,
   }) async {
     routeCalls++;
+
     return const MarketplaceRouteQuote(
       distanceKm: 9,
       durationSeconds: 1200,
       routePoints: [],
       routeToken: 'signed',
       prices: {
-        'passenger': {'recommended_price': 3900}
+        'passenger': {
+          'recommended_price': 3900,
+        },
+        'passenger_by_category': {
+          'motorcycle': {
+            'recommended_price': 3900,
+          },
+        },
       },
     );
   }
@@ -34,6 +43,9 @@ class FakeMapService extends MarketplaceMapService {
     required Map<String, dynamic> pricing,
   }) async {
     priceCalls++;
+
+    final price = pricing['urgent'] == true ? 4900 : 3900;
+
     return MarketplaceRouteQuote(
       distanceKm: 9,
       durationSeconds: 1200,
@@ -41,8 +53,13 @@ class FakeMapService extends MarketplaceMapService {
       routeToken: routeToken,
       prices: {
         'passenger': {
-          'recommended_price': pricing['urgent'] == true ? 4900 : 3900
-        }
+          'recommended_price': price,
+        },
+        'passenger_by_category': {
+          'motorcycle': {
+            'recommended_price': price,
+          },
+        },
       },
     );
   }
@@ -55,6 +72,7 @@ class FakeMapService extends MarketplaceMapService {
     required Map<String, dynamic> params,
   }) async {
     createCalls++;
+
     return const MarketplaceCustomerRequestDraft(
       jobId: 'job',
       serviceRequestId: 'request',
@@ -69,51 +87,124 @@ class FakeMapService extends MarketplaceMapService {
   }
 }
 
+Future<void> waitForVerifiedRoute(
+  CustomerBookingFlowController flow,
+) async {
+  for (var attempt = 0; attempt < 20; attempt++) {
+    if (flow.route != null && !flow.loading) {
+      return;
+    }
+
+    await Future<void>.delayed(Duration.zero);
+  }
+
+  fail('La ruta no quedó disponible dentro del tiempo esperado.');
+}
+
 void main() {
-  final client = SupabaseClient('https://example.supabase.co', 'test-key');
-  final map = FakeMapService(client);
-  final flow = CustomerBookingFlowController(
-    map,
-    MarketplaceCustomerService(client),
-    const MarketplaceCustomerSessionSnapshot(
-      sessionId: 'session',
-      customerId: 'customer',
-      token: 'token',
-    ),
+  late SupabaseClient client;
+  late FakeMapService map;
+  late CustomerBookingFlowController flow;
+
+  const origin = MarketplaceMapPoint(
+    label: 'Origen',
+    lat: 23.1,
+    lon: -82.3,
   );
-  const origin = MarketplaceMapPoint(label: 'Origen', lat: 23.1, lon: -82.3);
-  const destination =
-      MarketplaceMapPoint(label: 'Destino', lat: 23.2, lon: -82.4);
 
-  test('route waits for both points, origin change invalidates old route',
-      () async {
-    await flow.refreshRoute();
-    expect(map.routeCalls, 0);
-    flow.setOrigin(origin);
-    await flow.refreshRoute();
-    expect(map.routeCalls, 0);
-    flow.setDestination(destination);
-    await Future<void>.delayed(Duration.zero);
-    expect(map.routeCalls, 1);
-    expect(flow.route?.distanceKm, 9);
-    flow.setOrigin(origin);
-    expect(flow.route, isNull);
-    expect(flow.destination, isNull);
+  const destination = MarketplaceMapPoint(
+    label: 'Destino',
+    lat: 23.2,
+    lon: -82.4,
+  );
+
+  setUp(() {
+    client = SupabaseClient(
+      'https://example.supabase.co',
+      'test-key',
+    );
+
+    map = FakeMapService(client);
+
+    flow = CustomerBookingFlowController(
+      map,
+      MarketplaceCustomerService(client),
+      const MarketplaceCustomerSessionSnapshot(
+        sessionId: 'session',
+        customerId: 'customer',
+        token: 'token',
+      ),
+    );
   });
 
-  test('passenger and urgency changes only reprice verified route', () async {
-    flow.setDestination(destination);
-    await Future<void>.delayed(Duration.zero);
-    final before = map.routeCalls;
-    flow.passengerCount = 2;
-    await flow.reprice();
-    flow.urgent = true;
-    await flow.reprice();
-    expect(map.routeCalls, before);
-    expect(map.priceCalls, 2);
-    expect(map.createCalls, 0);
-    expect(flow.selectedPrice?['recommended_price'], 4900);
-    await flow.submit();
-    expect(map.createCalls, 1);
+  tearDown(() {
+    flow.dispose();
   });
+
+  test(
+    'route waits for both points, origin change invalidates old route',
+    () async {
+      await flow.refreshRoute();
+      expect(map.routeCalls, 0);
+
+      flow.setOrigin(origin);
+
+      await flow.refreshRoute();
+      expect(map.routeCalls, 0);
+
+      flow.setDestination(destination);
+      await waitForVerifiedRoute(flow);
+
+      expect(map.routeCalls, 1);
+      expect(flow.route?.distanceKm, 9);
+
+      flow.setOrigin(origin);
+
+      expect(flow.route, isNull);
+      expect(flow.destination, isNull);
+    },
+  );
+
+  test(
+    'passenger and urgency changes only reprice verified route',
+    () async {
+      // Este test prepara su propio estado.
+      // No depende del test anterior.
+      flow.setOrigin(origin);
+      flow.setDestination(destination);
+
+      await waitForVerifiedRoute(flow);
+
+      expect(flow.route, isNotNull);
+      expect(
+        flow.selectedPrice?['recommended_price'],
+        3900,
+      );
+
+      final routeCallsBeforeReprice = map.routeCalls;
+
+      flow.passengerCount = 2;
+      await flow.reprice();
+
+      flow.urgent = true;
+      await flow.reprice();
+
+      expect(
+        map.routeCalls,
+        routeCallsBeforeReprice,
+      );
+
+      expect(map.priceCalls, 2);
+      expect(map.createCalls, 0);
+
+      expect(
+        flow.selectedPrice?['recommended_price'],
+        4900,
+      );
+
+      await flow.submit();
+
+      expect(map.createCalls, 1);
+    },
+  );
 }

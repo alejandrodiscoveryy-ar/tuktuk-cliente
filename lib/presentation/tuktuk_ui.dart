@@ -48,8 +48,14 @@ class TuktukTheme {
 }
 
 class TuktukFlowHeader extends StatelessWidget {
-  const TuktukFlowHeader({required this.step, super.key});
+  const TuktukFlowHeader({
+    required this.step,
+    this.onBack,
+    super.key,
+  });
+
   final int step;
+  final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -70,7 +76,7 @@ class TuktukFlowHeader extends StatelessWidget {
               horizontalPadding,
               10,
               horizontalPadding,
-              12,
+              8,
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -94,6 +100,39 @@ class TuktukFlowHeader extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       TuktukProgressIndicator(step: step),
+                      const SizedBox(height: 3),
+                      Visibility(
+                        visible: onBack != null,
+                        maintainSize: true,
+                        maintainAnimation: true,
+                        maintainState: true,
+                        child: SizedBox(
+                          height: compact ? 34 : 36,
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: onBack,
+                              style: TextButton.styleFrom(
+                                foregroundColor: TuktukTheme.mint,
+                                padding: EdgeInsets.zero,
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              icon: Icon(
+                                Icons.arrow_back_rounded,
+                                size: compact ? 18 : 20,
+                              ),
+                              label: Text(
+                                'Volver',
+                                style: TextStyle(
+                                  fontSize: compact ? 14 : 15,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -241,32 +280,6 @@ class TuktukGlassCard extends StatelessWidget {
           ],
         ),
         child: child,
-      );
-}
-
-class TuktukFooterLabel extends StatelessWidget {
-  const TuktukFooterLabel(this.label, {super.key});
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(top: 17, bottom: 8),
-        child: Row(
-          children: [
-            const Expanded(child: Divider(color: TuktukTheme.border)),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              child: Text(
-                label,
-                style: const TextStyle(
-                  color: TuktukTheme.muted,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-            const Expanded(child: Divider(color: TuktukTheme.border)),
-          ],
-        ),
       );
 }
 
@@ -534,7 +547,6 @@ class TuktukServiceCard extends StatelessWidget {
           ),
         ),
       );
-
 }
 
 class TuktukSummaryRow extends StatelessWidget {
@@ -854,9 +866,8 @@ class _TuktukStatusOrbState extends State<TuktukStatusOrb>
         animation: _controller,
         builder: (context, child) {
           final phase = widget.active ? _controller.value : 0.0;
-          final breathe = widget.active
-              ? .92 + ((sin(phase * pi * 2) + 1) * .055)
-              : 1.0;
+          final breathe =
+              widget.active ? .92 + ((sin(phase * pi * 2) + 1) * .055) : 1.0;
 
           return Stack(
             alignment: Alignment.center,
@@ -958,7 +969,6 @@ class TuktukHavanaBackdrop extends StatelessWidget {
               ),
             ),
           ),
-
           if (showRelief)
             Positioned.fill(
               child: IgnorePointer(

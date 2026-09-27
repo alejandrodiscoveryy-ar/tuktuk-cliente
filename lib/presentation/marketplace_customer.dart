@@ -134,8 +134,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
         return;
       }
 
-      final editToken =
-          _editSessionToken ??= marketplaceCustomerSessionToken();
+      final editToken = _editSessionToken ??= marketplaceCustomerSessionToken();
       final editIdempotencyKey = _editIdempotencyKey ??= _marketplaceUuid();
 
       setState(() {
@@ -419,9 +418,6 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
                                   label:
                                       _loading ? 'Conectando...' : 'Continuar',
                                 ),
-                                const TuktukFooterLabel(
-                                  'Identificación del cliente',
-                                ),
                               ],
                             ),
                           ),
@@ -446,51 +442,131 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
               children: [
                 const TuktukFlowHeader(step: 1),
                 Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const Text(
-                            'Edita tus datos',
-                            style: TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.w800,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) => SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(22, 14, 22, 18),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: constraints.maxHeight - 32,
+                        ),
+                        child: IntrinsicHeight(
+                          child: Form(
+                            key: _formKey,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const Text(
+                                  'Edita tus datos',
+                                  style: TextStyle(
+                                    fontSize: 36,
+                                    fontWeight: FontWeight.w900,
+                                    height: 1.05,
+                                  ),
+                                ),
+                                const SizedBox(height: 9),
+                                const Text(
+                                  'Mantén actualizados tus datos de contacto.',
+                                  style: TextStyle(
+                                    color: TuktukTheme.muted,
+                                    fontSize: 16,
+                                    height: 1.35,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                TuktukGlassCard(
+                                  padding: EdgeInsets.zero,
+                                  child: TextFormField(
+                                    controller: _nameController,
+                                    textInputAction: TextInputAction.next,
+                                    autofillHints: const [
+                                      AutofillHints.name,
+                                    ],
+                                    decoration: InputDecoration(
+                                      labelText: 'Nombre',
+                                      hintText: 'Tu nombre',
+                                      prefixIcon: const Icon(
+                                        Icons.person_outline_rounded,
+                                        color: TuktukTheme.mint,
+                                      ),
+                                      suffixIcon: IconButton(
+                                        tooltip: 'Limpiar',
+                                        onPressed: _nameController.clear,
+                                        icon: const Icon(
+                                          Icons.cancel_outlined,
+                                        ),
+                                      ),
+                                    ),
+                                    validator: _validateName,
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                TuktukGlassCard(
+                                  padding: EdgeInsets.zero,
+                                  child: TextFormField(
+                                    controller: _whatsappController,
+                                    keyboardType: TextInputType.phone,
+                                    autofillHints: const [
+                                      AutofillHints.telephoneNumber,
+                                    ],
+                                    decoration: InputDecoration(
+                                      labelText: 'WhatsApp o teléfono',
+                                      hintText: '+53 5 123 4567',
+                                      prefixIcon: const Icon(
+                                        Icons.phone_outlined,
+                                        color: TuktukTheme.mint,
+                                      ),
+                                      suffixIcon: IconButton(
+                                        tooltip: 'Limpiar',
+                                        onPressed: _whatsappController.clear,
+                                        icon: const Icon(
+                                          Icons.cancel_outlined,
+                                        ),
+                                      ),
+                                    ),
+                                    validator: _validateWhatsapp,
+                                  ),
+                                ),
+                                if (_error != null) ...[
+                                  const SizedBox(height: 14),
+                                  TuktukGlassCard(
+                                    padding: const EdgeInsets.all(14),
+                                    borderColor: TuktukTheme.danger,
+                                    child: Text(
+                                      _error!,
+                                      style: const TextStyle(
+                                        color: TuktukTheme.danger,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                const Spacer(),
+                                Semantics(
+                                  label: 'Identidad TUKTUK',
+                                  image: true,
+                                  child: const Center(
+                                    child: Opacity(
+                                      opacity: .92,
+                                      child: Image(
+                                        image: AssetImage(
+                                          'assets/branding/tuktuk_identity.png',
+                                        ),
+                                        width: 170,
+                                        height: 170,
+                                        fit: BoxFit.contain,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const Spacer(),
+                                TuktukPrimaryButton(
+                                  label:
+                                      _loading ? 'Guardando...' : 'Continuar',
+                                  onPressed: _loading ? null : _continue,
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 18),
-                          TextFormField(
-                            controller: _nameController,
-                            decoration: const InputDecoration(
-                              labelText: 'Nombre',
-                            ),
-                            validator: _validateName,
-                          ),
-                          const SizedBox(height: 14),
-                          TextFormField(
-                            controller: _whatsappController,
-                            decoration: const InputDecoration(
-                              labelText: 'WhatsApp o teléfono',
-                            ),
-                            validator: _validateWhatsapp,
-                          ),
-                          if (_error != null) ...[
-                            const SizedBox(height: 12),
-                            Text(
-                              _error!,
-                              style: const TextStyle(
-                                color: TuktukTheme.danger,
-                              ),
-                            ),
-                          ],
-                          const Spacer(),
-                          TuktukPrimaryButton(
-                            label: _loading ? 'Guardando...' : 'Continuar',
-                            onPressed: _loading ? null : _continue,
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),

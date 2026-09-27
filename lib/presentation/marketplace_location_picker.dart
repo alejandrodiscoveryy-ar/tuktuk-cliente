@@ -147,7 +147,7 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
 
   @override
   Widget build(BuildContext context) {
-    const token = MarketplaceMapService.publicToken;
+    final token = MarketplaceMapService.publicToken;
     final center = widget.origin?.latLng ?? const LatLng(23.1136, -82.3666);
     final destination = widget.origin != null;
 
@@ -190,8 +190,7 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
                     ),
                     children: [
                       TileLayer(
-                        urlTemplate:
-                            'https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/256/{z}/{x}/{y}?access_token=$token',
+                        urlTemplate: MarketplaceMapService.tileUrlTemplate,
                         userAgentPackageName: 'com.vrixora.tuktuk',
                         errorTileCallback: (_, __, ___) {
                           if (mounted && !tilesFailed) {
@@ -650,7 +649,7 @@ class MarketplaceRouteMap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const token = MarketplaceMapService.publicToken;
+    final token = MarketplaceMapService.publicToken;
     if (token.isEmpty) {
       return const Center(child: Text('Mapa no configurado'));
     }
@@ -681,8 +680,7 @@ class MarketplaceRouteMap extends StatelessWidget {
           ),
           children: [
             TileLayer(
-              urlTemplate:
-                  'https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/256/{z}/{x}/{y}?access_token=$token',
+              urlTemplate: MarketplaceMapService.tileUrlTemplate,
               userAgentPackageName: 'com.vrixora.tuktuk',
             ),
             if (route != null)

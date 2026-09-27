@@ -38,6 +38,11 @@ Future<void> main() async {
   }
   await Supabase.initialize(
       url: _supabaseUrl, publishableKey: _supabasePublishableKey);
+
+  await MarketplaceMapService.loadPublicConfiguration(
+    Supabase.instance.client,
+  );
+
   runApp(MarketplaceCustomerApp(client: Supabase.instance.client));
 }
 
