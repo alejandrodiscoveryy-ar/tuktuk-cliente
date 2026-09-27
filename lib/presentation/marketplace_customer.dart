@@ -540,24 +540,6 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
                                   ),
                                 ],
                                 const Spacer(),
-                                Semantics(
-                                  label: 'Identidad TUKTUK',
-                                  image: true,
-                                  child: const Center(
-                                    child: Opacity(
-                                      opacity: .92,
-                                      child: Image(
-                                        image: AssetImage(
-                                          'assets/branding/tuktuk_identity.png',
-                                        ),
-                                        width: 170,
-                                        height: 170,
-                                        fit: BoxFit.contain,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const Spacer(),
                                 TuktukPrimaryButton(
                                   label:
                                       _loading ? 'Guardando...' : 'Continuar',
