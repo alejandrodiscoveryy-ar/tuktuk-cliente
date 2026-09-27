@@ -47,6 +47,39 @@ void main() {
     expect(marketplaceServiceLabel('cargo'), 'Carga');
   });
 
+  test('passenger smart pricing supports the four production categories', () {
+    expect(marketplacePassengerVehicleCategories,
+        ['motorcycle', 'bicitaxi', 'tricycle', 'light_car']);
+    expect(marketplacePassengerVehicleLabel('motorcycle'), 'Moto');
+    expect(marketplacePassengerVehicleLabel('bicitaxi'), 'Bicitaxi');
+    expect(marketplacePassengerVehicleLabel('tricycle'), 'Triciclo');
+    expect(marketplacePassengerVehicleLabel('light_car'), 'Auto');
+
+    final source =
+        File('lib/presentation/marketplace_customer_booking_flow.dart')
+            .readAsStringSync();
+    expect(source, contains("'passenger_by_category'"));
+    expect(source, contains("'target_vehicle_category_code'"));
+  });
+
+  test('passenger category selection changes the requested quote category', () {
+    final client = SupabaseClient('https://example.supabase.co', 'test-key');
+    final flow = CustomerBookingFlowController(
+      MarketplaceMapService(client),
+      MarketplaceCustomerService(client),
+      const MarketplaceCustomerSessionSnapshot(
+        sessionId: 's',
+        customerId: 'c',
+        token: 't',
+      ),
+    );
+
+    flow.setPassengerVehicleCategory('tricycle');
+
+    expect(flow.passengerVehicleCategoryCode, 'tricycle');
+    expect(flow.pricing['vehicle_category_code'], 'tricycle');
+  });
+
   test('manual flow preserves selected origin, destination and service', () {
     final client = SupabaseClient('https://example.supabase.co', 'test-key');
     final flow = CustomerBookingFlowController(
@@ -230,5 +263,4 @@ void main() {
     expect(source, contains('displayName: displayName'));
     expect(source, contains('whatsappPhone: whatsappPhone'));
   });
-
 }

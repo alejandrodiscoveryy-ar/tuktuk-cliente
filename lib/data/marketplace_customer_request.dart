@@ -181,6 +181,7 @@ extension MarketplaceCustomerRequestApi on MarketplaceCustomerService {
     double? cargoWidthCm,
     double? cargoHeightCm,
     String? requiredBodyType,
+    String? vehicleCategoryCode,
     String? notes,
     Map<String, dynamic> details = const <String, dynamic>{},
   }) =>
@@ -200,6 +201,7 @@ extension MarketplaceCustomerRequestApi on MarketplaceCustomerService {
           'target_cargo_width_cm': cargoWidthCm,
           'target_cargo_height_cm': cargoHeightCm,
           'target_required_body_type': requiredBodyType,
+          'target_vehicle_category_code': vehicleCategoryCode,
           'target_notes': notes,
           'target_details': details,
           'target_idempotency_key': idempotencyKey,

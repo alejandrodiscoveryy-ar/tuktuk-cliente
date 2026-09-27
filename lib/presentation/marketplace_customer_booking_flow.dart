@@ -13,6 +13,23 @@ String marketplaceServiceLabel(String code) => switch (code) {
       _ => 'Servicio',
     };
 
+@visibleForTesting
+const marketplacePassengerVehicleCategories = <String>[
+  'motorcycle',
+  'bicitaxi',
+  'tricycle',
+  'light_car',
+];
+
+@visibleForTesting
+String marketplacePassengerVehicleLabel(String code) => switch (code) {
+      'motorcycle' => 'Moto',
+      'bicitaxi' => 'Bicitaxi',
+      'tricycle' => 'Triciclo',
+      'light_car' => 'Auto',
+      _ => 'Vehículo',
+    };
+
 class CustomerBookingFlowController extends ChangeNotifier {
   CustomerBookingFlowController(
       this.mapService, this.customerService, this.session);
@@ -26,6 +43,7 @@ class CustomerBookingFlowController extends ChangeNotifier {
   MarketplaceMapPoint? destination;
   MarketplaceRouteQuote? route;
   String serviceCode = 'passenger';
+  String passengerVehicleCategoryCode = 'motorcycle';
   int passengerCount = 1;
   int stopCount = 0;
   bool urgent = false;
@@ -49,14 +67,29 @@ class CustomerBookingFlowController extends ChangeNotifier {
         'unload_help': unloadHelp,
         'cargo_weight_kg': cargoWeightKg,
         'cargo_volume_m3': cargoVolumeM3,
+        'vehicle_category_code':
+            serviceCode == 'passenger' ? passengerVehicleCategoryCode : null,
       };
 
   Map<String, dynamic>? get selectedPrice =>
       serviceCode == 'cargo' && cargoWeightKg == null && cargoVolumeM3 == null
           ? null
-          : route?.prices[serviceCode] is Map
-              ? Map<String, dynamic>.from(route!.prices[serviceCode] as Map)
-              : null;
+          : serviceCode == 'passenger'
+              ? _passengerCategoryPrice
+              : route?.prices[serviceCode] is Map
+                  ? Map<String, dynamic>.from(route!.prices[serviceCode] as Map)
+                  : null;
+
+  Map<String, dynamic>? get _passengerCategoryPrice {
+    final byCategory = route?.prices['passenger_by_category'];
+    if (byCategory is! Map ||
+        byCategory[passengerVehicleCategoryCode] is! Map) {
+      return null;
+    }
+    return Map<String, dynamic>.from(
+      byCategory[passengerVehicleCategoryCode] as Map,
+    );
+  }
 
   void setStep(MarketplaceBookingStep value) {
     step = value;
@@ -89,6 +122,16 @@ class CustomerBookingFlowController extends ChangeNotifier {
   void setService(String value) {
     serviceCode = value;
     notifyListeners();
+  }
+
+  void setPassengerVehicleCategory(String value) {
+    if (!marketplacePassengerVehicleCategories.contains(value) ||
+        passengerVehicleCategoryCode == value) {
+      return;
+    }
+    passengerVehicleCategoryCode = value;
+    notifyListeners();
+    reprice();
   }
 
   Future<void> refreshRoute() async {
@@ -174,6 +217,8 @@ class CustomerBookingFlowController extends ChangeNotifier {
           'target_scheduled_for': scheduledFor?.toUtc().toIso8601String(),
           'target_passenger_count':
               serviceCode == 'passenger' ? passengerCount : null,
+          'target_vehicle_category_code':
+              serviceCode == 'passenger' ? passengerVehicleCategoryCode : null,
           'target_cargo_weight_kg': cargoWeightKg,
           'target_cargo_volume_m3': cargoVolumeM3,
           'target_cargo_length_cm': null,
@@ -540,6 +585,27 @@ class _MarketplaceCustomerBookingFlowState
                         ),
                       if (flow.serviceCode == 'passenger')
                         TuktukGlassCard(
+                          padding: const EdgeInsets.all(10),
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final category
+                                  in marketplacePassengerVehicleCategories)
+                                ChoiceChip(
+                                  label: Text(
+                                    '${marketplacePassengerVehicleLabel(category)} · ${_priceLabel(_passengerPrice(category), 'passenger')}',
+                                  ),
+                                  selected: flow.passengerVehicleCategoryCode ==
+                                      category,
+                                  onSelected: (_) => flow
+                                      .setPassengerVehicleCategory(category),
+                                ),
+                            ],
+                          ),
+                        ),
+                      if (flow.serviceCode == 'passenger')
+                        TuktukGlassCard(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 8,
@@ -762,6 +828,11 @@ class _MarketplaceCustomerBookingFlowState
       return '${value['recommended_price']} ${value['currency'] ?? 'CUP'}';
     }
     return code == 'cargo' ? 'Indica peso o volumen' : 'Calculando…';
+  }
+
+  Object? _passengerPrice(String category) {
+    final prices = flow.route?.prices['passenger_by_category'];
+    return prices is Map ? prices[category] : null;
   }
 
   Future<void> _showStopsSheet() async {

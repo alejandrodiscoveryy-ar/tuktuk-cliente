@@ -311,8 +311,7 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
                         child: ListView.separated(
                           shrinkWrap: true,
                           itemCount: results.length,
-                          separatorBuilder: (_, __) =>
-                              const Divider(height: 1),
+                          separatorBuilder: (_, __) => const Divider(height: 1),
                           itemBuilder: (context, index) => ListTile(
                             dense: true,
                             title: Text(results[index].label),
@@ -482,7 +481,6 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
                         : () => widget.onConfirm(selected!),
                     label: 'Confirmar origen',
                   ),
-                  const TuktukFooterLabel('Origen del viaje'),
                 ],
               ),
             ),
@@ -589,7 +587,6 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
                               : () => widget.onConfirm(selected!),
                           label: 'Confirmar destino',
                         ),
-                        const TuktukFooterLabel('Destino del viaje'),
                       ],
                     ),
                   ),
