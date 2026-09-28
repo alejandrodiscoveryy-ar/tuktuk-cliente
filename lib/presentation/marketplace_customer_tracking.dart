@@ -648,16 +648,6 @@ class _MarketplaceCustomerTrackingScreenState
                                         onPressed: _finish,
                                         label: 'Volver a servicios',
                                       ),
-                                    ] else ...[
-                                      const SizedBox(height: 14),
-                                      const Text(
-                                        'Esta pantalla se actualiza automáticamente.',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: TuktukTheme.muted,
-                                          fontSize: 12.5,
-                                        ),
-                                      ),
                                     ],
                                   ],
                                 ),

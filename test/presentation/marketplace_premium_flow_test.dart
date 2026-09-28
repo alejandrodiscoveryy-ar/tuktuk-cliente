@@ -21,7 +21,7 @@ void main() {
     final source =
         File('lib/presentation/marketplace_customer_booking_flow.dart')
             .readAsStringSync();
-    expect(source, contains('Elegir ubicación manualmente'));
+    expect(source, isNot(contains('Elegir ubicación manualmente')));
     expect(source, contains('MarketplaceBookingStep.origin'));
   });
 

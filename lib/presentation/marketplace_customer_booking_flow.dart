@@ -428,14 +428,6 @@ class _MarketplaceCustomerBookingFlowState
                   onPressed: () => flow.setStep(MarketplaceBookingStep.origin),
                   label: 'Continuar',
                 ),
-                const SizedBox(height: 6),
-                TextButton(
-                  onPressed: () => flow.setStep(MarketplaceBookingStep.origin),
-                  child: const Text(
-                    'Elegir ubicación manualmente',
-                    style: TextStyle(color: TuktukTheme.muted),
-                  ),
-                ),
               ],
             ),
           ),

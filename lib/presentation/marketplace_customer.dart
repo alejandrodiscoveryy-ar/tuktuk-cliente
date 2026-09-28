@@ -455,6 +455,11 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
+                                SizedBox(
+                                  height: (constraints.maxHeight * .07)
+                                      .clamp(36.0, 58.0)
+                                      .toDouble(),
+                                ),
                                 const Text(
                                   'Edita tus datos',
                                   style: TextStyle(
