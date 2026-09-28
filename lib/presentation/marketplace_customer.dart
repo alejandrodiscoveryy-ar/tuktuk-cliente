@@ -463,73 +463,98 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
                                 const Text(
                                   'Edita tus datos',
                                   style: TextStyle(
-                                    fontSize: 36,
+                                    fontSize: 34,
                                     fontWeight: FontWeight.w900,
                                     height: 1.05,
+                                    letterSpacing: -0.5,
                                   ),
                                 ),
-                                const SizedBox(height: 9),
+                                const SizedBox(height: 8),
                                 const Text(
                                   'Mantén actualizados tus datos de contacto.',
                                   style: TextStyle(
                                     color: TuktukTheme.muted,
-                                    fontSize: 16,
+                                    fontSize: 15.5,
                                     height: 1.35,
                                   ),
                                 ),
-                                const SizedBox(height: 24),
-                                TuktukGlassCard(
-                                  padding: EdgeInsets.zero,
-                                  child: TextFormField(
-                                    controller: _nameController,
-                                    textInputAction: TextInputAction.next,
-                                    autofillHints: const [
-                                      AutofillHints.name,
-                                    ],
-                                    decoration: InputDecoration(
-                                      labelText: 'Nombre',
-                                      hintText: 'Tu nombre',
-                                      prefixIcon: const Icon(
-                                        Icons.person_outline_rounded,
-                                        color: TuktukTheme.mint,
-                                      ),
-                                      suffixIcon: IconButton(
-                                        tooltip: 'Limpiar',
-                                        onPressed: _nameController.clear,
-                                        icon: const Icon(
-                                          Icons.cancel_outlined,
-                                        ),
+                                const SizedBox(height: 20),
+                                TextFormField(
+                                  controller: _nameController,
+                                  textInputAction: TextInputAction.next,
+                                  autofillHints: const [
+                                    AutofillHints.name,
+                                  ],
+                                  style: const TextStyle(
+                                    fontSize: 18.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  decoration: InputDecoration(
+                                    labelText: 'Nombre',
+                                    hintText: 'Tu nombre',
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 18,
+                                      vertical: 16,
+                                    ),
+                                    prefixIcon: const Icon(
+                                      Icons.person_outline_rounded,
+                                      color: TuktukTheme.mint,
+                                      size: 24,
+                                    ),
+                                    prefixIconConstraints:
+                                        const BoxConstraints(minWidth: 52),
+                                    suffixIcon: IconButton(
+                                      tooltip: 'Limpiar',
+                                      onPressed: _nameController.clear,
+                                      icon: const Icon(
+                                        Icons.cancel_outlined,
+                                        size: 24,
                                       ),
                                     ),
-                                    validator: _validateName,
+                                    suffixIconConstraints:
+                                        const BoxConstraints(minWidth: 48),
                                   ),
+                                  validator: _validateName,
                                 ),
-                                const SizedBox(height: 14),
-                                TuktukGlassCard(
-                                  padding: EdgeInsets.zero,
-                                  child: TextFormField(
-                                    controller: _whatsappController,
-                                    keyboardType: TextInputType.phone,
-                                    autofillHints: const [
-                                      AutofillHints.telephoneNumber,
-                                    ],
-                                    decoration: InputDecoration(
-                                      labelText: 'WhatsApp o teléfono',
-                                      hintText: '+53 5 123 4567',
-                                      prefixIcon: const Icon(
-                                        Icons.phone_outlined,
-                                        color: TuktukTheme.mint,
-                                      ),
-                                      suffixIcon: IconButton(
-                                        tooltip: 'Limpiar',
-                                        onPressed: _whatsappController.clear,
-                                        icon: const Icon(
-                                          Icons.cancel_outlined,
-                                        ),
+                                const SizedBox(height: 12),
+                                TextFormField(
+                                  controller: _whatsappController,
+                                  keyboardType: TextInputType.phone,
+                                  autofillHints: const [
+                                    AutofillHints.telephoneNumber,
+                                  ],
+                                  style: const TextStyle(
+                                    fontSize: 18.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  decoration: InputDecoration(
+                                    labelText: 'WhatsApp o teléfono',
+                                    hintText: '+53 5 123 4567',
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 18,
+                                      vertical: 16,
+                                    ),
+                                    prefixIcon: const Icon(
+                                      Icons.phone_outlined,
+                                      color: TuktukTheme.mint,
+                                      size: 24,
+                                    ),
+                                    prefixIconConstraints:
+                                        const BoxConstraints(minWidth: 52),
+                                    suffixIcon: IconButton(
+                                      tooltip: 'Limpiar',
+                                      onPressed: _whatsappController.clear,
+                                      icon: const Icon(
+                                        Icons.cancel_outlined,
+                                        size: 24,
                                       ),
                                     ),
-                                    validator: _validateWhatsapp,
+                                    suffixIconConstraints:
+                                        const BoxConstraints(minWidth: 48),
                                   ),
+                                  validator: _validateWhatsapp,
                                 ),
                                 if (_error != null) ...[
                                   const SizedBox(height: 14),

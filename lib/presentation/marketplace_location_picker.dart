@@ -82,9 +82,10 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
   Future<void> select(LatLng position) async {
     setState(() {
       selected = MarketplaceMapPoint(
-          label: 'Ubicación seleccionada',
-          lat: position.latitude,
-          lon: position.longitude);
+        label: 'Ubicación seleccionada',
+        lat: position.latitude,
+        lon: position.longitude,
+      );
       results = const [];
       busy = true;
     });
@@ -93,8 +94,10 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
       if (mounted) setState(() => selected = point);
     } catch (_) {
       if (mounted) {
-        setState(() => message =
-            'No pudimos obtener la dirección. Puedes continuar con el punto elegido.');
+        setState(
+          () => message =
+              'No pudimos obtener la dirección. Puedes continuar con el punto elegido.',
+        );
       }
     } finally {
       if (mounted) setState(() => busy = false);
@@ -137,8 +140,10 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
       await select(point);
     } catch (_) {
       if (mounted) {
-        setState(() => message =
-            'Ubicación no disponible. Busca un lugar o toca el mapa para elegirlo manualmente.');
+        setState(
+          () => message =
+              'Ubicación no disponible. Busca un lugar o toca el mapa para elegirlo manualmente.',
+        );
       }
     } finally {
       if (mounted) setState(() => busy = false);
@@ -174,7 +179,9 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
                       onTap: (_, point) => select(point),
                       onPositionChanged: (camera, hasGesture) {
                         if (!hasGesture) return;
+
                         reverseDebounce?.cancel();
+
                         setState(
                           () => selected = MarketplaceMapPoint(
                             label: 'Ubicación seleccionada',
@@ -182,10 +189,15 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
                             lon: camera.center.longitude,
                           ),
                         );
-                        reverseDebounce =
-                            Timer(const Duration(milliseconds: 700), () {
-                          if (selected != null) select(selected!.latLng);
-                        });
+
+                        reverseDebounce = Timer(
+                          const Duration(milliseconds: 700),
+                          () {
+                            if (selected != null) {
+                              select(selected!.latLng);
+                            }
+                          },
+                        );
                       },
                     ),
                     children: [
@@ -214,9 +226,7 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
                   ),
           ),
           if (token.isNotEmpty)
-            const Positioned.fill(
-              child: TuktukMapLoadingOverlay(),
-            ),
+            const Positioned.fill(child: TuktukMapLoadingOverlay()),
           Positioned.fill(
             child: IgnorePointer(
               child: DecoratedBox(
@@ -225,10 +235,10 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
                     begin: Alignment.topCenter,
                     end: Alignment.center,
                     colors: [
-                      TuktukTheme.background.withValues(alpha: .45),
+                      TuktukTheme.background.withValues(alpha: .42),
                       Colors.transparent,
                     ],
-                    stops: const [0, .24],
+                    stops: const [0, .22],
                   ),
                 ),
               ),
@@ -238,31 +248,44 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
             Positioned(
               left: 14,
               right: 14,
-              top: 12,
+              top: 10,
               child: Column(
                 children: [
-                  TuktukGlassCard(
+                  Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 13,
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xEB121A20),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: TuktukTheme.border),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x55000000),
+                          blurRadius: 16,
+                          offset: Offset(0, 7),
+                        ),
+                      ],
                     ),
                     child: Row(
                       children: [
                         const Icon(
-                          Icons.location_on_outlined,
+                          Icons.location_on_rounded,
                           color: TuktukTheme.mint,
-                          size: 30,
+                          size: 25,
                         ),
-                        const SizedBox(width: 13),
+                        const SizedBox(width: 11),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                '¿Dónde te recogemos?',
+                                'Punto de recogida',
                                 style: TextStyle(
                                   color: TuktukTheme.muted,
-                                  fontSize: 14,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                               const SizedBox(height: 2),
@@ -271,7 +294,7 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  fontSize: 20,
+                                  fontSize: 17,
                                   fontWeight: FontWeight.w800,
                                 ),
                               ),
@@ -280,32 +303,37 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
                         ),
                         IconButton(
                           tooltip: 'Buscar dirección',
-                          onPressed: () =>
-                              setState(() => searchOpen = !searchOpen),
-                          icon: const Icon(Icons.edit_outlined),
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () {
+                            setState(() => searchOpen = !searchOpen);
+                          },
+                          icon: const Icon(
+                            Icons.search_rounded,
+                            color: TuktukTheme.mint,
+                          ),
                         ),
                       ],
                     ),
                   ),
                   if (searchOpen) ...[
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     TextField(
                       controller: searchController,
                       autofocus: true,
                       onChanged: search,
                       decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.search),
+                        prefixIcon: Icon(Icons.search_rounded),
                         hintText: 'Buscar dirección o lugar',
                       ),
                     ),
-                    if (results.isNotEmpty)
+                    if (results.isNotEmpty) ...[
+                      const SizedBox(height: 6),
                       Container(
-                        constraints: const BoxConstraints(maxHeight: 180),
-                        margin: const EdgeInsets.only(top: 6),
+                        constraints: const BoxConstraints(maxHeight: 170),
                         decoration: BoxDecoration(
                           color: TuktukTheme.surfaceStrong,
                           border: Border.all(color: TuktukTheme.border),
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(18),
                         ),
                         child: ListView.separated(
                           shrinkWrap: true,
@@ -314,10 +342,12 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
                           itemBuilder: (context, index) => ListTile(
                             dense: true,
                             title: Text(results[index].label),
+                            trailing: const Icon(Icons.chevron_right_rounded),
                             onTap: () => _chooseSearchResult(results[index]),
                           ),
                         ),
                       ),
+                    ],
                   ],
                 ],
               ),
@@ -326,35 +356,39 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
             Positioned(
               left: 14,
               right: 14,
-              top: 12,
-              child: TuktukGlassCard(
+              top: 10,
+              child: Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 14,
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xEB121A20),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: TuktukTheme.border),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x55000000),
+                      blurRadius: 16,
+                      offset: Offset(0, 7),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
                     const SizedBox(
-                      width: 28,
+                      width: 24,
                       child: Column(
                         children: [
-                          Icon(
-                            Icons.circle,
-                            size: 14,
-                            color: TuktukTheme.mint,
-                          ),
+                          Icon(Icons.circle, size: 11, color: TuktukTheme.mint),
                           Text(
                             '⋮',
                             style: TextStyle(
                               color: TuktukTheme.muted,
-                              height: .75,
+                              height: .7,
                             ),
                           ),
-                          Icon(
-                            Icons.circle,
-                            size: 14,
-                            color: TuktukTheme.danger,
-                          ),
+                          Icon(Icons.circle, size: 11, color: TuktukTheme.gold),
                         ],
                       ),
                     ),
@@ -368,23 +402,22 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 16,
+                              color: TuktukTheme.muted,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                          const SizedBox(height: 9),
+                          const SizedBox(height: 5),
                           Text(
-                            selected?.label ?? '¿A dónde vas?',
+                            selected?.label ?? 'Selecciona tu destino',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontWeight: selected == null
-                                  ? FontWeight.w500
-                                  : FontWeight.w800,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
                               color: selected == null
                                   ? TuktukTheme.muted
                                   : TuktukTheme.text,
-                              fontSize: 16,
                             ),
                           ),
                         ],
@@ -410,41 +443,53 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
                           onPressed: busy ? null : usePosition,
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: TuktukMapButton(
                           label: 'Mover pin',
                           icon: Icons.location_on_rounded,
-                          onPressed: () => setState(
-                            () => message =
-                                'Mueve el mapa o toca un punto para ajustar el origen.',
-                          ),
+                          onPressed: () {
+                            setState(
+                              () => message =
+                                  'Mueve el mapa o toca un punto para ajustar el origen.',
+                            );
+                          },
                           active: selected != null,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  TuktukGlassCard(
-                    padding: const EdgeInsets.all(15),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 11,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xE8121A20),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: TuktukTheme.border),
+                    ),
                     child: Row(
                       children: [
-                        const Icon(
-                          Icons.info_outline_rounded,
+                        Icon(
+                          selected == null
+                              ? Icons.touch_app_outlined
+                              : Icons.check_circle_outline_rounded,
                           color: TuktukTheme.mint,
-                          size: 27,
+                          size: 22,
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            selected == null
-                                ? 'Usaremos el punto elegido como origen del viaje. Puedes mover el mapa o usar tu ubicación actual.'
-                                : selected!.label,
+                            selected?.label ??
+                                'Toca el mapa o usa tu ubicación actual.',
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: TuktukTheme.muted,
-                              height: 1.35,
+                              fontSize: 13.5,
+                              height: 1.25,
                             ),
                           ),
                         ),
@@ -452,28 +497,25 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
                     ),
                   ),
                   if (message != null) ...[
-                    const SizedBox(height: 7),
+                    const SizedBox(height: 6),
                     Text(
                       message!,
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: TuktukTheme.muted,
-                        fontSize: 12.5,
+                        fontSize: 12,
                       ),
                     ),
                   ],
                   if (tilesFailed) ...[
-                    const SizedBox(height: 7),
+                    const SizedBox(height: 6),
                     const Text(
-                      'El mapa no pudo cargar todas las teselas. Aún puedes buscar o seleccionar un punto.',
+                      'El mapa no pudo cargar todas las teselas.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: TuktukTheme.gold,
-                        fontSize: 12.5,
-                      ),
+                      style: TextStyle(color: TuktukTheme.gold, fontSize: 12),
                     ),
                   ],
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   TuktukPrimaryButton(
                     onPressed: selected == null || busy
                         ? null
@@ -489,22 +531,24 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
               right: 10,
               bottom: 8,
               child: ConstrainedBox(
-                constraints:
-                    BoxConstraints(maxHeight: constraints.maxHeight * .54),
+                constraints: BoxConstraints(
+                  maxHeight: constraints.maxHeight * .48,
+                ),
                 child: TuktukSectionSheet(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
+                    padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         const Text(
                           '¿A dónde vas?',
                           style: TextStyle(
-                            fontSize: 31,
+                            fontSize: 28,
                             fontWeight: FontWeight.w900,
+                            letterSpacing: -0.4,
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 10),
                         TextField(
                           controller: searchController,
                           onChanged: search,
@@ -514,72 +558,78 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
                               Icons.search_rounded,
                               color: TuktukTheme.gold,
                             ),
-                            hintText: 'Introduce la dirección de destino',
+                            hintText: 'Buscar destino',
+                            isDense: true,
                           ),
                         ),
                         if (results.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxHeight: 150),
-                            child: TuktukGlassCard(
-                              padding: EdgeInsets.zero,
-                              child: ListView.separated(
-                                shrinkWrap: true,
-                                itemCount: results.length,
-                                separatorBuilder: (_, __) =>
-                                    const Divider(height: 1),
-                                itemBuilder: (context, index) => ListTile(
-                                  dense: true,
-                                  title: Text(results[index].label),
-                                  trailing:
-                                      const Icon(Icons.chevron_right_rounded),
-                                  onTap: () =>
-                                      _chooseSearchResult(results[index]),
+                          const SizedBox(height: 7),
+                          Container(
+                            constraints: const BoxConstraints(maxHeight: 138),
+                            decoration: BoxDecoration(
+                              color: TuktukTheme.surfaceStrong,
+                              border: Border.all(color: TuktukTheme.border),
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: ListView.separated(
+                              shrinkWrap: true,
+                              itemCount: results.length,
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (context, index) => ListTile(
+                                dense: true,
+                                title: Text(results[index].label),
+                                trailing: const Icon(
+                                  Icons.chevron_right_rounded,
                                 ),
+                                onTap: () =>
+                                    _chooseSearchResult(results[index]),
                               ),
                             ),
                           ),
                         ],
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 9),
                         const Row(
                           children: [
                             Icon(
-                              Icons.info_outline_rounded,
+                              Icons.touch_app_outlined,
                               color: TuktukTheme.mint,
+                              size: 20,
                             ),
                             SizedBox(width: 9),
                             Expanded(
                               child: Text(
-                                'También puedes tocar o mover el mapa para elegir el destino.',
+                                'También puedes mover el mapa y elegir el punto exacto.',
                                 style: TextStyle(
                                   color: TuktukTheme.muted,
-                                  fontSize: 13.5,
+                                  fontSize: 12.8,
+                                  height: 1.25,
                                 ),
                               ),
                             ),
                           ],
                         ),
                         if (message != null) ...[
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 7),
                           Text(
                             message!,
                             style: const TextStyle(
                               color: TuktukTheme.muted,
-                              fontSize: 12.5,
+                              fontSize: 12,
                             ),
                           ),
                         ],
                         if (tilesFailed) ...[
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 7),
                           const Text(
-                            'El mapa no pudo cargar todas las teselas. Puedes continuar usando la búsqueda.',
+                            'El mapa no pudo cargar todas las teselas.',
                             style: TextStyle(
                               color: TuktukTheme.gold,
-                              fontSize: 12.5,
+                              fontSize: 12,
                             ),
                           ),
                         ],
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 12),
                         TuktukPrimaryButton(
                           onPressed: selected == null || busy
                               ? null
