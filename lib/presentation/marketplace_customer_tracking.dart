@@ -283,8 +283,13 @@ class _MarketplaceCustomerTrackingScreenState
 
     if (!mounted) return;
 
-    Navigator.of(context).popUntil(
-      (route) => route.isFirst,
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(
+        builder: (_) => MarketplaceCustomerShell(
+          client: widget.service._client,
+        ),
+      ),
+      (route) => false,
     );
   }
 
