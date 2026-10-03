@@ -1,10 +1,7 @@
 part of '../main.dart';
 
 class MarketplaceCustomerApp extends StatelessWidget {
-  const MarketplaceCustomerApp({
-    required this.client,
-    super.key,
-  });
+  const MarketplaceCustomerApp({required this.client, super.key});
 
   final SupabaseClient client;
 
@@ -16,18 +13,13 @@ class MarketplaceCustomerApp extends StatelessWidget {
       theme: buildAppTheme(Brightness.dark),
       darkTheme: buildAppTheme(Brightness.dark),
       themeMode: ThemeMode.dark,
-      home: MarketplaceCustomerShell(
-        client: client,
-      ),
+      home: MarketplaceCustomerShell(client: client),
     );
   }
 }
 
 class MarketplaceCustomerShell extends StatefulWidget {
-  const MarketplaceCustomerShell({
-    required this.client,
-    super.key,
-  });
+  const MarketplaceCustomerShell({required this.client, super.key});
 
   final SupabaseClient client;
 
@@ -40,6 +32,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _whatsappController = TextEditingController();
+  final _emailController = TextEditingController();
 
   late final MarketplaceCustomerService _service;
   late final MarketplaceCustomerSessionStore _sessionStore;
@@ -73,6 +66,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
       _activeJobId = _sessionStore.readActiveJobId();
       _nameController.text = saved.displayName ?? '';
       _whatsappController.text = saved.whatsappPhone ?? '';
+      _emailController.text = saved.email ?? '';
     } else if (saved != null) {
       _sessionStore.clear();
     }
@@ -86,6 +80,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
     _bookingFlow?.dispose();
     _nameController.dispose();
     _whatsappController.dispose();
+    _emailController.dispose();
     super.dispose();
   }
 
@@ -107,8 +102,31 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
       return 'Escribe tu número de WhatsApp.';
     }
 
-    if (!RegExp(r'^\+[1-9][0-9]{7,14}$').hasMatch(text)) {
+    final normalized = text.replaceAll(RegExp(r'[\s()-]'), '');
+
+    if (!RegExp(r'^\+[1-9][0-9]{7,14}$').hasMatch(normalized)) {
       return 'Usa formato internacional, por ejemplo +5355555555.';
+    }
+
+    return null;
+  }
+
+  String _phoneValue() =>
+      _whatsappController.text.trim().replaceAll(RegExp(r'[\s()-]'), '');
+
+  String? _emailValue() {
+    final value = _emailController.text.trim().toLowerCase();
+    return value.isEmpty ? null : value;
+  }
+
+  String? _validateEmail(String? value) {
+    final text = value?.trim() ?? '';
+
+    if (text.isEmpty) return null;
+
+    if (text.length > 254 ||
+        !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(text)) {
+      return 'Escribe un correo válido o déjalo vacío.';
     }
 
     return null;
@@ -116,25 +134,30 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
 
   Future<void> _continue() async {
     if (!_formKey.currentState!.validate()) return;
+
     if (_existingSession != null && _editingExistingSession) {
       final existingSession = _existingSession!;
       final displayName = _nameController.text.trim();
-      final whatsappPhone = _whatsappController.text.trim();
+      final whatsappPhone = _phoneValue();
+      final email = _emailValue();
       final resumeStep = _resumeBookingStep ?? MarketplaceBookingStep.location;
 
       if (existingSession.displayName == displayName &&
-          existingSession.whatsappPhone == whatsappPhone) {
+          existingSession.whatsappPhone == whatsappPhone &&
+          existingSession.email == email) {
         setState(() {
           _editingExistingSession = false;
           _resumeBookingStep = null;
           _editSessionToken = null;
           _editIdempotencyKey = null;
         });
+
         _bookingFlow?.setStep(resumeStep);
         return;
       }
 
       final editToken = _editSessionToken ??= marketplaceCustomerSessionToken();
+
       final editIdempotencyKey = _editIdempotencyKey ??= _marketplaceUuid();
 
       setState(() {
@@ -146,6 +169,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
         final session = await _service.startSession(
           displayName: displayName,
           whatsappPhone: whatsappPhone,
+          email: email,
           sessionToken: editToken,
           idempotencyKey: editIdempotencyKey,
         );
@@ -157,6 +181,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
           expiresAt: session.expiresAt,
           displayName: displayName,
           whatsappPhone: whatsappPhone,
+          email: email,
         );
 
         await _sessionStore.save(
@@ -164,11 +189,13 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
           token: editToken,
           displayName: displayName,
           whatsappPhone: whatsappPhone,
+          email: email,
         );
 
         if (!mounted) return;
 
         _bookingFlow?.replaceSession(snapshot);
+
         setState(() {
           _existingSession = snapshot;
           _editingExistingSession = false;
@@ -176,12 +203,15 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
           _editSessionToken = null;
           _editIdempotencyKey = null;
         });
+
         _bookingFlow?.setStep(resumeStep);
       } catch (_) {
         if (!mounted) return;
+
         setState(() {
           _error =
-              'No pudimos actualizar los datos del cliente. Revisa la conexión e inténtalo otra vez.';
+              'No pudimos actualizar los datos del cliente. '
+              'Revisa la conexión e inténtalo otra vez.';
         });
       } finally {
         if (mounted) {
@@ -190,6 +220,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
           });
         }
       }
+
       return;
     }
 
@@ -199,15 +230,17 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
     });
 
     try {
+      final displayName = _nameController.text.trim();
+      final whatsappPhone = _phoneValue();
+      final email = _emailValue();
+
       final session = await _service.startSession(
-        displayName: _nameController.text.trim(),
-        whatsappPhone: _whatsappController.text.trim(),
+        displayName: displayName,
+        whatsappPhone: whatsappPhone,
+        email: email,
         sessionToken: _sessionToken,
         idempotencyKey: _startIdempotencyKey,
       );
-
-      final displayName = _nameController.text.trim();
-      final whatsappPhone = _whatsappController.text.trim();
 
       final snapshot = MarketplaceCustomerSessionSnapshot(
         sessionId: session.sessionId,
@@ -216,6 +249,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
         expiresAt: session.expiresAt,
         displayName: displayName,
         whatsappPhone: whatsappPhone,
+        email: email,
       );
 
       await _sessionStore.save(
@@ -223,6 +257,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
         token: _sessionToken,
         displayName: displayName,
         whatsappPhone: whatsappPhone,
+        email: email,
       );
 
       if (!mounted) return;
@@ -230,14 +265,18 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
       setState(() {
         _existingSession = snapshot;
         _bookingFlow = CustomerBookingFlowController(
-            MarketplaceMapService(_service._client), _service, snapshot);
+          MarketplaceMapService(_service._client),
+          _service,
+          snapshot,
+        );
       });
     } catch (_) {
       if (!mounted) return;
 
       setState(() {
         _error =
-            'No pudimos iniciar la solicitud. Revisa tu conexión e inténtalo otra vez.';
+            'No pudimos iniciar la solicitud. '
+            'Revisa tu conexión e inténtalo otra vez.';
       });
     } finally {
       if (mounted) {
@@ -275,7 +314,10 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
       }
 
       _bookingFlow ??= CustomerBookingFlowController(
-          MarketplaceMapService(_service._client), _service, existingSession);
+        MarketplaceMapService(_service._client),
+        _service,
+        existingSession,
+      );
       if (_editingExistingSession) return _editCustomerScreen();
       return MarketplaceCustomerBookingFlow(
         service: _service,
@@ -287,6 +329,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
           _editIdempotencyKey = _marketplaceUuid();
           _nameController.text = existingSession.displayName ?? '';
           _whatsappController.text = existingSession.whatsappPhone ?? '';
+          _emailController.text = existingSession.email ?? '';
           _error = null;
           _editingExistingSession = true;
         }),
@@ -343,8 +386,9 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
                                     decoration: InputDecoration(
                                       labelText: 'Nombre',
                                       hintText: 'Tu nombre',
-                                      prefixIcon:
-                                          const Icon(Icons.person_outline),
+                                      prefixIcon: const Icon(
+                                        Icons.person_outline,
+                                      ),
                                       suffixIcon: IconButton(
                                         tooltip: 'Limpiar',
                                         onPressed: _nameController.clear,
@@ -366,8 +410,9 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
                                     decoration: InputDecoration(
                                       labelText: 'WhatsApp o teléfono',
                                       hintText: '+53 5 123 4567',
-                                      prefixIcon:
-                                          const Icon(Icons.phone_outlined),
+                                      prefixIcon: const Icon(
+                                        Icons.phone_outlined,
+                                      ),
                                       suffixIcon: IconButton(
                                         tooltip: 'Limpiar',
                                         onPressed: _whatsappController.clear,
@@ -375,6 +420,30 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
                                       ),
                                     ),
                                     validator: _validateWhatsapp,
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                TuktukGlassCard(
+                                  padding: EdgeInsets.zero,
+                                  child: TextFormField(
+                                    controller: _emailController,
+                                    keyboardType: TextInputType.emailAddress,
+                                    textInputAction: TextInputAction.done,
+                                    autofillHints: const [AutofillHints.email],
+                                    decoration: InputDecoration(
+                                      labelText:
+                                          'Correo electrónico (opcional)',
+                                      hintText: 'nombre@ejemplo.com',
+                                      prefixIcon: const Icon(
+                                        Icons.email_outlined,
+                                      ),
+                                      suffixIcon: IconButton(
+                                        tooltip: 'Limpiar',
+                                        onPressed: _emailController.clear,
+                                        icon: const Icon(Icons.cancel_outlined),
+                                      ),
+                                    ),
+                                    validator: _validateEmail,
                                   ),
                                 ),
                                 const SizedBox(height: 18),
@@ -415,8 +484,9 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
                                 const SizedBox(height: 78),
                                 TuktukPrimaryButton(
                                   onPressed: _loading ? null : _continue,
-                                  label:
-                                      _loading ? 'Conectando...' : 'Continuar',
+                                  label: _loading
+                                      ? 'Conectando...'
+                                      : 'Continuar',
                                 ),
                               ],
                             ),
@@ -435,159 +505,200 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
   }
 
   Widget _editCustomerScreen() => Scaffold(
-        body: SafeArea(
-          child: TuktukHavanaBackdrop(
-            showRelief: true,
-            child: Column(
-              children: [
-                const TuktukFlowHeader(step: 1),
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) => SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(22, 14, 22, 18),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minHeight: constraints.maxHeight - 32,
-                        ),
-                        child: IntrinsicHeight(
-                          child: Form(
-                            key: _formKey,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                SizedBox(
-                                  height: (constraints.maxHeight * .07)
-                                      .clamp(36.0, 58.0)
-                                      .toDouble(),
-                                ),
-                                const Text(
-                                  'Edita tus datos',
-                                  style: TextStyle(
-                                    fontSize: 34,
-                                    fontWeight: FontWeight.w900,
-                                    height: 1.05,
-                                    letterSpacing: -0.5,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'Mantén actualizados tus datos de contacto.',
-                                  style: TextStyle(
-                                    color: TuktukTheme.muted,
-                                    fontSize: 15.5,
-                                    height: 1.35,
-                                  ),
-                                ),
-                                const SizedBox(height: 20),
-                                TextFormField(
-                                  controller: _nameController,
-                                  textInputAction: TextInputAction.next,
-                                  autofillHints: const [
-                                    AutofillHints.name,
-                                  ],
-                                  style: const TextStyle(
-                                    fontSize: 18.5,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  decoration: InputDecoration(
-                                    labelText: 'Nombre',
-                                    hintText: 'Tu nombre',
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 18,
-                                      vertical: 16,
-                                    ),
-                                    prefixIcon: const Icon(
-                                      Icons.person_outline_rounded,
-                                      color: TuktukTheme.mint,
-                                      size: 24,
-                                    ),
-                                    prefixIconConstraints:
-                                        const BoxConstraints(minWidth: 52),
-                                    suffixIcon: IconButton(
-                                      tooltip: 'Limpiar',
-                                      onPressed: _nameController.clear,
-                                      icon: const Icon(
-                                        Icons.cancel_outlined,
-                                        size: 24,
-                                      ),
-                                    ),
-                                    suffixIconConstraints:
-                                        const BoxConstraints(minWidth: 48),
-                                  ),
-                                  validator: _validateName,
-                                ),
-                                const SizedBox(height: 12),
-                                TextFormField(
-                                  controller: _whatsappController,
-                                  keyboardType: TextInputType.phone,
-                                  autofillHints: const [
-                                    AutofillHints.telephoneNumber,
-                                  ],
-                                  style: const TextStyle(
-                                    fontSize: 18.5,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  decoration: InputDecoration(
-                                    labelText: 'WhatsApp o teléfono',
-                                    hintText: '+53 5 123 4567',
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 18,
-                                      vertical: 16,
-                                    ),
-                                    prefixIcon: const Icon(
-                                      Icons.phone_outlined,
-                                      color: TuktukTheme.mint,
-                                      size: 24,
-                                    ),
-                                    prefixIconConstraints:
-                                        const BoxConstraints(minWidth: 52),
-                                    suffixIcon: IconButton(
-                                      tooltip: 'Limpiar',
-                                      onPressed: _whatsappController.clear,
-                                      icon: const Icon(
-                                        Icons.cancel_outlined,
-                                        size: 24,
-                                      ),
-                                    ),
-                                    suffixIconConstraints:
-                                        const BoxConstraints(minWidth: 48),
-                                  ),
-                                  validator: _validateWhatsapp,
-                                ),
-                                if (_error != null) ...[
-                                  const SizedBox(height: 14),
-                                  TuktukGlassCard(
-                                    padding: const EdgeInsets.all(14),
-                                    borderColor: TuktukTheme.danger,
-                                    child: Text(
-                                      _error!,
-                                      style: const TextStyle(
-                                        color: TuktukTheme.danger,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                                const Spacer(),
-                                TuktukPrimaryButton(
-                                  label:
-                                      _loading ? 'Guardando...' : 'Continuar',
-                                  onPressed: _loading ? null : _continue,
-                                ),
-                              ],
+    body: SafeArea(
+      child: TuktukHavanaBackdrop(
+        showRelief: true,
+        child: Column(
+          children: [
+            const TuktukFlowHeader(step: 1),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(22, 14, 22, 18),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight - 32,
+                    ),
+                    child: IntrinsicHeight(
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            SizedBox(
+                              height: (constraints.maxHeight * .07)
+                                  .clamp(36.0, 58.0)
+                                  .toDouble(),
                             ),
-                          ),
+                            const Text(
+                              'Edita tus datos',
+                              style: TextStyle(
+                                fontSize: 34,
+                                fontWeight: FontWeight.w900,
+                                height: 1.05,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Mantén actualizados tus datos de contacto.',
+                              style: TextStyle(
+                                color: TuktukTheme.muted,
+                                fontSize: 15.5,
+                                height: 1.35,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            TextFormField(
+                              controller: _nameController,
+                              textInputAction: TextInputAction.next,
+                              autofillHints: const [AutofillHints.name],
+                              style: const TextStyle(
+                                fontSize: 18.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              decoration: InputDecoration(
+                                labelText: 'Nombre',
+                                hintText: 'Tu nombre',
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 18,
+                                  vertical: 16,
+                                ),
+                                prefixIcon: const Icon(
+                                  Icons.person_outline_rounded,
+                                  color: TuktukTheme.mint,
+                                  size: 24,
+                                ),
+                                prefixIconConstraints: const BoxConstraints(
+                                  minWidth: 52,
+                                ),
+                                suffixIcon: IconButton(
+                                  tooltip: 'Limpiar',
+                                  onPressed: _nameController.clear,
+                                  icon: const Icon(
+                                    Icons.cancel_outlined,
+                                    size: 24,
+                                  ),
+                                ),
+                                suffixIconConstraints: const BoxConstraints(
+                                  minWidth: 48,
+                                ),
+                              ),
+                              validator: _validateName,
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _whatsappController,
+                              keyboardType: TextInputType.phone,
+                              autofillHints: const [
+                                AutofillHints.telephoneNumber,
+                              ],
+                              style: const TextStyle(
+                                fontSize: 18.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              decoration: InputDecoration(
+                                labelText: 'WhatsApp o teléfono',
+                                hintText: '+53 5 123 4567',
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 18,
+                                  vertical: 16,
+                                ),
+                                prefixIcon: const Icon(
+                                  Icons.phone_outlined,
+                                  color: TuktukTheme.mint,
+                                  size: 24,
+                                ),
+                                prefixIconConstraints: const BoxConstraints(
+                                  minWidth: 52,
+                                ),
+                                suffixIcon: IconButton(
+                                  tooltip: 'Limpiar',
+                                  onPressed: _whatsappController.clear,
+                                  icon: const Icon(
+                                    Icons.cancel_outlined,
+                                    size: 24,
+                                  ),
+                                ),
+                                suffixIconConstraints: const BoxConstraints(
+                                  minWidth: 48,
+                                ),
+                              ),
+                              validator: _validateWhatsapp,
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              textInputAction: TextInputAction.done,
+                              autofillHints: const [AutofillHints.email],
+                              style: const TextStyle(
+                                fontSize: 18.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              decoration: InputDecoration(
+                                labelText: 'Correo electrónico (opcional)',
+                                hintText: 'nombre@ejemplo.com',
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 18,
+                                  vertical: 16,
+                                ),
+                                prefixIcon: const Icon(
+                                  Icons.email_outlined,
+                                  color: TuktukTheme.mint,
+                                  size: 24,
+                                ),
+                                prefixIconConstraints: const BoxConstraints(
+                                  minWidth: 52,
+                                ),
+                                suffixIcon: IconButton(
+                                  tooltip: 'Limpiar',
+                                  onPressed: _emailController.clear,
+                                  icon: const Icon(
+                                    Icons.cancel_outlined,
+                                    size: 24,
+                                  ),
+                                ),
+                                suffixIconConstraints: const BoxConstraints(
+                                  minWidth: 48,
+                                ),
+                              ),
+                              validator: _validateEmail,
+                            ),
+                            if (_error != null) ...[
+                              const SizedBox(height: 14),
+                              TuktukGlassCard(
+                                padding: const EdgeInsets.all(14),
+                                borderColor: TuktukTheme.danger,
+                                child: Text(
+                                  _error!,
+                                  style: const TextStyle(
+                                    color: TuktukTheme.danger,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            const Spacer(),
+                            TuktukPrimaryButton(
+                              label: _loading ? 'Guardando...' : 'Continuar',
+                              onPressed: _loading ? null : _continue,
+                            ),
+                          ],
                         ),
                       ),
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class MarketplaceCustomerRequestScreen extends StatefulWidget {
@@ -642,9 +753,7 @@ class _MarketplaceCustomerRequestScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Nueva solicitud'),
-      ),
+      appBar: AppBar(title: const Text('Nueva solicitud')),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -652,49 +761,42 @@ class _MarketplaceCustomerRequestScreenState
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: _loading
-                  ? const Center(
-                      child: CircularProgressIndicator(),
-                    )
+                  ? const Center(child: CircularProgressIndicator())
                   : _error != null
-                      ? Center(child: Text(_error!))
-                      : _services.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'Todavía no hay servicios disponibles.',
-                              ),
-                            )
-                          : ListView.separated(
-                              itemCount: _services.length,
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(height: 12),
-                              itemBuilder: (context, index) {
-                                final service = _services[index];
+                  ? Center(child: Text(_error!))
+                  : _services.isEmpty
+                  ? const Center(
+                      child: Text('Todavía no hay servicios disponibles.'),
+                    )
+                  : ListView.separated(
+                      itemCount: _services.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final service = _services[index];
 
-                                return Card(
-                                  child: ListTile(
-                                    title: Text(service.name),
-                                    subtitle: Text(
-                                      'Precio calculado en ${service.currency}',
-                                    ),
-                                    trailing: const Icon(
-                                      Icons.chevron_right,
-                                    ),
-                                    onTap: () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute<void>(
-                                          builder: (_) =>
-                                              MarketplaceCustomerTripFormScreen(
-                                            service: widget.service,
-                                            session: widget.session,
-                                            serviceOption: service,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                );
-                              },
+                        return Card(
+                          child: ListTile(
+                            title: Text(service.name),
+                            subtitle: Text(
+                              'Precio calculado en ${service.currency}',
                             ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) =>
+                                      MarketplaceCustomerTripFormScreen(
+                                        service: widget.service,
+                                        session: widget.session,
+                                        serviceOption: service,
+                                      ),
+                                ),
+                              );
+                            },
+                          ),
+                        );
+                      },
+                    ),
             ),
           ),
         ),
@@ -847,8 +949,9 @@ class _MarketplaceCustomerTripFormScreenState
       return;
     }
 
-    final passengerCount =
-        _needsPassengers ? _positiveInt(_passengerController.text) : null;
+    final passengerCount = _needsPassengers
+        ? _positiveInt(_passengerController.text)
+        : null;
 
     if (_needsPassengers && passengerCount == null) {
       setState(() {
@@ -978,9 +1081,7 @@ class _MarketplaceCustomerTripFormScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.serviceOption.name),
-      ),
+      appBar: AppBar(title: Text(widget.serviceOption.name)),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -1097,9 +1198,7 @@ class _MarketplaceCustomerTripFormScreenState
                       const SizedBox(height: 12),
                       SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text(
-                          'Necesito ayuda para cargar',
-                        ),
+                        title: const Text('Necesito ayuda para cargar'),
                         value: _loadHelp,
                         onChanged: (value) {
                           setState(() {
@@ -1109,9 +1208,7 @@ class _MarketplaceCustomerTripFormScreenState
                       ),
                       SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text(
-                          'Necesito ayuda para descargar',
-                        ),
+                        title: const Text('Necesito ayuda para descargar'),
                         value: _unloadHelp,
                         onChanged: (value) {
                           setState(() {
@@ -1142,10 +1239,7 @@ class _MarketplaceCustomerTripFormScreenState
                     ),
                     if (_error != null) ...[
                       const SizedBox(height: 16),
-                      Text(
-                        _error!,
-                        style: const TextStyle(color: kDanger),
-                      ),
+                      Text(_error!, style: const TextStyle(color: kDanger)),
                     ],
                     const SizedBox(height: 24),
                     FilledButton(
@@ -1160,9 +1254,7 @@ class _MarketplaceCustomerTripFormScreenState
                                   strokeWidth: 2,
                                 ),
                               )
-                            : const Text(
-                                'Ver precio recomendado',
-                              ),
+                            : const Text('Ver precio recomendado'),
                       ),
                     ),
                   ],
@@ -1257,9 +1349,7 @@ class _MarketplaceCustomerQuoteScreenState
       return 'El precio está por debajo del mínimo permitido.';
     }
 
-    if (value.contains(
-      'PRICE_WARNING_ACKNOWLEDGEMENT_REQUIRED',
-    )) {
+    if (value.contains('PRICE_WARNING_ACKNOWLEDGEMENT_REQUIRED')) {
       return 'Debes confirmar la advertencia de precio bajo.';
     }
 
@@ -1296,7 +1386,8 @@ class _MarketplaceCustomerQuoteScreenState
 
     if (draft.isBelowMinimum(price)) {
       setState(() {
-        _error = 'El mínimo permitido es '
+        _error =
+            'El mínimo permitido es '
             '${draft.minimumPrice.toStringAsFixed(0)} '
             '${draft.currency}.';
       });
@@ -1379,9 +1470,7 @@ class _MarketplaceCustomerQuoteScreenState
     final warningRequired = price != null && draft.requiresWarningFor(price);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Precio y publicación'),
-      ),
+      appBar: AppBar(title: const Text('Precio y publicación')),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -1423,10 +1512,9 @@ class _MarketplaceCustomerQuoteScreenState
                             'Puedes aceptarlo, aumentarlo o reducirlo '
                             'antes de publicar.',
                             textAlign: TextAlign.center,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(color: kMuted),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodyMedium?.copyWith(color: kMuted),
                           ),
                         ],
                       ),
@@ -1453,9 +1541,7 @@ class _MarketplaceCustomerQuoteScreenState
                   const SizedBox(height: 8),
                   TextButton(
                     onPressed: _publishing ? null : _useRecommendedPrice,
-                    child: const Text(
-                      'Usar precio recomendado',
-                    ),
+                    child: const Text('Usar precio recomendado'),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -1463,8 +1549,8 @@ class _MarketplaceCustomerQuoteScreenState
                     '${draft.minimumPrice.toStringAsFixed(0)} '
                     '${draft.currency}',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: belowMinimum ? kDanger : kMuted,
-                        ),
+                      color: belowMinimum ? kDanger : kMuted,
+                    ),
                   ),
                   if (warningRequired && !belowMinimum) ...[
                     const SizedBox(height: 20),
@@ -1489,8 +1575,9 @@ class _MarketplaceCustomerQuoteScreenState
                                     'Puede reducir la probabilidad '
                                     'de que un transportista acepte '
                                     'la solicitud.',
-                                    style:
-                                        Theme.of(context).textTheme.bodyMedium,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium,
                                   ),
                                 ),
                               ],
@@ -1520,29 +1607,20 @@ class _MarketplaceCustomerQuoteScreenState
                   ],
                   if (_error != null) ...[
                     const SizedBox(height: 16),
-                    Text(
-                      _error!,
-                      style: const TextStyle(color: kDanger),
-                    ),
+                    Text(_error!, style: const TextStyle(color: kDanger)),
                   ],
                   const SizedBox(height: 24),
                   FilledButton(
                     onPressed: _publishing ? null : _publish,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 14,
-                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                       child: _publishing
                           ? const SizedBox(
                               width: 22,
                               height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                              ),
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Text(
-                              'Publicar solicitud',
-                            ),
+                          : const Text('Publicar solicitud'),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -1551,10 +1629,9 @@ class _MarketplaceCustomerQuoteScreenState
                     'transportista. TUKTUK no cobra el viaje '
                     'al cliente.',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: kMuted),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: kMuted),
                   ),
                 ],
               ),
@@ -1579,10 +1656,7 @@ DateTime marketplaceSchedulePickerInitialDate(
 
 String _marketplaceUuid() {
   final random = Random.secure();
-  final bytes = List<int>.generate(
-    16,
-    (_) => random.nextInt(256),
-  );
+  final bytes = List<int>.generate(16, (_) => random.nextInt(256));
 
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
