@@ -110,6 +110,23 @@ class _MarketplaceCustomerTrackingScreenState
       if (job.isTerminal) {
         _pollTimer?.cancel();
       }
+    } on FunctionsHttpException catch (error) {
+      final details = error.details;
+      final detailText = details is Map && details['error'] != null
+          ? details['error'].toString()
+          : details?.toString();
+
+      if (detailText?.contains('ACCESS_DENIED') ?? false) {
+        _pollTimer?.cancel();
+        await _finish();
+        return;
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _error = 'No pudimos actualizar el estado. Revisa tu conexión.';
+      });
     } catch (_) {
       if (!mounted) return;
 
