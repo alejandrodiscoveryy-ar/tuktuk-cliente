@@ -116,11 +116,27 @@ jobs:
           echo "LOCAL_HASH=$LOCAL_HASH" >> "$GITHUB_ENV"
           echo "LOCAL_SHA256=$LOCAL_HASH"
 
+      - name: Prepare least-privilege Cloudflare config
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER_CONFIG="$RUNNER_TEMP/tuktuk-cliente-wrangler.json"
+          cat > "$WRANGLER_CONFIG" <<EOF
+          {
+            "name": "${WORKER_NAME}",
+            "compatibility_date": "${COMPATIBILITY_DATE}",
+            "workers_dev": false,
+            "preview_urls": false
+          }
+          EOF
+          echo "WRANGLER_CONFIG=$WRANGLER_CONFIG" >> "$GITHUB_ENV"
+
       - name: Deploy exact build to existing Worker
         shell: bash
         run: |
           set -euo pipefail
           npx --yes wrangler@4.115.0 deploy \
+            --config "$WRANGLER_CONFIG" \
             --name "$WORKER_NAME" \
             --assets "$STAGE" \
             --compatibility-date "$COMPATIBILITY_DATE" \
