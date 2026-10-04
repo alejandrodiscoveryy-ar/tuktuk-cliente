@@ -131,16 +131,32 @@ jobs:
           EOF
           echo "WRANGLER_CONFIG=$WRANGLER_CONFIG" >> "$GITHUB_ENV"
 
-      - name: Deploy exact build to existing Worker
+      - name: Upload exact build to existing Worker
         shell: bash
         run: |
           set -euo pipefail
+          DEPLOY_LOG="$RUNNER_TEMP/tuktuk-cliente-wrangler-deploy.log"
           npx --yes wrangler@4.115.0 deploy \
             --config "$WRANGLER_CONFIG" \
             --name "$WORKER_NAME" \
             --assets "$STAGE" \
             --compatibility-date "$COMPATIBILITY_DATE" \
-            --keep-vars
+            --keep-vars 2>&1 | tee "$DEPLOY_LOG"
+
+          VERSION_ID="$(sed -n 's/.*Current Version ID: \([0-9a-f-]\+\).*/\1/p' "$DEPLOY_LOG" | tail -n 1)"
+          test -n "$VERSION_ID"
+          echo "VERSION_ID=$VERSION_ID" >> "$GITHUB_ENV"
+          echo "UPLOADED_VERSION_ID=$VERSION_ID"
+
+      - name: Promote uploaded version to 100 percent
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.115.0 versions deploy \
+            "${VERSION_ID}@100%" \
+            --config "$WRANGLER_CONFIG" \
+            --name "$WORKER_NAME" \
+            --yes
 
       - name: Verify production hash
         shell: bash
