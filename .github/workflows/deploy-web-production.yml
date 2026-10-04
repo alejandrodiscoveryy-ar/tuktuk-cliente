@@ -1,0 +1,134 @@
+name: Deploy TUKTUK Cliente Web
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_production:
+        description: "Confirmar publicación en producción"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tuktuk-cliente-web-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ inputs.confirm_production == true }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
+      PUBLIC_URL: https://www.vrixora.com/cliente/tuk/
+      WORKER_NAME: tuktuk-customer-webapp
+      COMPATIBILITY_DATE: "2026-09-22"
+
+    steps:
+      - name: Checkout exact main commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Verify source is main HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+          echo "SOURCE_SHA=$(git rev-parse HEAD)"
+
+      - name: Setup Flutter 3.44.4
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: "3.44.4"
+          channel: stable
+          cache: true
+
+      - name: Verify required configuration exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_PUBLISHABLE_KEY:-}"
+          test -n "${MAPBOX_PUBLIC_TOKEN:-}"
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      - name: Test
+        run: flutter test
+
+      - name: Verify tests left source clean
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            exit 1
+          fi
+
+      - name: Build production web
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_DIR="$RUNNER_TEMP/tuktuk-customer-build"
+          flutter build web \
+            --release \
+            --base-href "/cliente/tuk/" \
+            --output "$BUILD_DIR" \
+            --dart-define="SUPABASE_URL=${SUPABASE_URL}" \
+            --dart-define="SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}" \
+            --dart-define="MAPBOX_PUBLIC_TOKEN=${MAPBOX_PUBLIC_TOKEN}"
+
+      - name: Stage exact route and calculate hash
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            exit 1
+          fi
+          STAGE="$RUNNER_TEMP/tuktuk-customer-stage"
+          mkdir -p "$STAGE/cliente/tuk"
+          cp -a "$RUNNER_TEMP/tuktuk-customer-build/." "$STAGE/cliente/tuk/"
+          test -f "$STAGE/cliente/tuk/main.dart.js"
+          LOCAL_HASH="$(sha256sum "$STAGE/cliente/tuk/main.dart.js" | awk '{print toupper($1)}')"
+          echo "STAGE=$STAGE" >> "$GITHUB_ENV"
+          echo "LOCAL_HASH=$LOCAL_HASH" >> "$GITHUB_ENV"
+          echo "LOCAL_SHA256=$LOCAL_HASH"
+
+      - name: Deploy exact build to existing Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.115.0 deploy \
+            --name "$WORKER_NAME" \
+            --assets "$STAGE" \
+            --compatibility-date "$COMPATIBILITY_DATE" \
+            --keep-vars
+
+      - name: Verify production hash
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS -H "Cache-Control: no-cache" "${PUBLIC_URL}?release=${GITHUB_SHA}" >/dev/null
+          REMOTE="$RUNNER_TEMP/tuktuk-customer-main.dart.js"
+          curl -fsSL -H "Cache-Control: no-cache" "${PUBLIC_URL}main.dart.js?release=${GITHUB_SHA}" -o "$REMOTE"
+          REMOTE_HASH="$(sha256sum "$REMOTE" | awk '{print toupper($1)}')"
+          echo "REMOTE_SHA256=$REMOTE_HASH"
+          test "$REMOTE_HASH" = "$LOCAL_HASH"
+          echo "PRODUCTION_INTEGRITY=OK"
