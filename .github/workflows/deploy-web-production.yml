@@ -19,6 +19,7 @@ concurrency:
 jobs:
   deploy:
     if: ${{ inputs.confirm_production == true }}
+    environment: production
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -35,16 +36,20 @@ jobs:
       - name: Checkout exact main commit
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          ref: main
+          ref: ${{ github.sha }}
           fetch-depth: 1
 
-      - name: Verify source is main HEAD
+      - name: Verify approved commit is still main HEAD
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin main --depth=1
-          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
-          echo "SOURCE_SHA=$(git rev-parse HEAD)"
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          REMOTE_MAIN="$(git rev-parse origin/main)"
+          test "$SOURCE_SHA" = "$GITHUB_SHA"
+          test "$SOURCE_SHA" = "$REMOTE_MAIN"
+          echo "SOURCE_SHA=$SOURCE_SHA"
+          echo "APPROVED_COMMIT_STILL_MAIN=OK"
 
       - name: Setup Flutter 3.44.4
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
