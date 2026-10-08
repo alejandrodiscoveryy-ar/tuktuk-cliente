@@ -84,6 +84,11 @@ class MarketplaceCustomerJob {
 
   bool get hasAssignedDriver => driverDisplayName != null || vehicleId != null;
 
+  bool get customerCanFinish => const {
+    'en_route',
+    'pickup',
+    'in_progress',
+  }.contains(status);
   bool get customerCanCancel => const {
     'requested',
     'published',
@@ -144,6 +149,24 @@ class MarketplaceCustomerCancellation {
       );
 }
 
+class MarketplaceCustomerFinish {
+  const MarketplaceCustomerFinish({
+    required this.jobId,
+    required this.status,
+    this.serverTime,
+  });
+
+  final String jobId;
+  final String status;
+  final DateTime? serverTime;
+
+  factory MarketplaceCustomerFinish.fromMap(Map map) =>
+      MarketplaceCustomerFinish(
+        jobId: _marketText(map['job_id']) ?? '',
+        status: _marketText(map['status']) ?? 'unknown',
+        serverTime: _marketDate(map['server_time']),
+      );
+}
 class MarketplaceCustomerRating {
   const MarketplaceCustomerRating({
     required this.jobId,
@@ -358,6 +381,17 @@ class MarketplaceCustomerService {
     'target_idempotency_key': idempotencyKey,
   }).then(MarketplaceCustomerCancellation.fromMap);
 
+  Future<MarketplaceCustomerFinish> finishJob({
+    required String sessionId,
+    required String sessionToken,
+    required String jobId,
+    required String idempotencyKey,
+  }) => _gatewayOne('finish', {
+    'target_session_id': sessionId,
+    'target_session_token': sessionToken,
+    'target_job_id': jobId,
+    'target_idempotency_key': idempotencyKey,
+  }).then(MarketplaceCustomerFinish.fromMap);
   Future<MarketplaceCustomerRating?> getRating({
     required String sessionId,
     required String sessionToken,

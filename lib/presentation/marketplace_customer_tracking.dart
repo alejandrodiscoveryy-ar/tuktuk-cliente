@@ -31,10 +31,12 @@ class _MarketplaceCustomerTrackingScreenState
   bool _loading = true;
   bool _refreshing = false;
   bool _cancelling = false;
+  bool _finishing = false;
 
   String? _error;
   String? _cancelPayloadSignature;
   String? _cancelIdempotencyKey;
+  String? _finishIdempotencyKey;
 
   @override
   void initState() {
@@ -226,6 +228,86 @@ class _MarketplaceCustomerTrackingScreenState
     return result;
   }
 
+  Future<void> _finishJob() async {
+    final job = _job;
+
+    if (job == null ||
+        !job.customerCanFinish ||
+        _finishing ||
+        _cancelling) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Finalizar carrera'),
+            content: const Text(
+              'Confirma únicamente si la carrera terminó. '
+              'El servicio quedará cerrado y no podrá reanudarse.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Volver'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Finalizar'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!mounted || !confirmed) return;
+
+    final key = _finishIdempotencyKey ??= _marketplaceUuid();
+
+    setState(() {
+      _finishing = true;
+      _error = null;
+    });
+
+    try {
+      final result = await widget.service.finishJob(
+        sessionId: widget.session.sessionId,
+        sessionToken: widget.session.token,
+        jobId: job.id,
+        idempotencyKey: key,
+      );
+
+      if (result.jobId != job.id || result.status != 'settled') {
+        throw StateError('FINISH_RESPONSE_INVALID');
+      }
+
+      await _refresh();
+    } catch (error) {
+      if (!mounted) return;
+
+      final message = error.toString().toUpperCase();
+
+      if (message.contains('FINISH_TOO_EARLY')) {
+        setState(() {
+          _error =
+              'Todavía es demasiado pronto para finalizar esta carrera.';
+        });
+      } else {
+        await _refresh();
+        if (mounted && _job?.isTerminal != true) {
+          setState(() {
+            _error =
+                'No pudimos confirmar el cierre. Comprueba el estado '
+                'actual antes de volver a intentarlo.';
+          });
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _finishing = false);
+      }
+    }
+  }
   Future<void> _cancelJob() async {
     final job = _job;
 
@@ -617,10 +699,21 @@ class _MarketplaceCustomerTrackingScreenState
                                       ],
                                     ),
                                   ),
-                                if (job.customerCanCancel) ...[
+                                if (job.customerCanFinish) ...[
+                                  const SizedBox(height: 16),
+                                  TuktukPrimaryButton(
+                                    onPressed: (_finishing || _cancelling)
+                                        ? null
+                                        : _finishJob,
+                                    label: _finishing
+                                        ? 'Finalizando...'
+                                        : 'Finalizar carrera',
+                                    icon: Icons.check_circle_outline_rounded,
+                                  ),
+                                ],                                if (job.customerCanCancel) ...[
                                   const SizedBox(height: 16),
                                   OutlinedButton.icon(
-                                    onPressed: _cancelling ? null : _cancelJob,
+                                    onPressed: (_cancelling || _finishing) ? null : _cancelJob,
                                     icon: const Icon(Icons.close_rounded),
                                     label: Text(
                                       _cancelling
