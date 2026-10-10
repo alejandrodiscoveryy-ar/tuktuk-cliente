@@ -3,20 +3,20 @@ part of '../main.dart';
 // Shared vector renderer for the real customer booking flow.
 // Only public map configuration and data for this booking are rendered.
 String marketplaceVectorPointGeoJson(MarketplaceMapPoint? point) => jsonEncode({
-      'type': 'FeatureCollection',
-      'features': point == null
-          ? <Object>[]
-          : <Object>[
-              {
-                'type': 'Feature',
-                'geometry': {
-                  'type': 'Point',
-                  'coordinates': [point.lon, point.lat],
-                },
-                'properties': <String, Object>{},
-              },
-            ],
-    });
+  'type': 'FeatureCollection',
+  'features': point == null
+      ? <Object>[]
+      : <Object>[
+          {
+            'type': 'Feature',
+            'geometry': {
+              'type': 'Point',
+              'coordinates': [point.lon, point.lat],
+            },
+            'properties': <String, Object>{},
+          },
+        ],
+});
 
 String marketplaceVectorLineGeoJson(List<MarketplaceMapPoint> points) =>
     jsonEncode({
@@ -108,13 +108,15 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
     super.dispose();
   }
 
-  MarketplaceMapPoint? get _origin => widget.onPointTap != null &&
+  MarketplaceMapPoint? get _origin =>
+      widget.onPointTap != null &&
           widget.markerPoint != null &&
           !widget.markerIsDestination
       ? widget.markerPoint
       : widget.originPoint;
 
-  MarketplaceMapPoint? get _destination => widget.onPointTap != null &&
+  MarketplaceMapPoint? get _destination =>
+      widget.onPointTap != null &&
           widget.markerPoint != null &&
           widget.markerIsDestination
       ? widget.markerPoint
@@ -225,25 +227,52 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
           slot: 'top',
         ),
       );
+      // Iconos premium propios, anclados al punto exacto del mapa.
+      // Primero registramos ambos PNG en el estilo Mapbox Web/Android/iOS.
+      final assets = DefaultAssetBundle.of(context);
+      final pickup = await assets.load('assets/map_markers/pickup_green.png');
+      final destination = await assets.load(
+        'assets/map_markers/destination_red.png',
+      );
+      if (!mounted || map != _map) return;
+      await map.addImage(
+        'tuktuk-client-pickup-green-v7',
+        2.0,
+        mbx.StyleImage.bytes(
+          pickup.buffer.asUint8List(pickup.offsetInBytes, pickup.lengthInBytes),
+        ),
+      );
+      await map.addImage(
+        'tuktuk-client-destination-red-v7',
+        2.0,
+        mbx.StyleImage.bytes(
+          destination.buffer.asUint8List(
+            destination.offsetInBytes,
+            destination.lengthInBytes,
+          ),
+        ),
+      );
       await map.addLayer(
-        mbx.CircleLayer(
+        mbx.SymbolLayer(
           id: 'tuktuk-client-origin-point',
           sourceId: _sourceOrigin,
-          circleColor: 0xFF2DD4A3,
-          circleRadius: 14,
-          circleStrokeColor: 0xFF06131A,
-          circleStrokeWidth: 4,
+          iconImage: 'tuktuk-client-pickup-green-v7',
+          iconAnchor: mbx.IconAnchor.BOTTOM,
+          iconSize: 1.0,
+          iconAllowOverlap: true,
+          iconIgnorePlacement: true,
           slot: 'top',
         ),
       );
       await map.addLayer(
-        mbx.CircleLayer(
+        mbx.SymbolLayer(
           id: 'tuktuk-client-destination-point',
           sourceId: _sourceDestination,
-          circleColor: 0xFFFFC400,
-          circleRadius: 14,
-          circleStrokeColor: 0xFF06131A,
-          circleStrokeWidth: 4,
+          iconImage: 'tuktuk-client-destination-red-v7',
+          iconAnchor: mbx.IconAnchor.BOTTOM,
+          iconSize: 1.0,
+          iconAllowOverlap: true,
+          iconIgnorePlacement: true,
           slot: 'top',
         ),
       );

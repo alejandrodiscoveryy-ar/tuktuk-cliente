@@ -27,3 +27,5 @@ flutter:
     - assets/branding/tuktuk_identity.png
     - assets/branding/tuktuk_havana_morro_tracking.png
     - assets/branding/tuktuk_havana_shadow_relief.jpg
+    - assets/map_markers/pickup_green.png
+    - assets/map_markers/destination_red.png
