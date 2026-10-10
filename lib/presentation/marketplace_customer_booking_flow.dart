@@ -320,6 +320,12 @@ class _MarketplaceCustomerBookingFlowState
           child: Column(
             children: [
               TuktukFlowHeader(step: number, onBack: _goBack),
+              if (step == MarketplaceBookingStep.location)
+                TextButton.icon(
+                  onPressed: _openHistory,
+                  icon: const Icon(Icons.history),
+                  label: const Text('Historial'),
+                ),
               Expanded(
                 child: switch (step) {
                   MarketplaceBookingStep.location => _locationIntro(),
@@ -344,6 +350,26 @@ class _MarketplaceCustomerBookingFlowState
         ),
       ),
     );
+  }
+
+  Future<void> _openHistory() async {
+    final job = await showModalBottomSheet<MarketplaceCustomerJob>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => MarketplaceCustomerHistory(
+        service: widget.service,
+        session: widget.session,
+      ),
+    );
+    if (job == null || !mounted) return;
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+      builder: (_) => MarketplaceCustomerTrackingScreen(
+        service: widget.service,
+        session: widget.session,
+        jobId: job.id,
+        onDone: () async {},
+      ),
+    ));
   }
 
   void _goBack() {
