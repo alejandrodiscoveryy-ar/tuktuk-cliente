@@ -81,4 +81,29 @@ void main() {
     client.dispose();
     mock.close();
   });
+
+  test('customer history uses session ownership and a bounded creation cursor', () async {
+    final calls = <Map<String, dynamic>>[];
+    final mock = MockClient((request) async {
+      calls.add(Map<String, dynamic>.from(jsonDecode(request.body) as Map));
+      return http.Response(jsonEncode({'data': [{
+        'job_id': 'old-job', 'status': 'settled', 'final_price': 100,
+        'currency': 'CUP', 'created_at': '2026-09-01T00:00:00Z',
+      }]}), 200, headers: {'content-type': 'application/json'});
+    });
+    final client = SupabaseClient('http://127.0.0.1:1', 'test-key',
+      httpClient: mock, authOptions: const AuthClientOptions(autoRefreshToken: false));
+    final service = MarketplaceCustomerService(client);
+    final first = await service.history(sessionId: 'session-test', sessionToken: 'token-test');
+    await service.history(sessionId: 'session-test', sessionToken: 'token-test', before: first.single);
+    expect(calls.map((c) => c['operation']), everyElement('history'));
+    final params = calls.last['params'] as Map;
+    expect(params['target_limit'], 50);
+    expect(params['target_session_id'], 'session-test');
+    expect(params['target_session_token'], 'token-test');
+    expect(params['target_before_job_id'], 'old-job');
+    expect(DateTime.parse(params['target_before_created_at'] as String), first.single.createdAt);
+    client.dispose();
+    mock.close();
+  });
 }

@@ -36,7 +36,7 @@ class _MarketplaceCustomerTrackingScreenState
   String? _error;
   String? _cancelPayloadSignature;
   String? _cancelIdempotencyKey;
-  String? _finishIdempotencyKey;
+
 
   @override
   void initState() {
@@ -238,74 +238,11 @@ class _MarketplaceCustomerTrackingScreenState
       return;
     }
 
-    final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('Finalizar carrera'),
-            content: const Text(
-              'Confirma únicamente si la carrera terminó. '
-              'El servicio quedará cerrado y no podrá reanudarse.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('Volver'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('Finalizar'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-
-    if (!mounted || !confirmed) return;
-
-    final key = _finishIdempotencyKey ??= _marketplaceUuid();
-
-    setState(() {
-      _finishing = true;
-      _error = null;
-    });
-
+    setState(() => _finishing = true);
     try {
-      final result = await widget.service.finishJob(
-        sessionId: widget.session.sessionId,
-        sessionToken: widget.session.token,
-        jobId: job.id,
-        idempotencyKey: key,
-      );
-
-      if (result.jobId != job.id || result.status != 'settled') {
-        throw StateError('FINISH_RESPONSE_INVALID');
-      }
-
-      await _refresh();
-    } catch (error) {
-      if (!mounted) return;
-
-      final message = error.toString().toUpperCase();
-
-      if (message.contains('FINISH_TOO_EARLY')) {
-        setState(() {
-          _error =
-              'Todavía es demasiado pronto para finalizar esta carrera.';
-        });
-      } else {
-        await _refresh();
-        if (mounted && _job?.isTerminal != true) {
-          setState(() {
-            _error =
-                'No pudimos confirmar el cierre. Comprueba el estado '
-                'actual antes de volver a intentarlo.';
-          });
-        }
-      }
+      await _openRating(job);
     } finally {
-      if (mounted) {
-        setState(() => _finishing = false);
-      }
+      if (mounted) setState(() => _finishing = false);
     }
   }
   Future<void> _cancelJob() async {
@@ -777,7 +714,10 @@ class _MarketplaceCustomerTrackingScreenState
         ),
       ),
     );
-    if (rating != null && mounted) setState(() => _rating = rating);
+    if (rating != null && mounted) {
+      setState(() => _rating = rating);
+      await _refresh();
+    }
   }
 }
 
@@ -794,6 +734,80 @@ class MarketplaceCustomerRatingScreen extends StatefulWidget {
   @override
   State<MarketplaceCustomerRatingScreen> createState() =>
       _MarketplaceCustomerRatingScreenState();
+}
+
+class MarketplaceCustomerHistory extends StatefulWidget {
+  const MarketplaceCustomerHistory({
+    required this.service,
+    required this.session,
+    super.key,
+  });
+  final MarketplaceCustomerService service;
+  final MarketplaceCustomerSessionSnapshot session;
+
+  @override
+  State<MarketplaceCustomerHistory> createState() => _MarketplaceCustomerHistoryState();
+}
+
+class _MarketplaceCustomerHistoryState extends State<MarketplaceCustomerHistory> {
+  final _jobs = <MarketplaceCustomerJob>[];
+  bool _loading = false;
+  bool _hasMore = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMore();
+  }
+
+  Future<void> _loadMore() async {
+    if (_loading || !_hasMore) return;
+    setState(() { _loading = true; _error = null; });
+    try {
+      final page = await widget.service.history(
+        sessionId: widget.session.sessionId,
+        sessionToken: widget.session.token,
+        before: _jobs.isEmpty ? null : _jobs.last,
+      );
+      if (!mounted) return;
+      setState(() {
+        final ids = _jobs.map((j) => j.id).toSet();
+        _jobs.addAll(page.where((j) => ids.add(j.id)));
+        _hasMore = page.length == 50;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _error = 'No pudimos cargar el historial. Reintenta.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: SizedBox(
+      height: MediaQuery.sizeOf(context).height * .7,
+      child: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          const Text('Historial', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          for (final job in _jobs)
+            ListTile(
+              title: Text('${job.originText ?? 'Origen'} → ${job.destinationText ?? 'Destino'}'),
+              subtitle: Text('${job.finalPrice} ${job.currency}'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).pop(job),
+            ),
+          if (_error != null) Text(_error!),
+          if (!_loading && _jobs.isEmpty && _error == null)
+            const Text('Todavía no tienes carreras finalizadas.'),
+          if (_loading) const Center(child: CircularProgressIndicator()),
+          if (_hasMore && !_loading)
+            TextButton(onPressed: _loadMore, child: Text(_error == null ? 'Cargar más historial' : 'Reintentar')),
+        ],
+      ),
+    ),
+  );
 }
 
 class _MarketplaceCustomerRatingScreenState

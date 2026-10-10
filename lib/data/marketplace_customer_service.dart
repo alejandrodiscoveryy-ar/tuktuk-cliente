@@ -344,6 +344,24 @@ class MarketplaceCustomerService {
     return <String, dynamic>{};
   }
 
+  Future<List<MarketplaceCustomerJob>> history({
+    required String sessionId,
+    required String sessionToken,
+    MarketplaceCustomerJob? before,
+  }) async {
+    final value = await _gateway('history', {
+      'target_session_id': sessionId,
+      'target_session_token': sessionToken,
+      'target_limit': 50,
+      if (before != null) ...{
+        'target_before_created_at': before.createdAt?.toUtc().toIso8601String(),
+        'target_before_job_id': before.id,
+      },
+    });
+    if (value is! List) throw StateError('HISTORY_RESPONSE_INVALID');
+    return value.map((item) => MarketplaceCustomerJob.fromMap(item as Map)).toList();
+  }
+
   Future<MarketplaceCustomerSession> startSession({
     required String displayName,
     required String whatsappPhone,
