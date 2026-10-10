@@ -44,6 +44,16 @@ class MarketplaceRouteQuote {
       );
 }
 
+String? marketplaceMapboxStylePath(Object? raw) {
+  final text = raw?.toString().trim() ?? '';
+  const prefix = 'mapbox://styles/';
+  final path = text.startsWith(prefix) ? text.substring(prefix.length) : text;
+  return RegExp(r'^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$').hasMatch(path)
+      ? path
+      : null;
+}
+
+
 class MarketplaceMapService {
   MarketplaceMapService(this._client);
   final SupabaseClient _client;
@@ -57,6 +67,36 @@ class MarketplaceMapService {
 
   static String get tileUrlTemplate =>
       'https://api.mapbox.com/styles/v1/$_mapStyle/tiles/$_tileSize/{z}/{x}/{y}?access_token=$_publicToken';
+
+  // The administrator can store either owner/style or mapbox://styles/owner/style.
+  // This config contains only the public map style and token, never admin layers.
+  static bool applyPublicVisualCapability(Map item) {
+    if (item['capability'] != 'map_visual' ||
+        item['enabled'] != true || item['provider_code'] != 'mapbox') {
+      return false;
+    }
+
+    final token = item['public_token']?.toString().trim() ?? '';
+    if (token.isNotEmpty) _publicToken = token;
+
+    final config = item['config'];
+    final fallback = item['public_config'];
+    final preferred = config is Map ? config['style'] : null;
+    final fallbackStyle = fallback is Map ? fallback['style'] : null;
+    final style = marketplaceMapboxStylePath(preferred) ??
+        marketplaceMapboxStylePath(fallbackStyle);
+    if (style != null) _mapStyle = style;
+
+    final sizeValue = config is Map && config['tile_size'] != null
+        ? config['tile_size']
+        : fallback is Map ? fallback['tile_size'] : null;
+    final size = sizeValue is num
+        ? sizeValue.toInt()
+        : int.tryParse('$sizeValue');
+    if (size == 256 || size == 512) _tileSize = size!;
+    return true;
+  }
+
 
   static Future<void> loadPublicConfiguration(SupabaseClient client) async {
     try {
@@ -73,56 +113,7 @@ class MarketplaceMapService {
       if (capabilities is! List) return;
 
       for (final item in capabilities) {
-        if (item is! Map) continue;
-        if (item['capability']?.toString() != 'map_visual') continue;
-        if (item['enabled'] != true) continue;
-        if (item['provider_code']?.toString() != 'mapbox') continue;
-
-        final token = item['public_token']?.toString().trim() ?? '';
-
-        if (token.isNotEmpty) {
-          _publicToken = token;
-        }
-
-        final capabilityConfig = item['config'];
-        final publicConfig = item['public_config'];
-
-        String? configuredStyle;
-
-        if (capabilityConfig is Map) {
-          configuredStyle = capabilityConfig['style']?.toString().trim();
-        }
-
-        if ((configuredStyle == null || configuredStyle.isEmpty) &&
-            publicConfig is Map) {
-          configuredStyle = publicConfig['style']?.toString().trim();
-        }
-
-        if (configuredStyle != null &&
-            RegExp(r'^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$')
-                .hasMatch(configuredStyle)) {
-          _mapStyle = configuredStyle;
-        }
-
-        Object? configuredTileSize;
-
-        if (capabilityConfig is Map) {
-          configuredTileSize = capabilityConfig['tile_size'];
-        }
-
-        if (configuredTileSize == null && publicConfig is Map) {
-          configuredTileSize = publicConfig['tile_size'];
-        }
-
-        final tileSize = configuredTileSize is num
-            ? configuredTileSize.toInt()
-            : int.tryParse('$configuredTileSize');
-
-        if (tileSize == 256 || tileSize == 512) {
-          _tileSize = tileSize!;
-        }
-
-        break;
+        if (item is Map && applyPublicVisualCapability(item)) break;
       }
     } catch (_) {
       // Si la configuración remota no está disponible, la aplicación
