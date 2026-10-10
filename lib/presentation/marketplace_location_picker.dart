@@ -20,7 +20,7 @@ class MarketplaceLocationPicker extends StatefulWidget {
 }
 
 class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
-  final controller = MapController();
+  final vectorCenter = ValueNotifier<LatLng?>(null);
   final searchController = TextEditingController();
   Timer? debounce;
   Timer? reverseDebounce;
@@ -54,7 +54,7 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
     debounce?.cancel();
     reverseDebounce?.cancel();
     searchController.dispose();
-    controller.dispose();
+    vectorCenter.dispose();
     super.dispose();
   }
 
@@ -130,7 +130,7 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         try {
-          controller.move(point, 15);
+          vectorCenter.value = point;
         } catch (_) {
           // Si el controlador todavía no está listo, el punto seleccionado
           // sigue siendo válido y el usuario puede ajustar el pin.
@@ -170,59 +170,31 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
                       ),
                     ),
                   )
-                : FlutterMap(
-                    mapController: controller,
-                    options: MapOptions(
-                      backgroundColor: TuktukTheme.background,
-                      initialCenter: center,
-                      initialZoom: destination ? 13 : 12,
-                      onTap: (_, point) => select(point),
-                      onPositionChanged: (camera, hasGesture) {
-                        if (!hasGesture) return;
-
-                        reverseDebounce?.cancel();
-
-                        setState(
-                          () => selected = MarketplaceMapPoint(
+                : MarketplaceVectorMap(
+                    initialCenter: center,
+                    initialZoom: destination ? 13 : 12,
+                    requestedCenter: vectorCenter,
+                    markerPoint: selected,
+                    markerIsDestination: destination,
+                    onPointTap: (position) {
+                      unawaited(select(position));
+                    },
+                    onCenterMoved: (cameraCenter) {
+                      reverseDebounce?.cancel();
+                      setState(() => selected = MarketplaceMapPoint(
                             label: 'Ubicación seleccionada',
-                            lat: camera.center.latitude,
-                            lon: camera.center.longitude,
-                          ),
-                        );
-
-                        reverseDebounce = Timer(
-                          const Duration(milliseconds: 700),
-                          () {
-                            if (selected != null) {
-                              select(selected!.latLng);
-                            }
-                          },
-                        );
-                      },
-                    ),
-                    children: [
-                      TileLayer(
-                        urlTemplate: MarketplaceMapService.tileUrlTemplate,
-                        userAgentPackageName: 'com.vrixora.tuktuk',
-                        errorTileCallback: (_, __, ___) {
-                          if (mounted && !tilesFailed) {
-                            setState(() => tilesFailed = true);
+                            lat: cameraCenter.latitude,
+                            lon: cameraCenter.longitude,
+                          ));
+                      reverseDebounce = Timer(
+                        const Duration(milliseconds: 700),
+                        () {
+                          if (mounted && selected != null) {
+                            unawaited(select(selected!.latLng));
                           }
                         },
-                      ),
-                      if (selected != null)
-                        MarkerLayer(
-                          markers: [
-                            Marker(
-                              point: selected!.latLng,
-                              width: 64,
-                              height: 64,
-                              child: _PremiumMapPin(destination: destination),
-                            ),
-                          ],
-                        ),
-                      marketplaceMapAttribution(selected?.latLng ?? center),
-                    ],
+                      );
+                    },
                   ),
           ),
           if (token.isNotEmpty)
@@ -648,7 +620,7 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
   }
 
   void _chooseSearchResult(MarketplaceMapPoint point) {
-    controller.move(point.latLng, 15);
+    vectorCenter.value = point.latLng;
     setState(() {
       selected = point;
       results = const [];
@@ -657,32 +629,6 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
       message = null;
     });
   }
-}
-
-class _PremiumMapPin extends StatelessWidget {
-  const _PremiumMapPin({required this.destination});
-  final bool destination;
-
-  @override
-  Widget build(BuildContext context) => Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            width: 58,
-            height: 58,
-            decoration: BoxDecoration(
-              color: (destination ? TuktukTheme.danger : TuktukTheme.mint)
-                  .withValues(alpha: .18),
-              shape: BoxShape.circle,
-            ),
-          ),
-          Icon(
-            Icons.location_on_rounded,
-            color: destination ? TuktukTheme.danger : TuktukTheme.mint,
-            size: 48,
-          ),
-        ],
-      );
 }
 
 class MarketplaceRouteMap extends StatelessWidget {
@@ -719,58 +665,14 @@ class MarketplaceRouteMap extends StatelessWidget {
                 ? 11.4
                 : 10.7;
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        FlutterMap(
-          options: MapOptions(
-            backgroundColor: TuktukTheme.background,
-            initialCenter: center,
-            initialZoom: zoom,
-          ),
-          children: [
-            TileLayer(
-              urlTemplate: MarketplaceMapService.tileUrlTemplate,
-              userAgentPackageName: 'com.vrixora.tuktuk',
-            ),
-            if (route != null)
-              PolylineLayer(
-                polylines: [
-                  Polyline(
-                    points: route!.routePoints
-                        .map((point) => point.latLng)
-                        .toList(growable: false),
-                    color: TuktukTheme.mint,
-                    strokeWidth: 6,
-                  ),
-                ],
-              ),
-            MarkerLayer(
-              markers: [
-                if (origin != null)
-                  Marker(
-                    point: origin!.latLng,
-                    width: 52,
-                    height: 52,
-                    child: const _PremiumMapPin(destination: false),
-                  ),
-                if (destination != null)
-                  Marker(
-                    point: destination!.latLng,
-                    width: 52,
-                    height: 52,
-                    child: const _PremiumMapPin(destination: true),
-                  ),
-              ],
-            ),
-            marketplaceMapAttribution(
-              origin?.latLng ?? const LatLng(23.1136, -82.3666),
-            ),
-          ],
-        ),
-        const TuktukMapLoadingOverlay(),
-      ],
+    return MarketplaceVectorMap(
+      initialCenter: center,
+      initialZoom: zoom,
+      originPoint: origin,
+      destinationPoint: destination,
+      routePoints: route?.routePoints ?? const <MarketplaceMapPoint>[],
     );
+
   }
 }
 

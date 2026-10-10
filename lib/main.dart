@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mbx;
 import 'package:geolocator/geolocator.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
@@ -17,6 +18,7 @@ part 'presentation/marketplace_customer.dart';
 part 'presentation/marketplace_customer_booking_flow.dart';
 part 'presentation/marketplace_customer_tracking.dart';
 part 'presentation/marketplace_location_picker.dart';
+part 'presentation/marketplace_vector_map.dart';
 part 'presentation/tuktuk_ui.dart';
 
 const _metaBox = 'marketplace_customer_meta';
@@ -43,6 +45,9 @@ Future<void> main() async {
     Supabase.instance.client,
   );
 
+  if (MarketplaceMapService.publicToken.startsWith('pk.')) {
+    mbx.MapboxOptions.setAccessToken(MarketplaceMapService.publicToken);
+  }
   runApp(MarketplaceCustomerApp(client: Supabase.instance.client));
 }
 
