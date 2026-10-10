@@ -65,6 +65,9 @@ class MarketplaceMapService {
 
   static String get publicToken => _publicToken;
 
+  static String get vectorStyleUri =>
+      'mapbox://styles/$_mapStyle';
+
   static String get tileUrlTemplate =>
       'https://api.mapbox.com/styles/v1/$_mapStyle/tiles/$_tileSize/{z}/{x}/{y}?access_token=$_publicToken';
 

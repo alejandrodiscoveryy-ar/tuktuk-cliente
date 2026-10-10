@@ -8,6 +8,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_map: ^8.3.2
+  mapbox_maps_flutter: 3.0.0
   geolocator: ^14.0.3
   hive: ^2.2.3
   hive_flutter: ^1.1.0
