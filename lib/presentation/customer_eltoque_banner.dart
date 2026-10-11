@@ -33,15 +33,13 @@ class MarketplacePublicEltoqueRate {
       chargeCurrency == 'CUP' &&
       checkedAt != null &&
       !checkedAt!.isBefore(DateTime.now().toUtc().subtract(
-        const Duration(hours: 2),
-      ));
+            const Duration(hours: 2),
+          ));
 
   static MarketplacePublicEltoqueRate? parse(Object? raw) {
     if (raw is! Map) return null;
     final value = raw['rate'];
-    final current = value is num
-        ? value.toDouble()
-        : double.tryParse('$value');
+    final current = value is num ? value.toDouble() : double.tryParse('$value');
     if (current == null || !current.isFinite || current <= 0) return null;
     final old = raw['previous_rate'];
     final previous = old == null
@@ -92,6 +90,11 @@ class TuktukCustomerEltoqueBanner extends StatefulWidget {
 class _TuktukCustomerEltoqueBannerState
     extends State<TuktukCustomerEltoqueBanner> with WidgetsBindingObserver {
   Timer? _refreshTimer;
+  StreamSubscription<RemoteMessage>? _pushMessages;
+  late final CustomerRatePushClient _pushClient;
+  bool _pushEnabled = false;
+  bool _pushBusy = false;
+  String? _pushError;
   MarketplacePublicEltoqueRate? _snapshot;
   bool _loading = false;
   bool _expanded = false;
@@ -100,6 +103,25 @@ class _TuktukCustomerEltoqueBannerState
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _pushClient = CustomerRatePushClient(widget.client);
+    _pushEnabled = _pushClient.hasSavedSubscription;
+    if (_pushEnabled) unawaited(_pushClient.refreshExisting());
+    if (kIsWeb) {
+      try {
+        _pushMessages = FirebaseMessaging.onMessage.listen((message) {
+          if (message.data['kind'] != 'customer_exchange_rate_update') return;
+          unawaited(_refresh());
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text(
+                  'elTOQUE: la tasa ha cambiado. Consulta la franja superior.'),
+            ));
+          }
+        });
+      } catch (_) {
+        // Firebase notifications are optional.
+      }
+    }
     _refresh();
     _refreshTimer = Timer.periodic(
       const Duration(minutes: 5),
@@ -115,8 +137,32 @@ class _TuktukCustomerEltoqueBannerState
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _pushMessages?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  Future<void> _toggleAlerts() async {
+    if (_pushBusy) return;
+    setState(() {
+      _pushBusy = true;
+      _pushError = null;
+    });
+    try {
+      if (_pushEnabled) {
+        await _pushClient.deactivate();
+      } else {
+        await _pushClient.activate();
+      }
+      if (!mounted) return;
+      setState(() => _pushEnabled = _pushClient.hasSavedSubscription);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _pushError =
+          'No se pudieron cambiar las alertas. Comprueba los permisos o intenta luego.');
+    } finally {
+      if (mounted) setState(() => _pushBusy = false);
+    }
   }
 
   Future<void> _refresh() async {
@@ -141,10 +187,14 @@ class _TuktukCustomerEltoqueBannerState
     final delta = valid ? rate!.change : null;
     final directionColor = delta == null || delta == 0
         ? TuktukTheme.muted
-        : delta > 0 ? TuktukTheme.mint : TuktukTheme.danger;
+        : delta > 0
+            ? TuktukTheme.mint
+            : TuktukTheme.danger;
     final marker = delta == null || delta == 0
         ? '—'
-        : delta > 0 ? '↑' : '↓';
+        : delta > 0
+            ? '↑'
+            : '↓';
     final directionText = delta == null || delta == 0
         ? ''
         : ' $marker${marketplaceEltoqueAmount(delta.abs())}';
@@ -165,30 +215,41 @@ class _TuktukCustomerEltoqueBannerState
               child: ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: 44),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
                   child: Row(
                     children: [
                       const Icon(Icons.currency_exchange_rounded,
                           size: 17, color: TuktukTheme.gold),
                       const SizedBox(width: 7),
-                      const Text('elTOQUE', style: TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w800,
-                          color: TuktukTheme.gold)),
+                      const Text('elTOQUE',
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: TuktukTheme.gold)),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Text(text, maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w700,
-                            fontSize: 13.5, color: TuktukTheme.text)),
+                        child: Text(text,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13.5,
+                                color: TuktukTheme.text)),
                       ),
                       if (valid && delta != null && delta != 0)
                         Text(directionText,
-                          style: TextStyle(color: directionColor,
-                            fontSize: 12, fontWeight: FontWeight.w700)),
+                            style: TextStyle(
+                                color: directionColor,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700)),
                       const SizedBox(width: 5),
-                      Icon(_expanded ? Icons.keyboard_arrow_up_rounded
-                           : Icons.keyboard_arrow_down_rounded,
-                          size: 19, color: TuktukTheme.muted),
+                      Icon(
+                          _expanded
+                              ? Icons.keyboard_arrow_up_rounded
+                              : Icons.keyboard_arrow_down_rounded,
+                          size: 19,
+                          color: TuktukTheme.muted),
                     ],
                   ),
                 ),
@@ -202,11 +263,41 @@ class _TuktukCustomerEltoqueBannerState
                   child: Text(
                     valid
                         ? 'Fuente: elTOQUE. Valor referencial. '
-                          'Última consulta: ${DateFormat("dd/MM HH:mm").format(rate!.checkedAt!.toLocal())}.'
+                            'Última consulta: ${DateFormat("dd/MM HH:mm").format(rate!.checkedAt!.toLocal())}.'
                         : 'No hay una tasa reciente verificada. Intenta más tarde.',
-                    style: const TextStyle(fontSize: 11.5,
-                        color: TuktukTheme.muted),
+                    style: const TextStyle(
+                        fontSize: 11.5, color: TuktukTheme.muted),
                   ),
+                ),
+              ),
+            if (_expanded)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 9),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextButton.icon(
+                      onPressed: _pushBusy ? null : _toggleAlerts,
+                      icon: Icon(_pushEnabled
+                          ? Icons.notifications_off_outlined
+                          : Icons.notifications_active_outlined),
+                      label: Text(_pushBusy
+                          ? 'Comprobando...'
+                          : _pushEnabled
+                              ? 'Desactivar alertas'
+                              : 'Activar alertas gratuitas'),
+                    ),
+                    if (_pushError != null)
+                      Text(_pushError!,
+                          style: const TextStyle(
+                              fontSize: 12, color: TuktukTheme.danger)),
+                    if (!_pushEnabled)
+                      const Text(
+                          'Recibe un aviso cuando cambie la tasa. '
+                          'Sin cuenta, sin pagos y solo con tu permiso.',
+                          style: TextStyle(
+                              fontSize: 11.5, color: TuktukTheme.muted)),
+                  ],
                 ),
               ),
             const Divider(height: 1, color: TuktukTheme.border),

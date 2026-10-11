@@ -2,6 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'services/customer_rate_firebase_options.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mbx;
 import 'package:geolocator/geolocator.dart';
@@ -21,6 +25,7 @@ part 'presentation/marketplace_location_picker.dart';
 part 'presentation/marketplace_vector_map.dart';
 part 'presentation/tuktuk_ui.dart';
 part 'presentation/customer_eltoque_banner.dart';
+part 'presentation/customer_eltoque_notifications.dart';
 
 const _metaBox = 'marketplace_customer_meta';
 const kPrimary = Color(0xFF2DD4A3);
@@ -41,6 +46,14 @@ Future<void> main() async {
   }
   await Supabase.initialize(
       url: _supabaseUrl, publishableKey: _supabasePublishableKey);
+
+  if (kIsWeb) {
+    try {
+      await Firebase.initializeApp(options: customerRateFirebaseWebOptions);
+    } catch (_) {
+      // Push is optional. Ride booking must work when Firebase is unavailable.
+    }
+  }
 
   await MarketplaceMapService.loadPublicConfiguration(
     Supabase.instance.client,
