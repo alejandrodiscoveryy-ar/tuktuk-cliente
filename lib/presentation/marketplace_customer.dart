@@ -287,6 +287,64 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
     }
   }
 
+  // Reconstruye únicamente una sesión inexistente que el servidor rechazó.
+  // Conserva origen, destino, modalidad y datos del formulario. No publica
+  // ni repite solicitudes automáticamente: el usuario debe confirmar de nuevo.
+  Future<bool> _renewInvalidCustomerSession() async {
+    final previous = _existingSession;
+    if (previous == null || _activeJobId != null || _loading) return false;
+    final displayName = previous.displayName?.trim() ?? '';
+    final whatsappPhone = previous.whatsappPhone?.trim() ?? '';
+    if (displayName.isEmpty || whatsappPhone.isEmpty) return false;
+    setState(() => _loading = true);
+    try {
+      final token = marketplaceCustomerSessionToken();
+      final session = await _service.startSession(
+        displayName: displayName,
+        whatsappPhone: whatsappPhone,
+        email: previous.email,
+        sessionToken: token,
+        idempotencyKey: _marketplaceUuid(),
+      );
+      final snapshot = MarketplaceCustomerSessionSnapshot(
+        sessionId: session.sessionId,
+        customerId: session.customerId,
+        token: token,
+        expiresAt: session.expiresAt,
+        displayName: displayName,
+        whatsappPhone: whatsappPhone,
+        email: previous.email,
+      );
+      await _sessionStore.save(
+        session: session,
+        token: token,
+        displayName: displayName,
+        whatsappPhone: whatsappPhone,
+        email: previous.email,
+      );
+      if (!mounted) return false;
+      final booking = _bookingFlow;
+      if (booking != null) {
+        booking.replaceSession(snapshot);
+        booking.idempotencyKey = _marketplaceUuid();
+        booking.publishIdempotencyKey = _marketplaceUuid();
+        // No reutilizar cotización o token de ruta si caducaron.
+        booking.route = null;
+      }
+      setState(() => _existingSession = snapshot);
+      // Recalcula el token de ruta, que vence en 15 minutos.
+      if (booking?.origin != null && booking?.destination != null) {
+        await booking!.refreshRoute();
+      }
+      return mounted && (booking == null || booking.route != null);
+    } catch (_) {
+      // Los fallos de red no borran ni reemplazan la sesión guardada.
+      return false;
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   Future<void> _clearActiveJob() async {
     await _sessionStore.clearActiveJobId();
 
@@ -323,6 +381,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
         service: _service,
         session: existingSession,
         controller: _bookingFlow,
+        onSessionInvalid: _renewInvalidCustomerSession,
         onEditCustomer: () => setState(() {
           _resumeBookingStep = _bookingFlow!.step;
           _editSessionToken = marketplaceCustomerSessionToken();
