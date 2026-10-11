@@ -1,7 +1,7 @@
 # elTOQUE Cliente — integración compartida en desarrollo
 
 Admin coordina contratos, configuración y SQL. Supabase ejecuta un único emisor
-`send-push-notifications`, alojado actualmente en tuktuk-control, sobre la
+`send-push-notifications`, mantenido en Vrixora Admin (supabase/functions/send-push-notifications), sobre la
 referencia operativa v16. Se reutilizan Firebase, Google OAuth y el cron
 `tuktuk-push-dispatch`; no hay cron ni emisor nuevos.
 
@@ -57,5 +57,8 @@ conexión de red. La comprobación real del widget Turnstile, suscripción en Ed
 FCM y navegador cerrado requiere una fase posterior autorizada.
 
 No se autoriza merge, publicación, migración remota ni despliegue mediante este
-documento. Revisar el informe central de Admin y los tres commits antes de
+documento. Revisar el informe central de Admin y los dos commits de Admin y Cliente antes de
 proponer una activación.
+
+La corrección final autoriza publicar únicamente estas dos ramas de desarrollo.
+Conductor y 79919fd se conservan aislados, sin modificaciones ni publicación.
