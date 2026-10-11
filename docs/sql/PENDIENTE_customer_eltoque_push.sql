@@ -7,7 +7,7 @@ create table if not exists public.marketplace_customer_eltoque_push_subscription
   id uuid primary key default gen_random_uuid(),
   token_hash text not null unique,
   fcm_token text not null,
-  secret_hash text not null,
+  secret_hash text not null unique,
   enabled boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -122,38 +122,6 @@ $function$;
 revoke all on function public.marketplace_customer_eltoque_push_claim(int) from public, anon, authenticated;
 grant execute on function public.marketplace_customer_eltoque_push_claim(int) to service_role;
 
--- Best-effort anonymous enrollment throttle. Still require perimeter/WAF review.
-create table if not exists public.marketplace_customer_eltoque_push_registration_limits (
-  ip_hash text primary key check (ip_hash ~ '^[0-9a-f]{64}$'),
-  window_start timestamptz not null default now(),
-  attempt_count int not null default 0,
-  updated_at timestamptz not null default now()
-);
-alter table public.marketplace_customer_eltoque_push_registration_limits enable row level security;
-revoke all on public.marketplace_customer_eltoque_push_registration_limits from public, anon, authenticated;
-grant all on public.marketplace_customer_eltoque_push_registration_limits to service_role;
-
-create or replace function public.marketplace_customer_eltoque_push_allow_signup(ip_digest text)
-returns boolean language plpgsql security definer set search_path = '' as $function$
-declare attempts int;
-begin
-  if auth.role() <> 'service_role' then
-    raise exception 'Forbidden' using errcode='42501';
-  end if;
-  if ip_digest !~ '^[0-9a-f]{64}$' then return false; end if;
-  insert into public.marketplace_customer_eltoque_push_registration_limits as l
-    (ip_hash,window_start,attempt_count,updated_at)
-  values (ip_digest,now(),1,now())
-  on conflict (ip_hash) do update set
-    attempt_count=case when l.window_start<now()-interval '1 hour'
-      then 1 else l.attempt_count+1 end,
-    window_start=case when l.window_start<now()-interval '1 hour'
-      then now() else l.window_start end,
-    updated_at=now()
-  returning attempt_count into attempts;
-  return attempts <= 8;
-end;
-$function$;
-revoke all on function public.marketplace_customer_eltoque_push_allow_signup(text)
-  from public,anon,authenticated;
-grant execute on function public.marketplace_customer_eltoque_push_allow_signup(text) to service_role;
+-- Initial anonymous signups require verified Cloudflare Turnstile in the Edge
+-- function. Renewals authenticate with the existing random device secret.
+-- This migration intentionally does not trust spoofable forwarded-IP headers.

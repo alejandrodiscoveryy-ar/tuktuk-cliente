@@ -1,6 +1,12 @@
 part of '../main.dart';
 
 const _customerRatePushFunction = 'marketplace-customer-rate-push';
+const _customerTurnstileSiteKey =
+    String.fromEnvironment('CUSTOMER_TURNSTILE_SITE_KEY');
+
+@visibleForTesting
+bool customerRatePushNeedsProof({required bool hasExistingDeviceSecret}) =>
+    !hasExistingDeviceSecret;
 const _customerPushSecretCacheKey = 'customer:eltoque:device_secret';
 const _customerPushTokenCacheKey = 'customer:eltoque:fcm_token';
 
@@ -67,9 +73,21 @@ class CustomerRatePushClient {
     final secret = existingSecret is String && existingSecret.length == 64
         ? existingSecret
         : customerRateDeviceSecret(Random.secure());
+    // Renewals use the saved device secret. New devices require a browser
+    // challenge, verified by the Edge Function using a server-only key.
+    final proof = !customerRatePushNeedsProof(
+            hasExistingDeviceSecret:
+                existingSecret is String && existingSecret.length == 64)
+        ? null
+        : await customerRateTurnstileProof(_customerTurnstileSiteKey);
     final response = await supabase.functions.invoke(
       _customerRatePushFunction,
-      body: {'action': 'subscribe', 'token': token, 'device_secret': secret},
+      body: {
+        'action': 'subscribe',
+        'token': token,
+        'device_secret': secret,
+        if (proof != null) 'turnstile_token': proof,
+      },
     );
     final data = response.data;
     if (data is! Map || data['ok'] != true) {

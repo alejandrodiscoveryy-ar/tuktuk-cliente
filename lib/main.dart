@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'services/customer_rate_firebase_options.dart';
+import 'services/customer_rate_turnstile_stub.dart'
+    if (dart.library.js_interop) 'services/customer_rate_turnstile_web.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mbx;
 import 'package:geolocator/geolocator.dart';

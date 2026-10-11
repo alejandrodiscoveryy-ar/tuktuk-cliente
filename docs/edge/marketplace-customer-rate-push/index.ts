@@ -41,6 +41,26 @@ async function sameSecret(actual: string, expected: string) {
   const [a, b] = await Promise.all([sha256(actual), sha256(expected)]);
   return a === b;
 }
+// A server-only secret must be configured before anonymous enrolment is enabled.
+async function verifyTurnstile(proof: string): Promise<boolean> {
+  const secret = Deno.env.get('TUKTUK_CUSTOMER_TURNSTILE_SECRET') ?? '';
+  if (!secret) return false; // Fail closed; never trust browser Origin or IP headers.
+  try {
+    const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ secret, response: proof }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) return false;
+    const verdict = await response.json() as {
+      success?: boolean; hostname?: string; action?: string;
+    };
+    return verdict.success === true && verdict.hostname === 'www.vrixora.com' &&
+      verdict.action === 'customer-rate-subscribe';
+  } catch { return false; }
+}
+
 function b64url(bytes: Uint8Array) {
   let s = '';
   for (const byte of bytes) s += String.fromCharCode(byte);
@@ -177,36 +197,41 @@ export default {
         if (error) throw error;
         return json({ok:true},200,headers);
       }
-      const limiterKey = Deno.env.get('TUKTUK_PUSH_DISPATCH_SECRET') ?? '';
-      const rawAddress = request.headers.get('cf-connecting-ip') ||
-        request.headers.get('x-real-ip') ||
-        (request.headers.get('x-forwarded-for') || '').split(',')[0].trim();
-      if (!rawAddress || !limiterKey) {
-        return json({ok:false,error:'registration_unavailable'},503,headers);
-      }
-      // The address is not stored: only a salted digest. Reverse-proxy headers
-      // can still be forged unless verified by the hosting platform; WAF review
-      // is a deployment prerequisite.
-      const ipDigest=await sha256(`${limiterKey}:${rawAddress}`);
-      const {data:allowed,error:rateError}=await admin.rpc(
-        'marketplace_customer_eltoque_push_allow_signup',{ip_digest:ipDigest});
-      if (rateError) throw rateError;
-      if (allowed!==true) return json({ok:false,error:'too_many_requests'},429,headers);
-      const {data:existing,error:lookupError}=await admin.from(TABLE)
+      // Ownership is checked BEFORE any anti-abuse gate. Re-enabling or rotating
+      // a known device token must not consume a new-enrolment challenge.
+      const {data:byToken,error:tokenLookupError}=await admin.from(TABLE)
         .select('id,secret_hash').eq('token_hash',tokenHash).maybeSingle();
-      if (lookupError) throw lookupError;
-      if (existing && existing.secret_hash!==secretHash)
+      if (tokenLookupError) throw tokenLookupError;
+      if (byToken && byToken.secret_hash!==secretHash)
         return json({ok:false,error:'token_registered_elsewhere'},409,headers);
-      // One active FCM token per device-secret; supports Firebase token rotation.
-      if (!existing) {
-        const {error:removeError}=await admin.from(TABLE).delete()
-          .eq('secret_hash',secretHash).neq('token_hash',tokenHash);
-        if (removeError) throw removeError;
+      const {data:bySecret,error:secretLookupError}=await admin.from(TABLE)
+        .select('id,token_hash').eq('secret_hash',secretHash).maybeSingle();
+      if (secretLookupError) throw secretLookupError;
+      if (byToken && bySecret && byToken.id!==bySecret.id)
+        return json({ok:false,error:'subscription_conflict'},409,headers);
+
+      const knownDevice = byToken ?? bySecret;
+      if (!knownDevice) {
+        // Origin and client-supplied IP forwarding headers are not proof that
+        // an anonymous signup is genuine. Verify Cloudflare Turnstile on the
+        // SERVER for first-time registrations only; fail closed otherwise.
+        const proof=body.turnstile_token;
+        if (typeof proof!=='string' || proof.length<10 || proof.length>2048)
+          return json({ok:false,error:'verification_required'},403,headers);
+        if (!await verifyTurnstile(proof))
+          return json({ok:false,error:'verification_failed'},403,headers);
       }
       const dataToSave={token_hash:tokenHash,fcm_token:token,secret_hash:secretHash,enabled:true,
         updated_at:new Date().toISOString(),expires_at:new Date(Date.now()+180*86400000).toISOString()};
-      const {error}=await admin.from(TABLE).upsert(dataToSave,{onConflict:'token_hash'});
-      if (error) throw error;
+      if (knownDevice) {
+        // Update the existing row, preserving id and delivery deduplication.
+        const {error}=await admin.from(TABLE).update(dataToSave)
+          .eq('id',knownDevice.id).eq('secret_hash',secretHash);
+        if (error) throw error;
+      } else {
+        const {error}=await admin.from(TABLE).insert(dataToSave);
+        if (error) throw error;
+      }
       return json({ok:true},200,headers);
     } catch (_e) {
       return json({ok:false,error:'subscription_unavailable'},503,headers);

@@ -41,6 +41,45 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
+  <script>
+    // The Turnstile site key is public and injected by Flutter --dart-define.
+    // The SERVER must verify the token before registering an anonymous device.
+    window.tuktukCustomerTurnstileProof = function (siteKey) {
+      return new Promise(function (resolve, reject) {
+        if (!siteKey || !window.turnstile) {
+          reject(new Error('Verificacion de alertas no disponible. Intenta de nuevo.'));
+          return;
+        }
+        const container = document.createElement('div');
+        container.style.cssText = 'position:fixed;z-index:99999;bottom:12px;right:12px';
+        document.body.appendChild(container);
+        let widgetId = null;
+        let finished = false;
+        const timeoutId = window.setTimeout(function () {
+          finish(null, new Error('Tiempo de verificacion agotado'));
+        }, 110000);
+        function finish(token, error) {
+          if (finished) return;
+          finished = true;
+          window.clearTimeout(timeoutId);
+          try { if (widgetId !== null) window.turnstile.remove(widgetId); } catch (_) {}
+          container.remove();
+          if (error) reject(error); else resolve(token);
+        }
+        try {
+          widgetId = window.turnstile.render(container, {
+            sitekey: siteKey,
+            action: 'customer-rate-subscribe',
+            appearance: 'interaction-only',
+            callback: function (token) { finish(token, null); },
+            'error-callback': function () { finish(null, new Error('Verificacion rechazada')); },
+            'expired-callback': function () { finish(null, new Error('Verificacion caducada')); }
+          });
+        } catch (e) { finish(null, e); }
+      });
+    };
+  </script>
   <script>
     // The Cliente service worker is confined to /cliente/tuk/.
     if ('serviceWorker' in navigator) {

@@ -11,6 +11,13 @@ void main() {
     expect(first, isNot(second));
   });
 
+  test(
+      'new subscription requires server-verified antiabuse proof; renewal does not',
+      () {
+    expect(customerRatePushNeedsProof(hasExistingDeviceSecret: false), isTrue);
+    expect(customerRatePushNeedsProof(hasExistingDeviceSecret: true), isFalse);
+  });
+
   test('push opt-in honors capabilities and denied permission', () {
     expect(customerRatePushCanOptIn(supported: true, previouslyDenied: false),
         true);
