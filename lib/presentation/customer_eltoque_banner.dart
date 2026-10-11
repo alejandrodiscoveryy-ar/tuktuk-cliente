@@ -65,6 +65,10 @@ String marketplaceEltoqueAmount(double amount) {
   return amount.toStringAsFixed(decimals);
 }
 
+@visibleForTesting
+String marketplaceEltoqueRateLabel(double value) =>
+    '1 USD = ${marketplaceEltoqueAmount(value)} CUP';
+
 class TuktukCustomerHomeWithRate extends StatelessWidget {
   const TuktukCustomerHomeWithRate({required this.client, super.key});
   final SupabaseClient client;
@@ -199,7 +203,7 @@ class _TuktukCustomerEltoqueBannerState
         ? ''
         : ' $marker${marketplaceEltoqueAmount(delta.abs())}';
     final text = valid
-        ? 'USD/CUP  ${marketplaceEltoqueAmount(rate!.rate)}'
+        ? marketplaceEltoqueRateLabel(rate!.rate)
         : 'Tasa no disponible';
 
     return Material(

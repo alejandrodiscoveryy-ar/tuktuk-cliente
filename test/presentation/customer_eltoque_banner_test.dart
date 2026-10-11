@@ -20,6 +20,11 @@ void main() {
     expect(marketplaceEltoqueAmount(snapshot.rate), '780');
   });
 
+  test('header explicitly displays one USD equal to CUP', () {
+    expect(marketplaceEltoqueRateLabel(780), '1 USD = 780 CUP');
+    expect(marketplaceEltoqueRateLabel(780.5), '1 USD = 780.50 CUP');
+  });
+
   test('unavailable or stale rate is never shown as current', () {
     for (final stale in [false, true]) {
       final snapshot = MarketplacePublicEltoqueRate.parse({
