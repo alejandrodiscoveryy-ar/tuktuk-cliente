@@ -20,6 +20,7 @@ part 'presentation/marketplace_customer_tracking.dart';
 part 'presentation/marketplace_location_picker.dart';
 part 'presentation/marketplace_vector_map.dart';
 part 'presentation/tuktuk_ui.dart';
+part 'presentation/customer_eltoque_banner.dart';
 
 const _metaBox = 'marketplace_customer_meta';
 const kPrimary = Color(0xFF2DD4A3);

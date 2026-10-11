@@ -13,7 +13,7 @@ class MarketplaceCustomerApp extends StatelessWidget {
       theme: buildAppTheme(Brightness.dark),
       darkTheme: buildAppTheme(Brightness.dark),
       themeMode: ThemeMode.dark,
-      home: MarketplaceCustomerShell(client: client),
+      home: TuktukCustomerHomeWithRate(client: client),
     );
   }
 }
