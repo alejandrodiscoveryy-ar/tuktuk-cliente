@@ -83,6 +83,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Flutter regenerates desktop registrants in Linux CI. Restore ONLY
+          # these three generated files in the ephemeral checkout before guards.
+          git restore --worktree -- \
+            macos/Flutter/GeneratedPluginRegistrant.swift \
+            windows/flutter/generated_plugin_registrant.cc \
+            windows/flutter/generated_plugins.cmake
           if [ -n "$(git status --porcelain)" ]; then
             git status --short
             exit 1
@@ -106,6 +112,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Flutter regenerates desktop registrants in Linux CI. Restore ONLY
+          # these three generated files in the ephemeral checkout before guards.
+          git restore --worktree -- \
+            macos/Flutter/GeneratedPluginRegistrant.swift \
+            windows/flutter/generated_plugin_registrant.cc \
+            windows/flutter/generated_plugins.cmake
           if [ -n "$(git status --porcelain)" ]; then
             git status --short
             exit 1
