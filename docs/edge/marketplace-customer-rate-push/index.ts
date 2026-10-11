@@ -87,7 +87,7 @@ async function googleAccessToken(account: ServiceAccount) {
   const assertion=`${input}.${b64url(new Uint8Array(signature))}`;
   const resp=await fetch('https://oauth2.googleapis.com/token',{
     method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},
-    body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:jwt-bearer',assertion}),
+    body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion}),
   });
   const data=await resp.json();
   if (!resp.ok || typeof data.access_token!=='string') throw new Error('Firebase OAuth unavailable');

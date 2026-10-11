@@ -28,6 +28,7 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
       MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
+      CUSTOMER_TURNSTILE_SITE_KEY: ${{ vars.CUSTOMER_TURNSTILE_SITE_KEY }}
       PUBLIC_URL: https://www.vrixora.com/cliente/tuk/
       WORKER_NAME: tuktuk-customer-webapp
       COMPATIBILITY_DATE: "2026-09-22"
@@ -67,6 +68,7 @@ jobs:
           test -n "${SUPABASE_URL:-}"
           test -n "${SUPABASE_PUBLISHABLE_KEY:-}"
           test -n "${MAPBOX_PUBLIC_TOKEN:-}"
+          test -n "${CUSTOMER_TURNSTILE_SITE_KEY:-}"
 
       - name: Install dependencies
         run: flutter pub get
@@ -97,7 +99,8 @@ jobs:
             --output "$BUILD_DIR" \
             --dart-define="SUPABASE_URL=${SUPABASE_URL}" \
             --dart-define="SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}" \
-            --dart-define="MAPBOX_PUBLIC_TOKEN=${MAPBOX_PUBLIC_TOKEN}"
+            --dart-define="MAPBOX_PUBLIC_TOKEN=${MAPBOX_PUBLIC_TOKEN}" \
+            --dart-define="CUSTOMER_TURNSTILE_SITE_KEY=${CUSTOMER_TURNSTILE_SITE_KEY}"
 
       - name: Stage exact route and calculate hash
         shell: bash
