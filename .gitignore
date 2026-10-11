@@ -1,4 +1,6 @@
 # Miscellaneous
+# Local Deno dependencies used to verify the Edge entrypoint
+node_modules/
 *.class
 *.log
 *.pyc

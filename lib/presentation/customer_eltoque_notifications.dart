@@ -1,6 +1,6 @@
 part of '../main.dart';
 
-const _customerRatePushFunction = 'marketplace-customer-rate-push';
+const _customerRatePushFunction = 'marketplace-customer-push-registration';
 const _customerTurnstileSiteKey =
     String.fromEnvironment('CUSTOMER_TURNSTILE_SITE_KEY');
 
@@ -22,6 +22,40 @@ String customerRateDeviceSecret(Random random) {
   return List<int>.generate(32, (_) => random.nextInt(256))
       .map((value) => value.toRadixString(16).padLeft(2, '0'))
       .join();
+}
+
+@visibleForTesting
+Future<void> customerRateRegisterDevice({
+  required String token,
+  required String secret,
+  required bool needsProof,
+  required Future<String> Function() challenge,
+  required Future<Object?> Function(Map<String, Object?>) invoke,
+}) async {
+  Future<Object?> send(String? proof) => invoke({
+        'action': 'subscribe',
+        'token': token,
+        'device_secret': secret,
+        if (proof != null) 'turnstile_token': proof,
+      });
+  Object? data;
+  try {
+    data = await send(needsProof ? await challenge() : null);
+  } on FunctionException catch (error) {
+    // A saved secret may outlive the server record. Ask for a new challenge
+    // only during explicit opt-in, never during background refresh.
+    if (needsProof ||
+        error.status != 403 ||
+        error.details is! Map ||
+        (error.details as Map)['error'] != 'verification_required') {
+      rethrow;
+    }
+    data = await send(await challenge());
+  }
+  if (data is! Map || data['ok'] != true) {
+    throw StateError(
+        'No se pudo confirmar la suscripción de este dispositivo.');
+  }
 }
 
 class CustomerRatePushClient {
@@ -75,26 +109,21 @@ class CustomerRatePushClient {
         : customerRateDeviceSecret(Random.secure());
     // Renewals use the saved device secret. New devices require a browser
     // challenge, verified by the Edge Function using a server-only key.
-    final proof = !customerRatePushNeedsProof(
-            hasExistingDeviceSecret:
-                existingSecret is String && existingSecret.length == 64)
-        ? null
-        : await customerRateTurnstileProof(_customerTurnstileSiteKey);
-    final response = await supabase.functions.invoke(
-      _customerRatePushFunction,
-      body: {
-        'action': 'subscribe',
-        'token': token,
-        'device_secret': secret,
-        if (proof != null) 'turnstile_token': proof,
-      },
-    );
-    final data = response.data;
-    if (data is! Map || data['ok'] != true) {
-      throw StateError(
-          'No se pudo confirmar la suscripción de este dispositivo.');
-    }
+    final needsProof = customerRatePushNeedsProof(
+        hasExistingDeviceSecret:
+            existingSecret is String && existingSecret.length == 64);
+    // Preserve possession across a lost HTTP response after a successful
+    // server commit. Never generate a new secret for a retried known token.
     await _store.put(_customerPushSecretCacheKey, secret);
+    await customerRateRegisterDevice(
+      token: token,
+      secret: secret,
+      needsProof: needsProof,
+      challenge: () => customerRateTurnstileProof(_customerTurnstileSiteKey),
+      invoke: (body) async => (await supabase.functions
+              .invoke(_customerRatePushFunction, body: body))
+          .data,
+    );
     await _store.put(_customerPushTokenCacheKey, token);
   }
 
@@ -111,6 +140,7 @@ class CustomerRatePushClient {
         _customerRatePushFunction,
         body: {
           'action': 'subscribe',
+          'renew_only': true,
           'token': freshToken,
           'device_secret': secret
         },
@@ -135,7 +165,8 @@ class CustomerRatePushClient {
       throw StateError('No se pudo desactivar la alerta. Intenta nuevamente.');
     }
     await _store.delete(_customerPushTokenCacheKey);
-    await _store.delete(_customerPushSecretCacheKey);
+    // Keep possession for a later explicit opt-in, including if FCM token
+    // deletion fails. The missing cached token still marks alerts as disabled.
     // This device's FCM token is not used by any other Cliente feature yet.
     try {
       await FirebaseMessaging.instance.deleteToken();

@@ -1,50 +1,61 @@
-# TUKTUK Cliente — elTOQUE, fase 2 (preparación SIN DESPLIEGUE)
+# elTOQUE Cliente — integración compartida en desarrollo
 
-## Decisión funcional
+Admin coordina contratos, configuración y SQL. Supabase ejecuta un único emisor
+`send-push-notifications`, alojado actualmente en tuktuk-control, sobre la
+referencia operativa v16. Se reutilizan Firebase, Google OAuth y el cron
+`tuktuk-push-dispatch`; no hay cron ni emisor nuevos.
 
-- Avisar por cambio real detectado por la sincronización automática de Supabase, no a una hora fija.
-- No requiere suscripción de pago ni registro con nombre/correo/contraseña.
-- Consentimiento explícito por dispositivo; poder desactivar las notificaciones.
-- Barra visible de fase 1 siempre presente, manteniendo los seis pasos y mapas.
-- En Cliente Web/PWA se usa Firebase Web Push y service worker en `/cliente/tuk/`; Android APK no forma parte de esta fase.
+El borrador independiente `marketplace-customer-rate-push` queda sustituido:
+se retiraron su código de envío y la propuesta de cron. No desplegarlo.
+El esquema de preactivación `20261011141714` ya está aplicado y se concilia
+en Admin como documento, fuera del directorio de migraciones automáticas.
+El SQL pendiente de trigger/verificación/reversión pertenece a Admin.
 
-## Implementación preparada
+## Registro y baja
 
-- Cliente: dependencias Firebase, inicialización web tolerante a errores, indicador en la barra expandida, opt-in/opt-out, token de dispositivo, recuperación y pruebas.
-- Backend: proyecto independiente de Edge Function `marketplace-customer-rate-push`, sin modificar el trabajador de Conductor.
-- SQL: tablas segregadas y protegidas con RLS sin acceso anónimo, cola única por `subscription_id + rate_history_id`, trigger solo para cambios automáticos auténticos de elTOQUE, batch con bloqueo para evitar reclamaciones simultáneas.
-- Credenciales: cuenta de servicio Firebase y clave de despacho solo mediante secretos en Edge; el cliente contiene únicamente configuración pública Firebase/VAPID.
-- Cron: propuesta independiente cada 5 minutos, NO activada. La consulta del proveedor hoy es cada hora.
+`supabase/functions/marketplace-customer-push-registration` solo admite
+subscribe/unsubscribe. No contiene lógica Firebase de servicio, FCM ni claim.
+Primera alta: Turnstile verificado en servidor para www.vrixora.com y acción
+customer-rate-subscribe. Claves: CUSTOMER_TURNSTILE_SITE_KEY pública en Flutter;
+TUKTUK_CUSTOMER_TURNSTILE_SECRET protegida en Edge. No se extrajeron valores.
+Origin/IP no autorizan registros. Renovación/rotación/baja exigen posesión del
+secreto aleatorio de 32 bytes, cuyo hash se guarda en el servidor.
+Las actualizaciones comparan el token anterior y comprueban filas afectadas
+para detectar carreras. La baja deshabilita sin borrar historial.
 
-## Requisitos previos obligatorios antes de integrar/publicar
+Flutter conserva el secreto antes de registrar para tolerar respuestas perdidas;
+solo marca la suscripción activa después de confirmación. La recuperación de
+un registro ausente puede pedir desafío durante opt-in explícito. Refresh
+silencioso falla sin bloquear reservas. El permiso push es voluntario y la
+consulta de cabecera sigue siendo independiente.
 
-1. Revisar que el token del mismo proyecto Firebase admite el origen `www.vrixora.com` y que el service worker está limitado a `/cliente/tuk/`.
-2. Auditar el rate limiting y abuso de registro anónimo; el origen del navegador por sí solo no es una prueba de identidad. Habilitar límites perimetrales o por sesión/IP antes de producción.
-3. Revisar todas las grants y RLS de las nuevas tablas, especialmente `service_role` y ausencia de permisos `anon`.
-4. Migrar SQL al repositorio propietario `vrixora-admin-canvas` y probar primero su esquema; NO copiar SQL de docs directamente a producción.
-5. Desplegar la Edge Function con secretos correctos; comprobar suscripciones válidas e inválidas, revocación, caída temporal de FCM y cola.
-6. Configurar el cron de despacho solamente después de validar la función; verificar ausencia de avisos duplicados.
-7. Pruebas reales navegador Android: primer permiso, denegación, WebApp en segundo plano/cerrada, cambio real y desactivación.
-8. Solo entonces solicitar aprobación expresa para merge a main y publicación del Worker Cliente.
+## Compatibilidad y límites
 
-## Advertencias
+Firebase/VAPID y service worker permanecen bajo /cliente/tuk/. No se cambian
+precios, reservas, mapas ni la app Flutter Conductor. El mensaje conserva
+customer_exchange_rate_update y rate_history_id; el worker mantiene su tag por
+cambio. Envío es al menos una vez: un fallo al confirmar FCM puede reintentarse;
+no se afirma entrega exactamente una vez ni recepción visible.
 
-- Un servicio push de tipo `at least once` no garantiza entrega exacta ni recepción instantánea; puede haber reintentos o condiciones del SO/navegador.
-- El token de navegador debe tratarse como sensible. El cliente almacena una clave secreta aleatoria únicamente en su almacenamiento local y el servidor almacena solo su hash.
-- La tasa es referencial y NO se utiliza para recalcular el precio de las carreras.
-- El registro sin identidad obligatoria necesita limitación de abusos antes de la fase de producción.
+La revocación evita nuevos envíos tras la comprobación del servidor; no puede
+cancelar una petición FCM ya en vuelo. Mantener límites de abuso perimetrales
+antes de activar producción; Turnstile no sustituye una política de capacidad.
 
-## Endurecimiento V3 — nueva alta anónima
+## Validación local
 
-- El backend distingue renovación (secreto local previo, token igual o rotado) de alta nueva.
-- Una renovación conserva el identificador de suscripción; no consume prueba antiabuso.
-- Para el alta nueva se requiere token Cloudflare Turnstile validado exclusivamente en Edge
-  con `TUKTUK_CUSTOMER_TURNSTILE_SECRET`; se comprueban `hostname` y `action`.
-- Cliente Web usa `CUSTOMER_TURNSTILE_SITE_KEY` (clave PÚBLICA, via dart-define).
-- Sin ambas configuraciones nuevas altas se bloquean de forma segura; no se habilita producción.
-- Se eliminó el limitador basado en cabeceras IP suministrables por el solicitante.
-- No basta el `Origin` del navegador como control de abuso. Web/PWA necesita prueba real.
-- Pendiente: crear la pareja site/secret de Turnstile para `www.vrixora.com`,
-  almacenarla como secreto en CI/Edge y actualizar el workflow de publicación.
-- Pendiente: pruebas del widget real, suscripción, renovación, revocación, FCM Web y envío
-  con WebApp cerrada. NO desplegar SQL, cron ni Edge hasta superar esas pruebas.
+Desde este repositorio:
+
+```powershell
+deno test --no-config --no-lock supabase/functions/marketplace-customer-push-registration/registration_test.ts
+flutter pub get --offline
+flutter analyze --no-pub --no-fatal-infos
+flutter test --no-pub
+```
+
+Los tests backend usan tokens y secretos sintéticos, fetch simulado y ninguna
+conexión de red. La comprobación real del widget Turnstile, suscripción en Edge,
+FCM y navegador cerrado requiere una fase posterior autorizada.
+
+No se autoriza merge, publicación, migración remota ni despliegue mediante este
+documento. Revisar el informe central de Admin y los tres commits antes de
+proponer una activación.
