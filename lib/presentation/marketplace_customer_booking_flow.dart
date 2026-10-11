@@ -1504,7 +1504,7 @@ class _MarketplaceCustomerBookingFlowState
         MaterialPageRoute<void>(
           builder: (_) => MarketplaceCustomerTrackingScreen(
             service: widget.service,
-            session: widget.session,
+            session: flow.session,
             jobId: publication.jobId,
             onDone: sessionStore.clearActiveJobId,
           ),
