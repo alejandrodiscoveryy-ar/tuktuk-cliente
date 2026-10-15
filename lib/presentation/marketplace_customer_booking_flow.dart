@@ -127,6 +127,19 @@ class CustomerBookingFlowController extends ChangeNotifier {
     notifyListeners();
   }
 
+  // En la pantalla principal cambiar el origen no debe borrar el destino.
+  void setPickupForQuote(MarketplaceMapPoint value) {
+    _pricingRevision++;
+    origin = value;
+    route = null;
+    error = null;
+    step = MarketplaceBookingStep.quote;
+    notifyListeners();
+    if (destination != null) {
+      unawaited(refreshRoute());
+    }
+  }
+
   void setDestination(MarketplaceMapPoint value) {
     _pricingRevision++;
     destination = value;
@@ -296,6 +309,7 @@ class _MarketplaceCustomerBookingFlowState
   Timer? pricingDebounce;
   bool _publishing = false;
   bool _showAdvancedOptions = false;
+  bool _tryingAutoPickup = false;
 
   @override
   void initState() {
@@ -311,6 +325,13 @@ class _MarketplaceCustomerBookingFlowState
     weightController.text = flow.cargoWeightKg?.toString() ?? '';
     volumeController.text = flow.cargoVolumeM3?.toString() ?? '';
     flow.addListener(_changed);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted &&
+          flow.step == MarketplaceBookingStep.quote &&
+          flow.origin == null) {
+        unawaited(_autoLocatePickup());
+      }
+    });
   }
 
   void _changed() {
@@ -420,7 +441,7 @@ class _MarketplaceCustomerBookingFlowState
           origin: origin ? null : flow.origin,
           onConfirm: (point) {
             if (origin) {
-              flow.setOrigin(point);
+              flow.setPickupForQuote(point);
             } else {
               flow.setDestination(point);
             }
@@ -431,6 +452,43 @@ class _MarketplaceCustomerBookingFlowState
         ),
       ),
     );
+  }
+
+  // Se intenta una sola vez al abrir. Si GPS o permisos fallan, la entrada
+  // manual sigue disponible. Nunca sustituye una recogida elegida por el usuario.
+  Future<void> _autoLocatePickup() async {
+    if (_tryingAutoPickup || flow.origin != null) return;
+    _tryingAutoPickup = true;
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return;
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) return;
+      final position = await Geolocator.getCurrentPosition(
+        timeLimit: const Duration(seconds: 12),
+      );
+      if (!mounted || flow.origin != null) return;
+      var point = MarketplaceMapPoint(
+        label: 'Mi ubicación actual',
+        lat: position.latitude,
+        lon: position.longitude,
+      );
+      try {
+        point = await flow.mapService.reverse(point);
+      } catch (_) {
+        // Conservamos coordenadas validas si la direccion no se resuelve.
+      }
+      if (mounted && flow.origin == null) {
+        flow.setPickupForQuote(point);
+      }
+    } catch (_) {
+      // La ubicacion no debe impedir contratar manualmente.
+    } finally {
+      _tryingAutoPickup = false;
+    }
   }
 
   Future<void> _openHistory() async {
@@ -937,10 +995,9 @@ class _MarketplaceCustomerBookingFlowState
                               ),
                             ),
                             IconButton(
-                              tooltip: 'Editar ruta',
+                              tooltip: 'Cambiar recogida',
                               visualDensity: VisualDensity.compact,
-                              onPressed: () =>
-                                  flow.setStep(MarketplaceBookingStep.origin),
+                              onPressed: () => _selectPoint(origin: true),
                               icon: const Icon(
                                 Icons.edit_outlined,
                                 color: TuktukTheme.mint,
