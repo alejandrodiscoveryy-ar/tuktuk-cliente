@@ -1,0 +1,32 @@
+name: Verificar TUKTUK Cliente UI
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/presentation/marketplace_customer_tracking.dart'
+      - 'lib/presentation/marketplace_customer_booking_flow.dart'
+      - 'test/presentation/marketplace_tracking_mobile_ui_test.dart'
+      - '.github/workflows/customer-ui-pr-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  flutter-checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - name: Setup Flutter 3.44.4
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.44.4'
+          channel: stable
+          cache: true
+      - name: Dependencies
+        run: flutter pub get
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+      - name: Test
+        run: flutter test
