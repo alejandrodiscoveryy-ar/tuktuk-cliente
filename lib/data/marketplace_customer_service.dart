@@ -84,11 +84,8 @@ class MarketplaceCustomerJob {
 
   bool get hasAssignedDriver => driverDisplayName != null || vehicleId != null;
 
-  bool get customerCanFinish => const {
-    'en_route',
-    'pickup',
-    'in_progress',
-  }.contains(status);
+  bool get customerCanFinish =>
+      const {'en_route', 'pickup', 'in_progress'}.contains(status);
   bool get customerCanCancel => const {
     'requested',
     'published',
@@ -167,6 +164,7 @@ class MarketplaceCustomerFinish {
         serverTime: _marketDate(map['server_time']),
       );
 }
+
 class MarketplaceCustomerRating {
   const MarketplaceCustomerRating({
     required this.jobId,
@@ -241,6 +239,7 @@ class MarketplaceCustomerSessionStore {
   static const _whatsappPhoneKey = 'marketplace_customer_whatsapp_phone';
   static const _emailKey = 'marketplace_customer_email';
   static const _activeJobIdKey = 'marketplace_customer_active_job_id';
+  static const _activeJobMapKey = 'marketplace_customer_active_job_map';
 
   MarketplaceCustomerSessionSnapshot? read() {
     final sessionId = _marketText(_box.get(_sessionIdKey));
@@ -291,8 +290,37 @@ class MarketplaceCustomerSessionStore {
     await _box.put(_activeJobIdKey, jobId);
   }
 
+  // Geometría SOLO para la carrera activa del dispositivo. No contiene GPS del
+  // transportista y no se expone a otros clientes. Se limpia al salir.
+  Future<void> saveActiveJobMap({
+    required String jobId,
+    required MarketplaceMapPoint origin,
+    required MarketplaceMapPoint destination,
+    required List<MarketplaceMapPoint> routePoints,
+    required double distanceKm,
+  }) async {
+    await _box.put(_activeJobMapKey, <String, dynamic>{
+      'job_id': jobId,
+      'origin': origin.toMap(),
+      'destination': destination.toMap(),
+      'distance_km': distanceKm,
+      'route_points': routePoints.map((point) => point.toMap()).toList(),
+    });
+  }
+
+  Map<String, dynamic>? readActiveJobMap(String jobId) {
+    if (readActiveJobId() != jobId) return null;
+    final value = _box.get(_activeJobMapKey);
+    if (value is! Map || value['job_id'] != jobId) return null;
+    try {
+      return Map<String, dynamic>.from(value);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> clearActiveJobId() async {
-    await _box.delete(_activeJobIdKey);
+    await _box.deleteAll([_activeJobIdKey, _activeJobMapKey]);
   }
 
   Future<void> clear() async {
@@ -305,6 +333,7 @@ class MarketplaceCustomerSessionStore {
       _whatsappPhoneKey,
       _emailKey,
       _activeJobIdKey,
+      _activeJobMapKey,
     ]);
   }
 }
@@ -359,7 +388,9 @@ class MarketplaceCustomerService {
       },
     });
     if (value is! List) throw StateError('HISTORY_RESPONSE_INVALID');
-    return value.map((item) => MarketplaceCustomerJob.fromMap(item as Map)).toList();
+    return value
+        .map((item) => MarketplaceCustomerJob.fromMap(item as Map))
+        .toList();
   }
 
   Future<MarketplaceCustomerSession> startSession({
