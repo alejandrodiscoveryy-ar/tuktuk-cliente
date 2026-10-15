@@ -3,20 +3,20 @@ part of '../main.dart';
 // Shared vector renderer for the real customer booking flow.
 // Only public map configuration and data for this booking are rendered.
 String marketplaceVectorPointGeoJson(MarketplaceMapPoint? point) => jsonEncode({
-      'type': 'FeatureCollection',
-      'features': point == null
-          ? <Object>[]
-          : <Object>[
-              {
-                'type': 'Feature',
-                'geometry': {
-                  'type': 'Point',
-                  'coordinates': [point.lon, point.lat],
-                },
-                'properties': <String, Object>{},
-              },
-            ],
-    });
+  'type': 'FeatureCollection',
+  'features': point == null
+      ? <Object>[]
+      : <Object>[
+          {
+            'type': 'Feature',
+            'geometry': {
+              'type': 'Point',
+              'coordinates': [point.lon, point.lat],
+            },
+            'properties': <String, Object>{},
+          },
+        ],
+});
 
 String marketplaceVectorLineGeoJson(List<MarketplaceMapPoint> points) =>
     jsonEncode({
@@ -110,13 +110,15 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
     super.dispose();
   }
 
-  MarketplaceMapPoint? get _origin => widget.onPointTap != null &&
+  MarketplaceMapPoint? get _origin =>
+      widget.onPointTap != null &&
           widget.markerPoint != null &&
           !widget.markerIsDestination
       ? widget.markerPoint
       : widget.originPoint;
 
-  MarketplaceMapPoint? get _destination => widget.onPointTap != null &&
+  MarketplaceMapPoint? get _destination =>
+      widget.onPointTap != null &&
           widget.markerPoint != null &&
           widget.markerIsDestination
       ? widget.markerPoint
@@ -212,19 +214,10 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
       );
       await map.addLayer(
         mbx.LineLayer(
-          id: 'tuktuk-client-route-outline',
-          sourceId: _sourceRoute,
-          lineColor: 0xFF06131A,
-          lineWidth: 10,
-          slot: 'top',
-        ),
-      );
-      await map.addLayer(
-        mbx.LineLayer(
           id: 'tuktuk-client-route-line',
           sourceId: _sourceRoute,
           lineColor: 0xFFFFC400,
-          lineWidth: 6,
+          lineWidth: 7,
           slot: 'top',
         ),
       );
