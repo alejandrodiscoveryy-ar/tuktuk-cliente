@@ -837,7 +837,7 @@ class _MarketplaceCustomerBookingFlowState
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.center,
-                    colors: [Color(0xD908141B), Color(0x0008141B)],
+                    colors: [Color(0x5208141B), Color(0x0008141B)],
                   ),
                 ),
               ),

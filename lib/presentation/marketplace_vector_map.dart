@@ -212,13 +212,30 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
           data: marketplaceVectorLineGeoJson(widget.routePoints),
         ),
       );
+      // La geometria vial verificada se representa siempre en dorado.
+      // Sin slot: sobre el mapa base dark-v11 y estilos privados por igual.
+      // Aura tenue + trazo opaco: contraste legible sin tapar las calles.
+      await map.addLayer(
+        mbx.LineLayer(
+          id: 'tuktuk-client-route-glow',
+          sourceId: _sourceRoute,
+          lineColor: 0xFFFFC400,
+          lineOpacity: 0.30,
+          lineWidth: 15,
+          lineBlur: 1.2,
+          lineCap: mbx.LineCap.ROUND,
+          lineJoin: mbx.LineJoin.ROUND,
+        ),
+      );
       await map.addLayer(
         mbx.LineLayer(
           id: 'tuktuk-client-route-line',
           sourceId: _sourceRoute,
           lineColor: 0xFFFFC400,
-          lineWidth: 7,
-          slot: 'top',
+          lineOpacity: 1.0,
+          lineWidth: 8,
+          lineCap: mbx.LineCap.ROUND,
+          lineJoin: mbx.LineJoin.ROUND,
         ),
       );
       // Iconos premium propios, anclados al punto exacto del mapa.
