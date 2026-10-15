@@ -1073,22 +1073,12 @@ class _MarketplaceCustomerBookingFlowState
           ],
         ),
         if (flow.serviceCode == 'passenger') ...[
-          const SizedBox(height: 11),
-          SizedBox(
-            height: 94,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                for (final category
-                    in marketplacePassengerVehicleCategories) ...[
-                  SizedBox(
-                    width: 158,
-                    child: _premiumPassengerVehicleCard(category),
-                  ),
-                  const SizedBox(width: 7),
-                ],
-              ],
-            ),
+          const SizedBox(height: 9),
+          MarketplaceCompactVehicleSelector(
+            selectedCategory: flow.passengerVehicleCategoryCode,
+            priceLabel: (category) =>
+                _priceLabel(_passengerPrice(category), 'passenger'),
+            onSelected: flow.setPassengerVehicleCategory,
           ),
         ],
         const SizedBox(height: 6),
@@ -1316,99 +1306,6 @@ class _MarketplaceCustomerBookingFlowState
                 label: 'Listo',
                 onPressed: () => Navigator.of(sheetContext).pop(),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _premiumPassengerVehicleCard(String category) {
-    final selected = flow.passengerVehicleCategoryCode == category;
-
-    final price = _priceLabel(_passengerPrice(category), 'passenger');
-
-    final icon = switch (category) {
-      'motorcycle' => Icons.two_wheeler_rounded,
-      'bicitaxi' => Icons.pedal_bike_rounded,
-      'tricycle' => Icons.electric_rickshaw_rounded,
-      'light_car' => Icons.directions_car_filled_outlined,
-      _ => Icons.local_taxi_outlined,
-    };
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => flow.setPassengerVehicleCategory(category),
-        borderRadius: BorderRadius.circular(20),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          height: 92,
-          padding: const EdgeInsets.all(11),
-          decoration: BoxDecoration(
-            color: selected
-                ? TuktukTheme.gold.withValues(alpha: .10)
-                : TuktukTheme.surface.withValues(alpha: .58),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: selected
-                  ? TuktukTheme.gold.withValues(alpha: .82)
-                  : TuktukTheme.border,
-              width: selected ? 1.4 : 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 39,
-                height: 39,
-                decoration: BoxDecoration(
-                  color: selected
-                      ? TuktukTheme.gold.withValues(alpha: .13)
-                      : TuktukTheme.surfaceSoft,
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: Icon(
-                  icon,
-                  color: selected ? TuktukTheme.gold : TuktukTheme.mint,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      marketplacePassengerVehicleLabel(category),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 15.5,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      price,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: selected ? TuktukTheme.gold : TuktukTheme.muted,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (selected)
-                const Icon(
-                  Icons.check_circle_rounded,
-                  color: TuktukTheme.gold,
-                  size: 19,
-                ),
             ],
           ),
         ),
@@ -1843,6 +1740,119 @@ class _MarketplaceCustomerBookingFlowState
         flow.error = 'No pudimos crear la solicitud. Inténtalo de nuevo.';
       });
     }
+  }
+}
+
+// Selector de cuatro vehiculos visible sin scroll horizontal.
+// Unicamente recibe precios calculados por el gateway existente.
+class MarketplaceCompactVehicleSelector extends StatelessWidget {
+  const MarketplaceCompactVehicleSelector({
+    required this.selectedCategory,
+    required this.priceLabel,
+    required this.onSelected,
+    super.key,
+  });
+
+  final String selectedCategory;
+  final String Function(String category) priceLabel;
+  final ValueChanged<String> onSelected;
+
+  IconData _icon(String category) => switch (category) {
+    'motorcycle' => Icons.two_wheeler_rounded,
+    'bicitaxi' => Icons.pedal_bike_rounded,
+    'tricycle' => Icons.electric_rickshaw_rounded,
+    'light_car' => Icons.directions_car_filled_outlined,
+    _ => Icons.local_taxi_outlined,
+  };
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      // En telefonos normales los cuatro se ven a la vez; en anchos
+      // realmente estrechos se organizan en una cuadricula 2 x 2.
+      final columns = constraints.maxWidth < 335 ? 2 : 4;
+      const gap = 6.0;
+      final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+
+      return Wrap(
+        key: const Key('compact-vehicle-layout'),
+        spacing: gap,
+        runSpacing: gap,
+        children: [
+          for (final category in marketplacePassengerVehicleCategories)
+            SizedBox(width: width, child: _tile(category)),
+        ],
+      );
+    },
+  );
+
+  Widget _tile(String category) {
+    final selected = selectedCategory == category;
+    final price = priceLabel(category);
+    final title = marketplacePassengerVehicleLabel(category);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '$title. Precio $price',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: Key('vehicle-$category'),
+          onTap: () => onSelected(category),
+          borderRadius: BorderRadius.circular(15),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            height: 76,
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+            decoration: BoxDecoration(
+              color: selected
+                  ? TuktukTheme.gold.withValues(alpha: .17)
+                  : TuktukTheme.surface.withValues(alpha: .48),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(
+                color: selected ? TuktukTheme.gold : TuktukTheme.border,
+                width: selected ? 1.5 : 1,
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                Icon(
+                  _icon(category),
+                  size: 20,
+                  color: selected ? TuktukTheme.gold : TuktukTheme.mint,
+                ),
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                  ),
+                ),
+                SizedBox(
+                  height: 15,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      price,
+                      maxLines: 1,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: selected ? TuktukTheme.gold : TuktukTheme.muted,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
