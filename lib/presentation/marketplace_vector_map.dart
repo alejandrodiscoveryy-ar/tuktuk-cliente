@@ -3,20 +3,20 @@ part of '../main.dart';
 // Shared vector renderer for the real customer booking flow.
 // Only public map configuration and data for this booking are rendered.
 String marketplaceVectorPointGeoJson(MarketplaceMapPoint? point) => jsonEncode({
-  'type': 'FeatureCollection',
-  'features': point == null
-      ? <Object>[]
-      : <Object>[
-          {
-            'type': 'Feature',
-            'geometry': {
-              'type': 'Point',
-              'coordinates': [point.lon, point.lat],
-            },
-            'properties': <String, Object>{},
-          },
-        ],
-});
+      'type': 'FeatureCollection',
+      'features': point == null
+          ? <Object>[]
+          : <Object>[
+              {
+                'type': 'Feature',
+                'geometry': {
+                  'type': 'Point',
+                  'coordinates': [point.lon, point.lat],
+                },
+                'properties': <String, Object>{},
+              },
+            ],
+    });
 
 String marketplaceVectorLineGeoJson(List<MarketplaceMapPoint> points) =>
     jsonEncode({
@@ -42,6 +42,7 @@ class MarketplaceVectorMap extends StatefulWidget {
     required this.initialCenter,
     required this.initialZoom,
     this.requestedCenter,
+    this.requestedZoom,
     this.markerPoint,
     this.markerIsDestination = false,
     this.originPoint,
@@ -55,6 +56,7 @@ class MarketplaceVectorMap extends StatefulWidget {
   final LatLng initialCenter;
   final double initialZoom;
   final ValueNotifier<LatLng?>? requestedCenter;
+  final double? requestedZoom;
   final MarketplaceMapPoint? markerPoint;
   final bool markerIsDestination;
   final MarketplaceMapPoint? originPoint;
@@ -108,15 +110,13 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
     super.dispose();
   }
 
-  MarketplaceMapPoint? get _origin =>
-      widget.onPointTap != null &&
+  MarketplaceMapPoint? get _origin => widget.onPointTap != null &&
           widget.markerPoint != null &&
           !widget.markerIsDestination
       ? widget.markerPoint
       : widget.originPoint;
 
-  MarketplaceMapPoint? get _destination =>
-      widget.onPointTap != null &&
+  MarketplaceMapPoint? get _destination => widget.onPointTap != null &&
           widget.markerPoint != null &&
           widget.markerIsDestination
       ? widget.markerPoint
@@ -153,7 +153,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
           center: mbx.Point(
             coordinates: mbx.Position(position.longitude, position.latitude),
           ),
-          zoom: 15,
+          zoom: widget.requestedZoom ?? 15,
         ),
       ),
     );
@@ -191,6 +191,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
     final map = _map;
     if (map == null || _layersReady) return;
     try {
+      final assets = DefaultAssetBundle.of(context);
       await map.addSource(
         mbx.GeoJsonSource(
           id: _sourceOrigin,
@@ -229,7 +230,6 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
       );
       // Iconos premium propios, anclados al punto exacto del mapa.
       // Primero registramos ambos PNG en el estilo Mapbox Web/Android/iOS.
-      final assets = DefaultAssetBundle.of(context);
       final pickup = await assets.load('assets/map_markers/pickup_green.png');
       final destination = await assets.load(
         'assets/map_markers/destination_red.png',
