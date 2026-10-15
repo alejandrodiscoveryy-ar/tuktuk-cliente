@@ -54,11 +54,13 @@ void main() {
     expect(source, contains('Widget _bookingHeader()'));
     expect(
         source, contains('Future<void> _selectPoint({required bool origin})'));
-    expect(source,
-        contains('Selecciona origen y destino para ver precios reales.'));
+    expect(source, contains('¿A dónde vamos?'));
     expect(source, contains("'Solicitar transporte'"));
     expect(source, contains('? _submit'));
-    expect(source, contains('if (_showAdvancedOptions) ...['));
+    expect(source, contains('Widget _floatingBookingPanel()'));
+    expect(source, contains('MarketplaceVectorMap('));
+    expect(source, contains('onPointTap: _selectingOrigin == null'));
+    expect(source, contains('_floatingPlaceSelection()'));
     expect(source, contains('publishJob('));
     expect(source, contains('saveActiveJobId('));
   });

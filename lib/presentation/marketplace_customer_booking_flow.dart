@@ -308,8 +308,16 @@ class _MarketplaceCustomerBookingFlowState
   final volumeController = TextEditingController();
   Timer? pricingDebounce;
   bool _publishing = false;
-  bool _showAdvancedOptions = false;
   bool _tryingAutoPickup = false;
+  final ValueNotifier<LatLng?> _mapCenter = ValueNotifier<LatLng?>(null);
+  final TextEditingController _placeSearch = TextEditingController();
+  Timer? _searchDebounce;
+  bool? _selectingOrigin;
+  bool _searchingPlaces = false;
+  bool _resolvingMapPoint = false;
+  String? _placeMessage;
+  List<MarketplaceMapPoint> _placeResults = const <MarketplaceMapPoint>[];
+  MarketplaceRouteQuote? _lastRoute;
 
   @override
   void initState() {
@@ -335,7 +343,15 @@ class _MarketplaceCustomerBookingFlowState
   }
 
   void _changed() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final route = flow.route;
+    if (route != null && !identical(route, _lastRoute)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focusRoute();
+      });
+    }
+    _lastRoute = route;
+    setState(() {});
   }
 
   @override
@@ -346,6 +362,9 @@ class _MarketplaceCustomerBookingFlowState
     weightController.dispose();
     volumeController.dispose();
     pricingDebounce?.cancel();
+    _searchDebounce?.cancel();
+    _mapCenter.dispose();
+    _placeSearch.dispose();
     super.dispose();
   }
 
@@ -355,6 +374,9 @@ class _MarketplaceCustomerBookingFlowState
     final number = marketplacePremiumStepNumber(step);
     final showRelief = step == MarketplaceBookingStep.location ||
         step == MarketplaceBookingStep.confirm;
+    if (step == MarketplaceBookingStep.quote) {
+      return Scaffold(body: _quote());
+    }
     return Scaffold(
       body: SafeArea(
         child: TuktukHavanaBackdrop(
@@ -428,33 +450,111 @@ class _MarketplaceCustomerBookingFlowState
 
   Future<void> _selectPoint({required bool origin}) async {
     if (!origin && flow.origin == null) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: TuktukTheme.background,
-      builder: (sheetContext) => SizedBox(
-        height: MediaQuery.sizeOf(sheetContext).height * .88,
-        child: MarketplaceLocationPicker(
-          service: flow.mapService,
-          title: origin ? 'Elige el origen' : 'Elige el destino',
-          origin: origin ? null : flow.origin,
-          onConfirm: (point) {
-            if (origin) {
-              flow.setPickupForQuote(point);
-            } else {
-              flow.setDestination(point);
-            }
-            // Solo se abandona temporalmente la pantalla para elegir en el mapa.
-            flow.setStep(MarketplaceBookingStep.quote);
-            Navigator.of(sheetContext).pop();
-          },
-        ),
-      ),
-    );
+    _searchDebounce?.cancel();
+    _placeSearch.clear();
+    setState(() {
+      _selectingOrigin = origin;
+      _placeResults = const <MarketplaceMapPoint>[];
+      _placeMessage = null;
+    });
   }
 
-  // Se intenta una sola vez al abrir. Si GPS o permisos fallan, la entrada
+  void _cancelPlaceSelection() {
+    _searchDebounce?.cancel();
+    _placeSearch.clear();
+    setState(() {
+      _selectingOrigin = null;
+      _placeResults = const <MarketplaceMapPoint>[];
+      _placeMessage = null;
+      _searchingPlaces = false;
+    });
+  }
+
+  void _searchPlaces(String text) {
+    _searchDebounce?.cancel();
+    final query = text.trim();
+    setState(() {
+      _placeResults = const <MarketplaceMapPoint>[];
+      _placeMessage = null;
+      _searchingPlaces = query.length >= 3;
+    });
+    if (query.length < 3) return;
+    _searchDebounce = Timer(const Duration(milliseconds: 550), () async {
+      try {
+        final found = await flow.mapService.search(query);
+        if (!mounted ||
+            _selectingOrigin == null ||
+            _placeSearch.text.trim() != query) {
+          return;
+        }
+        setState(() {
+          _placeResults = found;
+          _searchingPlaces = false;
+          if (found.isEmpty) {
+            _placeMessage = 'Sin resultados. Puedes tocar el mapa.';
+          }
+        });
+      } catch (_) {
+        if (mounted && _placeSearch.text.trim() == query) {
+          setState(() {
+            _searchingPlaces = false;
+            _placeMessage = 'No se pudo buscar. Toca el mapa para elegir.';
+          });
+        }
+      }
+    });
+  }
+
+  void _commitPlace(MarketplaceMapPoint point, bool origin) {
+    if (origin) {
+      flow.setPickupForQuote(point);
+    } else {
+      flow.setDestination(point);
+    }
+    _cancelPlaceSelection();
+    // Mismo mapa y misma vista. El cambio solo recoloca su camara.
+    _mapCenter.value = point.latLng;
+  }
+
+  Future<void> _pickMapPoint(LatLng coordinates) async {
+    final selectingOrigin = _selectingOrigin;
+    if (selectingOrigin == null || _resolvingMapPoint) return;
+    setState(() => _resolvingMapPoint = true);
+    var point = MarketplaceMapPoint(
+      label: 'Punto marcado en el mapa',
+      lat: coordinates.latitude,
+      lon: coordinates.longitude,
+    );
+    try {
+      point = await flow.mapService.reverse(point);
+    } catch (_) {
+      // Si falla el nombre de la calle, las coordenadas siguen siendo validas.
+    } finally {
+      if (mounted) setState(() => _resolvingMapPoint = false);
+    }
+    if (!mounted || _selectingOrigin != selectingOrigin) return;
+    _commitPlace(point, selectingOrigin);
+  }
+
+  double get _mapRequestedZoom {
+    final distance = flow.route?.distanceKm;
+    if (distance == null) return 14.5;
+    if (distance <= 2) return 14.2;
+    if (distance <= 6) return 12.6;
+    if (distance <= 12) return 11.8;
+    if (distance <= 22) return 11;
+    return 10;
+  }
+
+  void _focusRoute() {
+    final a = flow.origin;
+    final b = flow.destination;
+    if (a == null || b == null || !mounted) {
+      return;
+    }
+    _mapCenter.value = LatLng((a.lat + b.lat) / 2, (a.lon + b.lon) / 2);
+  } // Se intenta una sola vez al abrir. Si GPS o permisos fallan, la entrada
+
   // manual sigue disponible. Nunca sustituye una recogida elegida por el usuario.
   Future<void> _autoLocatePickup() async {
     if (_tryingAutoPickup || flow.origin != null) return;
@@ -466,9 +566,12 @@ class _MarketplaceCustomerBookingFlowState
         permission = await Geolocator.requestPermission();
       }
       if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) return;
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
       final position = await Geolocator.getCurrentPosition(
-        timeLimit: const Duration(seconds: 12),
+        locationSettings:
+            const LocationSettings(timeLimit: Duration(seconds: 12)),
       );
       if (!mounted || flow.origin != null) return;
       var point = MarketplaceMapPoint(
@@ -483,6 +586,7 @@ class _MarketplaceCustomerBookingFlowState
       }
       if (mounted && flow.origin == null) {
         flow.setPickupForQuote(point);
+        _mapCenter.value = point.latLng;
       }
     } catch (_) {
       // La ubicacion no debe impedir contratar manualmente.
@@ -611,518 +715,516 @@ class _MarketplaceCustomerBookingFlowState
       );
   Widget _quote() {
     final route = flow.route;
-    final selectedPrice = _priceLabel(flow.selectedPrice, flow.serviceCode);
+    final origin = flow.origin;
+    final destination = flow.destination;
+    final center = origin?.latLng ?? const LatLng(23.1136, -82.3666);
+    return SafeArea(
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: MarketplaceMapService.publicToken.isEmpty
+                ? const ColoredBox(
+                    color: TuktukTheme.background,
+                    child: Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(30),
+                        child: Text(
+                          'Mapa temporalmente no disponible. Puedes buscar una direccion.',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  )
+                : MarketplaceVectorMap(
+                    initialCenter: center,
+                    initialZoom: 13.2,
+                    requestedCenter: _mapCenter,
+                    requestedZoom: _mapRequestedZoom,
+                    originPoint: origin,
+                    destinationPoint: destination,
+                    routePoints:
+                        route?.routePoints ?? const <MarketplaceMapPoint>[],
+                    onPointTap: _selectingOrigin == null ? null : _pickMapPoint,
+                  ),
+          ),
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.center,
+                    colors: [Color(0xD908141B), Color(0x0008141B)],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 12,
+            right: 12,
+            top: 4,
+            child: _floatingOriginDestination(),
+          ),
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: 10,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * .48,
+              ),
+              child: _floatingBookingPanel(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-    return Column(
-      children: [
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(18, 6, 18, 14),
+  Widget _floatingOriginDestination() => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: TuktukTheme.background.withValues(alpha: .90),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: TuktukTheme.border),
+            ),
+            child: _bookingHeader(),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: TuktukTheme.background.withValues(alpha: .93),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: TuktukTheme.border),
+            ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Card(
-                  child: ListTile(
-                    dense: true,
-                    leading: const Icon(Icons.my_location_rounded,
-                        color: TuktukTheme.mint),
-                    title: const Text('Recogida'),
-                    subtitle: Text(
-                        flow.origin?.label ?? 'Elegir mi ubicación o buscar'),
-                    trailing: const Icon(Icons.edit_location_alt_outlined),
-                    onTap: () => _selectPoint(origin: true),
-                  ),
+                _floatingLocationRow(
+                  icon: Icons.my_location_rounded,
+                  color: TuktukTheme.mint,
+                  label: 'Recogida',
+                  value: flow.origin?.label ??
+                      'Detectando ubicación o toca para elegir',
+                  onTap: () => _selectPoint(origin: true),
+                  tooltip: 'Cambiar recogida',
                 ),
-                Card(
-                  child: ListTile(
-                    dense: true,
-                    leading: const Icon(Icons.location_on_outlined,
-                        color: TuktukTheme.gold),
-                    title: const Text('Destino'),
-                    subtitle: Text(flow.destination?.label ??
-                        (flow.origin == null
-                            ? 'Primero selecciona el origen'
-                            : 'Buscar o marcar en el mapa')),
-                    trailing: const Icon(Icons.edit_location_alt_outlined),
-                    onTap: flow.origin == null
-                        ? null
-                        : () => _selectPoint(origin: false),
-                  ),
+                const Divider(color: TuktukTheme.border, height: 1),
+                _floatingLocationRow(
+                  icon: Icons.location_on_rounded,
+                  color: TuktukTheme.gold,
+                  label: 'Destino',
+                  value: flow.destination?.label ?? '¿A dónde vamos?',
+                  onTap: flow.origin == null
+                      ? null
+                      : () => _selectPoint(origin: false),
+                  tooltip: 'Elegir destino',
                 ),
-                if (flow.origin == null || flow.destination == null)
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(8, 5, 8, 10),
-                    child: Text(
-                      'Selecciona origen y destino para ver precios reales.',
-                      style: TextStyle(color: TuktukTheme.muted),
-                    ),
-                  ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Pide tu transporte',
-                  style: TextStyle(
-                    fontSize: 31,
-                    fontWeight: FontWeight.w900,
-                    height: 1.05,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Elige un servicio y solicita sin pasos adicionales.',
-                  style: TextStyle(
-                    color: TuktukTheme.muted,
-                    fontSize: 15.5,
-                    height: 1.3,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(child: _premiumTopServiceCard('passenger')),
-                    const SizedBox(width: 8),
-                    Expanded(child: _premiumTopServiceCard('courier')),
-                    const SizedBox(width: 8),
-                    Expanded(child: _premiumTopServiceCard('cargo')),
-                  ],
-                ),
-                if (flow.serviceCode == 'passenger') ...[
-                  const SizedBox(height: 20),
-                  const Text(
-                    '¿Cómo quieres viajar?',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.25,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  LayoutBuilder(
-                    builder: (context, inner) {
-                      const gap = 9.0;
-                      final width = (inner.maxWidth - gap) / 2;
-
-                      return Wrap(
-                        spacing: gap,
-                        runSpacing: gap,
-                        children: [
-                          for (final category
-                              in marketplacePassengerVehicleCategories)
-                            SizedBox(
-                              width: width,
-                              child: _premiumPassengerVehicleCard(category),
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: TuktukTheme.surface.withValues(alpha: .72),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: TuktukTheme.border),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.groups_2_outlined,
-                          color: TuktukTheme.mint,
-                          size: 23,
-                        ),
-                        const SizedBox(width: 10),
-                        const Expanded(
-                          child: Text(
-                            'Pasajeros',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                        IconButton(
-                          visualDensity: VisualDensity.compact,
-                          onPressed: flow.passengerCount > 1
-                              ? () {
-                                  flow.passengerCount--;
-                                  flow.reprice();
-                                }
-                              : null,
-                          icon: const Icon(Icons.remove),
-                        ),
-                        Text(
-                          '${flow.passengerCount}',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        IconButton(
-                          visualDensity: VisualDensity.compact,
-                          onPressed: flow.passengerCount <
-                                  (flow.passengerVehicleCategoryCode ==
-                                          'motorcycle'
-                                      ? 1
-                                      : 8)
-                              ? () {
-                                  flow.passengerCount++;
-                                  flow.reprice();
-                                }
-                              : null,
-                          icon: const Icon(Icons.add),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: () => setState(
-                      () => _showAdvancedOptions = !_showAdvancedOptions,
-                    ),
-                    icon: Icon(_showAdvancedOptions
-                        ? Icons.expand_less_rounded
-                        : Icons.tune_rounded),
-                    label: Text(_showAdvancedOptions
-                        ? 'Menos opciones'
-                        : 'Más opciones'),
-                  ),
-                ),
-                if (flow.serviceCode == 'cargo' && !_showAdvancedOptions)
-                  const Text(
-                    'Para cotizar carga, abre Más opciones e indica peso o volumen.',
-                    style: TextStyle(color: TuktukTheme.muted),
-                  ),
-                if (_showAdvancedOptions) ...[
-                  if (flow.serviceCode == 'cargo') ...[
-                    const SizedBox(height: 16),
-                    TuktukGlassCard(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: weightController,
-                                  keyboardType: TextInputType.number,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Peso (kg)',
-                                    isDense: true,
-                                  ),
-                                  onChanged: (value) {
-                                    flow.cargoWeightKg = double.tryParse(value);
-                                    _scheduleReprice();
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: TextField(
-                                  controller: volumeController,
-                                  keyboardType: TextInputType.number,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Volumen (m³)',
-                                    isDense: true,
-                                  ),
-                                  onChanged: (value) {
-                                    flow.cargoVolumeM3 = double.tryParse(value);
-                                    _scheduleReprice();
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                          SwitchListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('Ayuda para cargar'),
-                            value: flow.loadHelp,
-                            onChanged: (value) {
-                              flow.loadHelp = value;
-                              flow.reprice();
-                            },
-                          ),
-                          SwitchListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('Ayuda para descargar'),
-                            value: flow.unloadHelp,
-                            onChanged: (value) {
-                              flow.unloadHelp = value;
-                              flow.reprice();
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 14),
-                  LayoutBuilder(
-                    builder: (context, inner) {
-                      final width = (inner.maxWidth - 8) / 2;
-
-                      return Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          SizedBox(
-                            width: width,
-                            child: TuktukActionChip(
-                              label: flow.stopCount == 0
-                                  ? 'Paradas'
-                                  : 'Paradas ${flow.stopCount}',
-                              icon: Icons.location_on_outlined,
-                              onTap: _showStopsSheet,
-                              active: flow.stopCount > 0,
-                            ),
-                          ),
-                          SizedBox(
-                            width: width,
-                            child: TuktukActionChip(
-                              label: 'Urgente',
-                              icon: Icons.bolt_rounded,
-                              onTap: () {
-                                flow.urgent = !flow.urgent;
-                                flow.reprice();
-                              },
-                              active: flow.urgent,
-                            ),
-                          ),
-                          SizedBox(
-                            width: width,
-                            child: TuktukActionChip(
-                              label: flow.scheduledFor == null
-                                  ? 'Programar'
-                                  : 'Programado',
-                              icon: Icons.calendar_month_outlined,
-                              onTap: _pickSchedule,
-                              active: flow.scheduledFor != null,
-                            ),
-                          ),
-                          SizedBox(
-                            width: width,
-                            child: TuktukActionChip(
-                              label: flow.note.trim().isEmpty
-                                  ? 'Nota'
-                                  : 'Nota añadida',
-                              icon: Icons.notes_outlined,
-                              onTap: _showNoteSheet,
-                              active: flow.note.trim().isNotEmpty,
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ],
-                if (flow.loading) ...[
-                  const SizedBox(height: 14),
-                  const LinearProgressIndicator(),
-                ],
-                if (flow.error != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    flow.error!,
-                    style: const TextStyle(color: TuktukTheme.danger),
-                  ),
-                ],
-                if (route != null) ...[
-                  const SizedBox(height: 18),
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
-                    decoration: BoxDecoration(
-                      color: TuktukTheme.surface.withValues(alpha: .82),
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: TuktukTheme.border),
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            const SizedBox(
-                              width: 25,
-                              child: Column(
-                                children: [
-                                  Icon(
-                                    Icons.circle,
-                                    size: 10,
-                                    color: TuktukTheme.mint,
-                                  ),
-                                  Text(
-                                    '⋮',
-                                    style: TextStyle(
-                                      color: TuktukTheme.muted,
-                                      height: .7,
-                                    ),
-                                  ),
-                                  Icon(
-                                    Icons.circle,
-                                    size: 10,
-                                    color: TuktukTheme.gold,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 9),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    flow.origin?.label ?? 'Origen',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    flow.destination?.label ?? 'Destino',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              tooltip: 'Cambiar recogida',
-                              visualDensity: VisualDensity.compact,
-                              onPressed: () => _selectPoint(origin: true),
-                              icon: const Icon(
-                                Icons.edit_outlined,
-                                color: TuktukTheme.mint,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const Divider(color: TuktukTheme.border, height: 20),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                children: [
-                                  const Text(
-                                    'Distancia',
-                                    style: TextStyle(
-                                      color: TuktukTheme.muted,
-                                      fontSize: 11.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    '${route.distanceKm.toStringAsFixed(1)} km',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Expanded(
-                              child: Column(
-                                children: [
-                                  const Text(
-                                    'Tiempo',
-                                    style: TextStyle(
-                                      color: TuktukTheme.muted,
-                                      fontSize: 11.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    '${(route.durationSeconds / 60).round()} min',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Expanded(
-                              child: Column(
-                                children: [
-                                  const Text(
-                                    'Estimado',
-                                    style: TextStyle(
-                                      color: TuktukTheme.muted,
-                                      fontSize: 11.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    selectedPrice,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: TuktukTheme.gold,
-                                      fontSize: 16.5,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(24),
-                    child: SizedBox(
-                      height: 210,
-                      child: MarketplaceRouteMap(
-                        origin: flow.origin,
-                        destination: flow.destination,
-                        route: route,
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 6),
               ],
             ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(18, 8, 18, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+        ],
+      );
+
+  Widget _floatingLocationRow({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required String value,
+    required VoidCallback? onTap,
+    required String tooltip,
+  }) =>
+      InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
             children: [
-              if (route != null && flow.selectedPrice != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 7),
-                  child: Text(
-                    'Precio estimado: $selectedPrice · '
-                    '${route.distanceKm.toStringAsFixed(1)} km',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
+              Icon(icon, color: color, size: 21),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label,
+                        style: const TextStyle(
+                            fontSize: 11.5, color: TuktukTheme.muted)),
+                    Text(value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 13.5, fontWeight: FontWeight.w700)),
+                  ],
                 ),
-              TuktukPrimaryButton(
-                onPressed: route != null &&
-                        flow.selectedPrice != null &&
-                        !flow.loading &&
-                        !_publishing
-                    ? _submit
-                    : null,
-                label: _publishing ? 'Publicando...' : 'Solicitar transporte',
+              ),
+              Tooltip(
+                message: tooltip,
+                child: Icon(Icons.edit_location_alt_outlined,
+                    color: onTap == null ? TuktukTheme.muted : color),
               ),
             ],
           ),
         ),
+      );
+
+  Widget _floatingBookingPanel() => Container(
+        decoration: BoxDecoration(
+          color: TuktukTheme.background.withValues(alpha: .97),
+          border: Border.all(color: TuktukTheme.border),
+          borderRadius: BorderRadius.circular(26),
+          boxShadow: const [
+            BoxShadow(
+                color: Color(0x88000000), blurRadius: 22, offset: Offset(0, 9))
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(13, 10, 13, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                  child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                          color: TuktukTheme.border,
+                          borderRadius: BorderRadius.circular(5)))),
+              const SizedBox(height: 9),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: _selectingOrigin != null
+                      ? _floatingPlaceSelection()
+                      : flow.origin == null
+                          ? _floatingNextAction(
+                              'Tu punto de recogida',
+                              'Usaremos tu ubicación si está disponible. También puedes marcarla en el mapa.',
+                              'Elegir recogida',
+                              () => _selectPoint(origin: true),
+                            )
+                          : flow.destination == null
+                              ? _floatingNextAction(
+                                  '¿A dónde vamos?',
+                                  'Elige un destino para calcular la ruta y el precio.',
+                                  'Elegir destino',
+                                  () => _selectPoint(origin: false),
+                                )
+                              : _floatingQuoteOptions(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _floatingNextAction(
+          String title, String detail, String action, VoidCallback callback) =>
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(title,
+              style:
+                  const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 5),
+          Text(detail, style: const TextStyle(color: TuktukTheme.muted)),
+          const SizedBox(height: 12),
+          TuktukPrimaryButton(onPressed: callback, label: action),
+        ],
+      );
+
+  Widget _floatingPlaceSelection() => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(children: [
+            Expanded(
+                child: Text(
+                    _selectingOrigin! ? 'Elegir recogida' : 'Elegir destino',
+                    style: const TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.w900))),
+            IconButton(
+                onPressed: _cancelPlaceSelection,
+                icon: const Icon(Icons.close_rounded),
+                tooltip: 'Cerrar búsqueda'),
+          ]),
+          const Text('Busca una dirección o toca directamente el mapa.',
+              style: TextStyle(color: TuktukTheme.muted)),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _placeSearch,
+            autofocus: true,
+            onChanged: _searchPlaces,
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.search_rounded),
+              hintText: 'Dirección o lugar',
+              isDense: true,
+            ),
+          ),
+          if (_resolvingMapPoint || _searchingPlaces)
+            const Padding(
+                padding: EdgeInsets.all(7), child: LinearProgressIndicator()),
+          if (_placeMessage != null)
+            Padding(
+                padding: const EdgeInsets.all(8),
+                child: Text(_placeMessage!,
+                    style: const TextStyle(color: TuktukTheme.muted))),
+          if (_placeResults.isNotEmpty)
+            SizedBox(
+              height: 130,
+              child: ListView.builder(
+                itemCount: _placeResults.length,
+                itemBuilder: (context, index) {
+                  final point = _placeResults[index];
+                  return ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.place_outlined,
+                        color: TuktukTheme.mint),
+                    title: Text(point.label,
+                        maxLines: 2, overflow: TextOverflow.ellipsis),
+                    onTap: () {
+                      final origin = _selectingOrigin;
+                      if (origin != null) _commitPlace(point, origin);
+                    },
+                  );
+                },
+              ),
+            ),
+        ],
+      );
+
+  Widget _floatingQuoteOptions() {
+    final route = flow.route;
+    final price = _priceLabel(flow.selectedPrice, flow.serviceCode);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(children: [
+          const Expanded(
+              child: Text('Pide tu transporte',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900))),
+          if (route != null)
+            Text('${route.distanceKm.toStringAsFixed(1)} km',
+                style: const TextStyle(
+                    color: TuktukTheme.mint, fontWeight: FontWeight.w800)),
+        ]),
+        const SizedBox(height: 9),
+        Row(children: [
+          for (final code in const ['passenger', 'courier', 'cargo']) ...[
+            if (code != 'passenger') const SizedBox(width: 7),
+            Expanded(child: _floatingServiceChoice(code)),
+          ],
+        ]),
+        if (flow.serviceCode == 'passenger') ...[
+          const SizedBox(height: 11),
+          SizedBox(
+            height: 94,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (final category
+                    in marketplacePassengerVehicleCategories) ...[
+                  SizedBox(
+                      width: 158,
+                      child: _premiumPassengerVehicleCard(category)),
+                  const SizedBox(width: 7),
+                ],
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 6),
+        TextButton.icon(
+          onPressed: _openFloatingOptions,
+          icon: const Icon(Icons.tune_rounded, size: 18),
+          label: const Text('Más opciones'),
+          style: TextButton.styleFrom(
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.symmetric(horizontal: 2)),
+        ),
+        if (flow.loading) const LinearProgressIndicator(),
+        if (flow.error != null)
+          Text(flow.error!, style: const TextStyle(color: TuktukTheme.danger)),
+        if (flow.serviceCode == 'cargo' && flow.selectedPrice == null)
+          const Text('Indica peso o volumen en Más opciones para cotizar.',
+              style: TextStyle(color: TuktukTheme.muted)),
+        const SizedBox(height: 5),
+        Text('Estimado: $price',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontWeight: FontWeight.w900, color: TuktukTheme.gold)),
+        const SizedBox(height: 7),
+        TuktukPrimaryButton(
+          onPressed: route != null &&
+                  flow.selectedPrice != null &&
+                  !flow.loading &&
+                  !_publishing
+              ? _submit
+              : null,
+          label: _publishing ? 'Publicando...' : 'Solicitar transporte',
+        ),
       ],
+    );
+  }
+
+  Widget _floatingServiceChoice(String code) {
+    final selected = flow.serviceCode == code;
+    return InkWell(
+      onTap: () => flow.setService(code),
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected
+              ? TuktukTheme.gold.withValues(alpha: .17)
+              : TuktukTheme.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+              color: selected ? TuktukTheme.gold : TuktukTheme.border),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(_serviceIcon(code),
+                size: 22,
+                color: selected ? TuktukTheme.gold : TuktukTheme.mint),
+            const SizedBox(height: 4),
+            Text(marketplaceServiceLabel(code),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 12.5, fontWeight: FontWeight.w800)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openFloatingOptions() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: TuktukTheme.background,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, refreshSheet) => SizedBox(
+          height: MediaQuery.sizeOf(sheetContext).height * .63,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(19, 5, 19, 26),
+            children: [
+              const Text('Opciones del servicio',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+              if (flow.serviceCode == 'passenger')
+                Row(children: [
+                  const Expanded(child: Text('Pasajeros')),
+                  IconButton(
+                      onPressed: flow.passengerCount > 1
+                          ? () {
+                              flow.passengerCount--;
+                              flow.reprice();
+                              refreshSheet(() {});
+                            }
+                          : null,
+                      icon: const Icon(Icons.remove_circle_outline)),
+                  Text('${flow.passengerCount}',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w900, fontSize: 21)),
+                  IconButton(
+                      onPressed: flow.passengerCount <
+                              (flow.passengerVehicleCategoryCode == 'motorcycle'
+                                  ? 1
+                                  : 8)
+                          ? () {
+                              flow.passengerCount++;
+                              flow.reprice();
+                              refreshSheet(() {});
+                            }
+                          : null,
+                      icon: const Icon(Icons.add_circle_outline)),
+                ]),
+              if (flow.serviceCode == 'cargo') ...[
+                const SizedBox(height: 14),
+                TextField(
+                    controller: weightController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Peso (kg)'),
+                    onChanged: (value) {
+                      flow.cargoWeightKg = double.tryParse(value);
+                      _scheduleReprice();
+                    }),
+                TextField(
+                    controller: volumeController,
+                    keyboardType: TextInputType.number,
+                    decoration:
+                        const InputDecoration(labelText: 'Volumen (m³)'),
+                    onChanged: (value) {
+                      flow.cargoVolumeM3 = double.tryParse(value);
+                      _scheduleReprice();
+                    }),
+                SwitchListTile(
+                    title: const Text('Ayuda para cargar'),
+                    value: flow.loadHelp,
+                    onChanged: (value) {
+                      flow.loadHelp = value;
+                      flow.reprice();
+                      refreshSheet(() {});
+                    }),
+                SwitchListTile(
+                    title: const Text('Ayuda para descargar'),
+                    value: flow.unloadHelp,
+                    onChanged: (value) {
+                      flow.unloadHelp = value;
+                      flow.reprice();
+                      refreshSheet(() {});
+                    }),
+              ],
+              const Divider(),
+              ListTile(
+                  leading: const Icon(Icons.alt_route_rounded),
+                  title: const Text('Paradas adicionales'),
+                  subtitle: Text('${flow.stopCount}'),
+                  onTap: () async {
+                    await _showStopsSheet();
+                    if (sheetContext.mounted) refreshSheet(() {});
+                  }),
+              SwitchListTile(
+                  title: const Text('Servicio urgente'),
+                  value: flow.urgent,
+                  onChanged: (value) {
+                    flow.urgent = value;
+                    flow.reprice();
+                    refreshSheet(() {});
+                  }),
+              ListTile(
+                  leading: const Icon(Icons.calendar_month_outlined),
+                  title: const Text('Programar servicio'),
+                  subtitle: Text(flow.scheduledFor == null
+                      ? 'Ahora'
+                      : DateFormat('dd/MM HH:mm').format(flow.scheduledFor!)),
+                  onTap: () async {
+                    await _pickSchedule();
+                    if (sheetContext.mounted) refreshSheet(() {});
+                  }),
+              ListTile(
+                  leading: const Icon(Icons.notes_outlined),
+                  title: const Text('Nota para el conductor'),
+                  subtitle: Text(flow.note.isEmpty ? 'Sin nota' : flow.note,
+                      maxLines: 2, overflow: TextOverflow.ellipsis),
+                  onTap: () async {
+                    await _showNoteSheet();
+                    if (sheetContext.mounted) refreshSheet(() {});
+                  }),
+              const SizedBox(height: 16),
+              TuktukPrimaryButton(
+                  label: 'Listo',
+                  onPressed: () => Navigator.of(sheetContext).pop()),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1212,92 +1314,6 @@ class _MarketplaceCustomerBookingFlowState
                   color: TuktukTheme.gold,
                   size: 19,
                 ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _premiumTopServiceCard(String code) {
-    final selected = flow.serviceCode == code;
-
-    final secondaryText = code == 'passenger'
-        ? 'Elige modalidad'
-        : _priceLabel(flow.route?.prices[code], code);
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => flow.setService(code),
-        borderRadius: BorderRadius.circular(20),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          height: 108,
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: selected
-                ? TuktukTheme.gold.withValues(alpha: .10)
-                : TuktukTheme.surface.withValues(alpha: .72),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: selected
-                  ? TuktukTheme.gold.withValues(alpha: .82)
-                  : TuktukTheme.border,
-              width: selected ? 1.4 : 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? TuktukTheme.gold.withValues(alpha: .14)
-                          : TuktukTheme.mint.withValues(alpha: .10),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      _serviceIcon(code),
-                      color: selected ? TuktukTheme.gold : TuktukTheme.mint,
-                      size: 21,
-                    ),
-                  ),
-                  const Spacer(),
-                  Icon(
-                    selected
-                        ? Icons.check_circle_rounded
-                        : Icons.circle_outlined,
-                    color: selected ? TuktukTheme.gold : TuktukTheme.border,
-                    size: 19,
-                  ),
-                ],
-              ),
-              const Spacer(),
-              Text(
-                marketplaceServiceLabel(code),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                secondaryText,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: selected ? TuktukTheme.gold : TuktukTheme.muted,
-                  fontSize: 12.3,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
             ],
           ),
         ),
