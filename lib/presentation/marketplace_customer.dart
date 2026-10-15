@@ -49,6 +49,8 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
   String? _editSessionToken;
   String? _editIdempotencyKey;
   String? _error;
+  bool _showFirstTimeForm = false;
+  final ValueNotifier<LatLng?> _welcomeMapCenter = ValueNotifier<LatLng?>(null);
 
   @override
   void initState() {
@@ -73,11 +75,18 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
 
     _sessionToken = marketplaceCustomerSessionToken();
     _startIdempotencyKey = _marketplaceUuid();
+    if (_existingSession == null &&
+        MarketplaceMapService.publicToken.startsWith('pk.')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_centerFirstEntryMap());
+      });
+    }
   }
 
   @override
   void dispose() {
     _bookingFlow?.dispose();
+    _welcomeMapCenter.dispose();
     _nameController.dispose();
     _whatsappController.dispose();
     _emailController.dispose();
@@ -209,8 +218,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
         if (!mounted) return;
 
         setState(() {
-          _error =
-              'No pudimos actualizar los datos del cliente. '
+          _error = 'No pudimos actualizar los datos del cliente. '
               'Revisa la conexión e inténtalo otra vez.';
         });
       } finally {
@@ -274,8 +282,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
       if (!mounted) return;
 
       setState(() {
-        _error =
-            'No pudimos iniciar la solicitud. '
+        _error = 'No pudimos iniciar la solicitud. '
             'Revisa tu conexión e inténtalo otra vez.';
       });
     } finally {
@@ -399,161 +406,91 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
       );
     }
 
-    return Scaffold(
-      body: SafeArea(
-        child: TuktukHavanaBackdrop(
-          showRelief: true,
-          child: Column(
+    return _firstTimeCustomerScreen();
+  }
+
+  Widget _firstTimeCustomerScreen() => Scaffold(
+        backgroundColor: TuktukTheme.background,
+        resizeToAvoidBottomInset: true,
+        body: SafeArea(
+          child: Stack(
             children: [
-              const TuktukFlowHeader(step: 1),
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) => SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(22, 8, 22, 18),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minHeight: constraints.maxHeight - 18,
+              Positioned.fill(
+                child: MarketplaceMapService.publicToken.startsWith('pk.')
+                    ? MarketplaceVectorMap(
+                        initialCenter: const LatLng(23.1136, -82.3666),
+                        initialZoom: 12.8,
+                        requestedCenter: _welcomeMapCenter,
+                      )
+                    : const TuktukHavanaBackdrop(
+                        child: SizedBox.expand(),
                       ),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 600),
-                          child: Form(
-                            key: _formKey,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                const Text(
-                                  '¿Cómo quieres que\nte llamemos?',
-                                  style: TextStyle(
-                                    fontSize: 41,
-                                    fontWeight: FontWeight.w900,
-                                    height: 1.03,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                const Text(
-                                  'Usaremos estos datos para identificar tu solicitud.',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    height: 1.4,
-                                    color: TuktukTheme.muted,
-                                  ),
-                                ),
-                                const SizedBox(height: 28),
-                                TuktukGlassCard(
-                                  padding: EdgeInsets.zero,
-                                  child: TextFormField(
-                                    controller: _nameController,
-                                    textInputAction: TextInputAction.next,
-                                    autofillHints: const [AutofillHints.name],
-                                    decoration: InputDecoration(
-                                      labelText: 'Nombre',
-                                      hintText: 'Tu nombre',
-                                      prefixIcon: const Icon(
-                                        Icons.person_outline,
-                                      ),
-                                      suffixIcon: IconButton(
-                                        tooltip: 'Limpiar',
-                                        onPressed: _nameController.clear,
-                                        icon: const Icon(Icons.cancel_outlined),
-                                      ),
-                                    ),
-                                    validator: _validateName,
-                                  ),
-                                ),
-                                const SizedBox(height: 14),
-                                TuktukGlassCard(
-                                  padding: EdgeInsets.zero,
-                                  child: TextFormField(
-                                    controller: _whatsappController,
-                                    keyboardType: TextInputType.phone,
-                                    autofillHints: const [
-                                      AutofillHints.telephoneNumber,
-                                    ],
-                                    decoration: InputDecoration(
-                                      labelText: 'WhatsApp o teléfono',
-                                      hintText: '+53 5 123 4567',
-                                      prefixIcon: const Icon(
-                                        Icons.phone_outlined,
-                                      ),
-                                      suffixIcon: IconButton(
-                                        tooltip: 'Limpiar',
-                                        onPressed: _whatsappController.clear,
-                                        icon: const Icon(Icons.cancel_outlined),
-                                      ),
-                                    ),
-                                    validator: _validateWhatsapp,
-                                  ),
-                                ),
-                                const SizedBox(height: 14),
-                                TuktukGlassCard(
-                                  padding: EdgeInsets.zero,
-                                  child: TextFormField(
-                                    controller: _emailController,
-                                    keyboardType: TextInputType.emailAddress,
-                                    textInputAction: TextInputAction.done,
-                                    autofillHints: const [AutofillHints.email],
-                                    decoration: InputDecoration(
-                                      labelText:
-                                          'Correo electrónico (opcional)',
-                                      hintText: 'nombre@ejemplo.com',
-                                      prefixIcon: const Icon(
-                                        Icons.email_outlined,
-                                      ),
-                                      suffixIcon: IconButton(
-                                        tooltip: 'Limpiar',
-                                        onPressed: _emailController.clear,
-                                        icon: const Icon(Icons.cancel_outlined),
-                                      ),
-                                    ),
-                                    validator: _validateEmail,
-                                  ),
-                                ),
-                                const SizedBox(height: 18),
-                                const Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Icon(
-                                      Icons.info_outline_rounded,
-                                      color: TuktukTheme.mint,
-                                      size: 30,
-                                    ),
-                                    SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        'El conductor usará tu nombre y tu contacto para coordinar el servicio.',
-                                        style: TextStyle(
-                                          color: TuktukTheme.muted,
-                                          fontSize: 15.5,
-                                          height: 1.35,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                if (_error != null) ...[
-                                  const SizedBox(height: 14),
-                                  TuktukGlassCard(
-                                    padding: const EdgeInsets.all(14),
-                                    borderColor: TuktukTheme.danger,
-                                    child: Text(
-                                      _error!,
-                                      style: const TextStyle(
-                                        color: TuktukTheme.danger,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                                const SizedBox(height: 78),
-                                TuktukPrimaryButton(
-                                  onPressed: _loading ? null : _continue,
-                                  label: _loading
-                                      ? 'Conectando...'
-                                      : 'Continuar',
-                                ),
-                              ],
-                            ),
-                          ),
+              ),
+              const Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.center,
+                        colors: [Color(0xE008141B), Color(0x0008141B)],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 13,
+                right: 13,
+                top: 8,
+                child: IgnorePointer(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 15,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: TuktukTheme.background.withValues(alpha: .77),
+                      border: Border.all(color: TuktukTheme.border),
+                      borderRadius: BorderRadius.circular(19),
+                    ),
+                    child: const Row(
+                      children: [
+                        _TuktukBrandLockup(width: 125),
+                        Spacer(),
+                        Icon(Icons.my_location_outlined,
+                            color: TuktukTheme.mint),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 540),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: TuktukTheme.background.withValues(alpha: .84),
+                        borderRadius: BorderRadius.circular(26),
+                        border: Border.all(color: TuktukTheme.border),
+                        boxShadow: const [
+                          BoxShadow(color: Color(0x60000000), blurRadius: 20),
+                        ],
+                      ),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: MediaQuery.sizeOf(context).height * .76,
+                        ),
+                        child: SingleChildScrollView(
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.onDrag,
+                          padding: const EdgeInsets.fromLTRB(18, 15, 18, 19),
+                          child: _showFirstTimeForm
+                              ? _welcomeIdentificationForm()
+                              : _welcomeStartCard(),
                         ),
                       ),
                     ),
@@ -563,8 +500,142 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
             ],
           ),
         ),
-      ),
-    );
+      );
+
+  Widget _welcomeStartCard() => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 42,
+              height: 4,
+              decoration: BoxDecoration(
+                color: TuktukTheme.border,
+                borderRadius: BorderRadius.circular(5),
+              ),
+            ),
+          ),
+          const SizedBox(height: 13),
+          const Text(
+            '¿A dónde vamos?',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 7),
+          const Text(
+            'Para solicitar tu primer transporte, dinos cómo podemos contactarte.',
+            style: TextStyle(color: TuktukTheme.muted, fontSize: 14),
+          ),
+          const SizedBox(height: 16),
+          TuktukPrimaryButton(
+            label: 'Comenzar',
+            onPressed: () => setState(() => _showFirstTimeForm = true),
+          ),
+        ],
+      );
+
+  Widget _welcomeIdentificationForm() => Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Tu primer viaje',
+                    style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Volver al mapa',
+                  onPressed: _loading
+                      ? null
+                      : () {
+                          FocusScope.of(context).unfocus();
+                          setState(() => _showFirstTimeForm = false);
+                        },
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            const Text(
+              'Necesitamos tu nombre y teléfono para identificar la solicitud.',
+              style: TextStyle(color: TuktukTheme.muted, fontSize: 13.5),
+            ),
+            const SizedBox(height: 15),
+            TextFormField(
+              controller: _nameController,
+              textInputAction: TextInputAction.next,
+              autofillHints: const [AutofillHints.name],
+              decoration: const InputDecoration(
+                labelText: 'Nombre',
+                hintText: 'Tu nombre',
+                prefixIcon: Icon(Icons.person_outline_rounded),
+              ),
+              validator: _validateName,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _whatsappController,
+              keyboardType: TextInputType.phone,
+              textInputAction: TextInputAction.next,
+              autofillHints: const [AutofillHints.telephoneNumber],
+              decoration: const InputDecoration(
+                labelText: 'WhatsApp o teléfono',
+                hintText: '+53 5 123 4567',
+                prefixIcon: Icon(Icons.phone_outlined),
+              ),
+              validator: _validateWhatsapp,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.done,
+              autofillHints: const [AutofillHints.email],
+              decoration: const InputDecoration(
+                labelText: 'Correo electrónico (opcional)',
+                hintText: 'nombre@ejemplo.com',
+                prefixIcon: Icon(Icons.email_outlined),
+              ),
+              validator: _validateEmail,
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!, style: const TextStyle(color: TuktukTheme.danger)),
+            ],
+            const SizedBox(height: 16),
+            TuktukPrimaryButton(
+              onPressed: _loading ? null : _continue,
+              label: _loading ? 'Conectando...' : 'Continuar al mapa',
+            ),
+          ],
+        ),
+      );
+
+  Future<void> _centerFirstEntryMap() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return;
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+      final location = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          timeLimit: Duration(seconds: 12),
+        ),
+      );
+      if (!mounted || _existingSession != null) return;
+      _welcomeMapCenter.value = LatLng(location.latitude, location.longitude);
+    } catch (_) {
+      // Sin permiso o GPS, el mapa sigue visible y el registro es posible.
+    }
   }
 
   void _closeCustomerEditor() {
@@ -580,107 +651,114 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
   }
 
   Widget _editCustomerScreen() => Positioned.fill(
-    child: Material(
-      color: const Color(0xB800070D),
-      child: SafeArea(
-        child: Align(
-          alignment: Alignment.bottomCenter,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              12,
-              10,
-              12,
-              MediaQuery.viewInsetsOf(context).bottom + 10,
-            ),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: 540,
-                maxHeight: MediaQuery.sizeOf(context).height * .79,
-              ),
-              child: Material(
-                color: TuktukTheme.background,
-                borderRadius: BorderRadius.circular(25),
-                clipBehavior: Clip.antiAlias,
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 17, 20, 22),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
+        child: Material(
+          color: const Color(0xB800070D),
+          child: SafeArea(
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  12,
+                  10,
+                  12,
+                  MediaQuery.viewInsetsOf(context).bottom + 10,
+                ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: 540,
+                    maxHeight: MediaQuery.sizeOf(context).height * .79,
+                  ),
+                  child: Material(
+                    color: TuktukTheme.background,
+                    borderRadius: BorderRadius.circular(25),
+                    clipBehavior: Clip.antiAlias,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(20, 17, 20, 22),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Expanded(
-                              child: Text(
-                                'Mi perfil',
-                                style: TextStyle(
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.w900,
+                            Row(
+                              children: [
+                                const Expanded(
+                                  child: Text(
+                                    'Mi perfil',
+                                    style: TextStyle(
+                                      fontSize: 26,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                IconButton(
+                                  tooltip: 'Cerrar perfil',
+                                  onPressed:
+                                      _loading ? null : _closeCustomerEditor,
+                                  icon: const Icon(Icons.close_rounded),
+                                ),
+                              ],
                             ),
-                            IconButton(
-                              tooltip: 'Cerrar perfil',
+                            const Text(
+                              'Actualiza tus datos sin salir del mapa.',
+                              style: TextStyle(color: TuktukTheme.muted),
+                            ),
+                            const SizedBox(height: 18),
+                            TextFormField(
+                              controller: _nameController,
+                              textInputAction: TextInputAction.next,
+                              autofillHints: const [AutofillHints.name],
+                              decoration: const InputDecoration(
+                                labelText: 'Nombre',
+                                prefixIcon: Icon(Icons.person_outline_rounded),
+                              ),
+                              validator: _validateName,
+                            ),
+                            const SizedBox(height: 14),
+                            TextFormField(
+                              controller: _whatsappController,
+                              keyboardType: TextInputType.phone,
+                              autofillHints: const [
+                                AutofillHints.telephoneNumber
+                              ],
+                              decoration: const InputDecoration(
+                                labelText: 'WhatsApp o teléfono',
+                                prefixIcon: Icon(Icons.phone_outlined),
+                              ),
+                              validator: _validateWhatsapp,
+                            ),
+                            const SizedBox(height: 14),
+                            TextFormField(
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              autofillHints: const [AutofillHints.email],
+                              decoration: const InputDecoration(
+                                labelText: 'Correo electrónico (opcional)',
+                                prefixIcon: Icon(Icons.email_outlined),
+                              ),
+                              validator: _validateEmail,
+                            ),
+                            if (_error != null) ...[
+                              const SizedBox(height: 12),
+                              Text(
+                                _error!,
+                                style:
+                                    const TextStyle(color: TuktukTheme.danger),
+                              ),
+                            ],
+                            const SizedBox(height: 20),
+                            TuktukPrimaryButton(
+                              label:
+                                  _loading ? 'Guardando...' : 'Guardar datos',
+                              onPressed: _loading ? null : _continue,
+                            ),
+                            TextButton(
                               onPressed: _loading ? null : _closeCustomerEditor,
-                              icon: const Icon(Icons.close_rounded),
+                              child: const Text('Volver al mapa'),
                             ),
                           ],
                         ),
-                        const Text(
-                          'Actualiza tus datos sin salir del mapa.',
-                          style: TextStyle(color: TuktukTheme.muted),
-                        ),
-                        const SizedBox(height: 18),
-                        TextFormField(
-                          controller: _nameController,
-                          textInputAction: TextInputAction.next,
-                          autofillHints: const [AutofillHints.name],
-                          decoration: const InputDecoration(
-                            labelText: 'Nombre',
-                            prefixIcon: Icon(Icons.person_outline_rounded),
-                          ),
-                          validator: _validateName,
-                        ),
-                        const SizedBox(height: 14),
-                        TextFormField(
-                          controller: _whatsappController,
-                          keyboardType: TextInputType.phone,
-                          autofillHints: const [AutofillHints.telephoneNumber],
-                          decoration: const InputDecoration(
-                            labelText: 'WhatsApp o teléfono',
-                            prefixIcon: Icon(Icons.phone_outlined),
-                          ),
-                          validator: _validateWhatsapp,
-                        ),
-                        const SizedBox(height: 14),
-                        TextFormField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          autofillHints: const [AutofillHints.email],
-                          decoration: const InputDecoration(
-                            labelText: 'Correo electrónico (opcional)',
-                            prefixIcon: Icon(Icons.email_outlined),
-                          ),
-                          validator: _validateEmail,
-                        ),
-                        if (_error != null) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            _error!,
-                            style: const TextStyle(color: TuktukTheme.danger),
-                          ),
-                        ],
-                        const SizedBox(height: 20),
-                        TuktukPrimaryButton(
-                          label: _loading ? 'Guardando...' : 'Guardar datos',
-                          onPressed: _loading ? null : _continue,
-                        ),
-                        TextButton(
-                          onPressed: _loading ? null : _closeCustomerEditor,
-                          child: const Text('Volver al mapa'),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -688,9 +766,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
             ),
           ),
         ),
-      ),
-    ),
-  );
+      );
 }
 
 class MarketplaceCustomerRequestScreen extends StatefulWidget {
@@ -755,40 +831,42 @@ class _MarketplaceCustomerRequestScreenState
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
                   : _error != null
-                  ? Center(child: Text(_error!))
-                  : _services.isEmpty
-                  ? const Center(
-                      child: Text('Todavía no hay servicios disponibles.'),
-                    )
-                  : ListView.separated(
-                      itemCount: _services.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final service = _services[index];
+                      ? Center(child: Text(_error!))
+                      : _services.isEmpty
+                          ? const Center(
+                              child:
+                                  Text('Todavía no hay servicios disponibles.'),
+                            )
+                          : ListView.separated(
+                              itemCount: _services.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 12),
+                              itemBuilder: (context, index) {
+                                final service = _services[index];
 
-                        return Card(
-                          child: ListTile(
-                            title: Text(service.name),
-                            subtitle: Text(
-                              'Precio calculado en ${service.currency}',
+                                return Card(
+                                  child: ListTile(
+                                    title: Text(service.name),
+                                    subtitle: Text(
+                                      'Precio calculado en ${service.currency}',
+                                    ),
+                                    trailing: const Icon(Icons.chevron_right),
+                                    onTap: () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute<void>(
+                                          builder: (_) =>
+                                              MarketplaceCustomerTripFormScreen(
+                                            service: widget.service,
+                                            session: widget.session,
+                                            serviceOption: service,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                );
+                              },
                             ),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute<void>(
-                                  builder: (_) =>
-                                      MarketplaceCustomerTripFormScreen(
-                                        service: widget.service,
-                                        session: widget.session,
-                                        serviceOption: service,
-                                      ),
-                                ),
-                              );
-                            },
-                          ),
-                        );
-                      },
-                    ),
             ),
           ),
         ),
@@ -941,9 +1019,8 @@ class _MarketplaceCustomerTripFormScreenState
       return;
     }
 
-    final passengerCount = _needsPassengers
-        ? _positiveInt(_passengerController.text)
-        : null;
+    final passengerCount =
+        _needsPassengers ? _positiveInt(_passengerController.text) : null;
 
     if (_needsPassengers && passengerCount == null) {
       setState(() {
@@ -1378,8 +1455,7 @@ class _MarketplaceCustomerQuoteScreenState
 
     if (draft.isBelowMinimum(price)) {
       setState(() {
-        _error =
-            'El mínimo permitido es '
+        _error = 'El mínimo permitido es '
             '${draft.minimumPrice.toStringAsFixed(0)} '
             '${draft.currency}.';
       });
@@ -1541,8 +1617,8 @@ class _MarketplaceCustomerQuoteScreenState
                     '${draft.minimumPrice.toStringAsFixed(0)} '
                     '${draft.currency}',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: belowMinimum ? kDanger : kMuted,
-                    ),
+                          color: belowMinimum ? kDanger : kMuted,
+                        ),
                   ),
                   if (warningRequired && !belowMinimum) ...[
                     const SizedBox(height: 20),

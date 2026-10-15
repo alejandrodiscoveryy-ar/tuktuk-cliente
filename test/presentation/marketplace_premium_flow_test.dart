@@ -4,10 +4,12 @@ import 'package:tuktuk_cliente/main.dart';
 import 'dart:io';
 
 void main() {
-  test('step one renders the official premium progress header', () {
+  test('primer acceso muestra mapa y registro dentro de una tarjeta', () {
     final source =
         File('lib/presentation/marketplace_customer.dart').readAsStringSync();
-    expect(source, contains('TuktukFlowHeader(step: 1)'));
+    expect(source, contains('Widget _firstTimeCustomerScreen()'));
+    expect(source, contains('Widget _welcomeIdentificationForm()'));
+    expect(source, isNot(contains('TuktukFlowHeader(step: 1)')));
   });
 
   test('invalid identification remains blocked by the existing validators', () {
