@@ -39,6 +39,19 @@ void main() {
     expect(source, contains("id: 'tuktuk-client-route-line'"));
     expect(source, isNot(contains("id: 'tuktuk-client-route-outline'")));
     expect(source, contains('lineColor: 0xFFFFC400'));
+    expect(source, contains("id: 'tuktuk-client-route-glow'"));
+    expect(source, contains('lineOpacity: 0.30'));
+    expect(source, contains('lineOpacity: 1.0'));
+    expect(source, contains('lineWidth: 8'));
+    expect(source, contains('lineCap: mbx.LineCap.ROUND'));
+    // La capa de ruta no se ata a un slot de Mapbox Standard:
+    // dark-v11 y estilos personalizados deben dibujarla por encima.
+    final routeLayer = source
+        .split("id: 'tuktuk-client-route-line'")
+        .last
+        .split('// Iconos premium propios')
+        .first;
+    expect(routeLayer, isNot(contains("slot: 'top'")));
     expect(
       source,
       contains('marketplaceVectorLineGeoJson(widget.routePoints)'),
@@ -53,6 +66,11 @@ void main() {
     expect(source, contains('TuktukTheme.background.withValues(alpha: .80)'));
     expect(source, contains('TuktukTheme.background.withValues(alpha: .77)'));
     expect(source, contains('Widget _floatingQuoteOptions()'));
+    expect(source, contains('Color(0x5208141B)'));
+    final tracking = File(
+      'lib/presentation/marketplace_customer_tracking.dart',
+    ).readAsStringSync();
+    expect(tracking, contains('Color(0x52050B10)'));
     expect(source, contains('Solicitar transporte'));
   });
 }

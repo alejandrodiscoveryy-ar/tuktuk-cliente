@@ -5,7 +5,9 @@ on:
     paths:
       - 'lib/presentation/marketplace_customer_tracking.dart'
       - 'lib/presentation/marketplace_customer_booking_flow.dart'
+      - 'lib/presentation/marketplace_vector_map.dart'
       - 'test/presentation/marketplace_tracking_mobile_ui_test.dart'
+      - 'test/presentation/marketplace_map_route_glass_test.dart'
       - '.github/workflows/customer-ui-pr-check.yml'
 
 permissions:

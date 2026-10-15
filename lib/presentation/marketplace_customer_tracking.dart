@@ -856,7 +856,7 @@ class _MarketplaceCustomerTrackingScreenState
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.center,
-                        colors: [Color(0xD4050B10), Color(0x00050B10)],
+                        colors: [Color(0x52050B10), Color(0x00050B10)],
                       ),
                     ),
                   ),
