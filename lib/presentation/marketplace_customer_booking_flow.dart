@@ -1704,6 +1704,21 @@ class _MarketplaceCustomerBookingFlowState
       if (!mounted) return;
       final sessionStore = MarketplaceCustomerSessionStore(Hive.box(_metaBox));
       await sessionStore.saveActiveJobId(publication.jobId);
+      try {
+        // Caché local, no consulta la ubicación de ningún conductor.
+        final quote = flow.route;
+        if (flow.origin != null && flow.destination != null && quote != null) {
+          await sessionStore.saveActiveJobMap(
+            jobId: publication.jobId,
+            origin: flow.origin!,
+            destination: flow.destination!,
+            routePoints: quote.routePoints,
+            distanceKm: quote.distanceKm,
+          );
+        }
+      } catch (_) {
+        // La carrera publicada NO puede fallar por una caché visual opcional.
+      }
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute<void>(

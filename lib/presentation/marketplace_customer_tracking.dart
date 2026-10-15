@@ -37,7 +37,6 @@ class _MarketplaceCustomerTrackingScreenState
   String? _cancelPayloadSignature;
   String? _cancelIdempotencyKey;
 
-
   @override
   void initState() {
     super.initState();
@@ -74,8 +73,7 @@ class _MarketplaceCustomerTrackingScreenState
 
       final mediaSignature =
           '${job.driverPhotoAssetId ?? ''}:${job.vehicleMainPhotoAssetId ?? ''}';
-      final mediaExpiresSoon =
-          _media?.expiresAt == null ||
+      final mediaExpiresSoon = _media?.expiresAt == null ||
           _media!.expiresAt!.isBefore(
             DateTime.now().toUtc().add(const Duration(minutes: 2)),
           );
@@ -118,8 +116,8 @@ class _MarketplaceCustomerTrackingScreenState
 
       final invalidSession =
           detailText?.contains('CUSTOMER_SESSION_NOT_FOUND') == true ||
-          detailText?.contains('CUSTOMER_SESSION_EXPIRED') == true ||
-          detailText?.contains('CUSTOMER_SESSION_INVALID') == true;
+              detailText?.contains('CUSTOMER_SESSION_EXPIRED') == true ||
+              detailText?.contains('CUSTOMER_SESSION_INVALID') == true;
 
       if (invalidSession) {
         _pollTimer?.cancel();
@@ -127,8 +125,7 @@ class _MarketplaceCustomerTrackingScreenState
         return;
       }
 
-      final staleJob =
-          detailText?.contains('ACCESS_DENIED') == true ||
+      final staleJob = detailText?.contains('ACCESS_DENIED') == true ||
           detailText?.contains('JOB_NOT_FOUND') == true;
 
       if (staleJob) {
@@ -160,37 +157,37 @@ class _MarketplaceCustomerTrackingScreenState
   }
 
   String _statusTitle(String status) => switch (status) {
-    'requested' => 'Preparando solicitud',
-    'published' => 'Buscando transportista',
-    'accepted' => 'Transportista asignado',
-    'en_route' => 'El transportista va hacia ti',
-    'pickup' => 'Transportista en el punto de recogida',
-    'in_progress' => 'Servicio en curso',
-    'completed' => 'Servicio completado',
-    'settled' => 'Servicio finalizado',
-    'cancelled_by_customer' => 'Solicitud cancelada',
-    'cancelled_by_driver' => 'Cancelada por el transportista',
-    'expired' => 'La solicitud expiró',
-    'incident' => 'Servicio en revisión',
-    _ => 'Estado del servicio',
-  };
+        'requested' => 'Preparando solicitud',
+        'published' => 'Buscando transportista',
+        'accepted' => 'Transportista asignado',
+        'en_route' => 'El transportista va hacia ti',
+        'pickup' => 'Transportista en el punto de recogida',
+        'in_progress' => 'Servicio en curso',
+        'completed' => 'Servicio completado',
+        'settled' => 'Servicio finalizado',
+        'cancelled_by_customer' => 'Solicitud cancelada',
+        'cancelled_by_driver' => 'Cancelada por el transportista',
+        'expired' => 'La solicitud expiró',
+        'incident' => 'Servicio en revisión',
+        _ => 'Estado del servicio',
+      };
 
   String _statusDescription(String status) => switch (status) {
-    'published' =>
-      'Tu solicitud está visible para los transportistas compatibles.',
-    'accepted' =>
-      'Un transportista aceptó tu solicitud. Ya puedes ver sus datos.',
-    'en_route' => 'Tu transportista se dirige al punto de recogida.',
-    'pickup' => 'El transportista indicó que llegó al punto de recogida.',
-    'in_progress' => 'El servicio ya comenzó.',
-    'completed' => 'El transportista marcó el servicio como completado.',
-    'settled' => 'El servicio quedó cerrado correctamente.',
-    'cancelled_by_customer' => 'Cancelaste esta solicitud.',
-    'cancelled_by_driver' => 'El transportista canceló el servicio.',
-    'expired' => 'Ningún transportista aceptó antes del vencimiento.',
-    'incident' => 'El servicio requiere revisión.',
-    _ => 'El estado se actualizará automáticamente.',
-  };
+        'published' =>
+          'Tu solicitud está visible para los transportistas compatibles.',
+        'accepted' =>
+          'Un transportista aceptó tu solicitud. Ya puedes ver sus datos.',
+        'en_route' => 'Tu transportista se dirige al punto de recogida.',
+        'pickup' => 'El transportista indicó que llegó al punto de recogida.',
+        'in_progress' => 'El servicio ya comenzó.',
+        'completed' => 'El transportista marcó el servicio como completado.',
+        'settled' => 'El servicio quedó cerrado correctamente.',
+        'cancelled_by_customer' => 'Cancelaste esta solicitud.',
+        'cancelled_by_driver' => 'El transportista canceló el servicio.',
+        'expired' => 'Ningún transportista aceptó antes del vencimiento.',
+        'incident' => 'El servicio requiere revisión.',
+        _ => 'El estado se actualizará automáticamente.',
+      };
 
   Future<String?> _askCancellationReason() async {
     final controller = TextEditingController();
@@ -231,10 +228,7 @@ class _MarketplaceCustomerTrackingScreenState
   Future<void> _finishJob() async {
     final job = _job;
 
-    if (job == null ||
-        !job.customerCanFinish ||
-        _finishing ||
-        _cancelling) {
+    if (job == null || !job.customerCanFinish || _finishing || _cancelling) {
       return;
     }
 
@@ -245,6 +239,7 @@ class _MarketplaceCustomerTrackingScreenState
       if (mounted) setState(() => _finishing = false);
     }
   }
+
   Future<void> _cancelJob() async {
     final job = _job;
 
@@ -475,229 +470,406 @@ class _MarketplaceCustomerTrackingScreenState
   }
 
   IconData _statusIcon(String status) => switch (status) {
-    'published' => Icons.radar_rounded,
-    'accepted' => Icons.person_pin_circle_outlined,
-    'en_route' => Icons.directions_car_filled_outlined,
-    'pickup' => Icons.location_on_outlined,
-    'in_progress' => Icons.alt_route_rounded,
-    'completed' || 'settled' => Icons.check_circle_outline_rounded,
-    'cancelled_by_customer' || 'cancelled_by_driver' => Icons.cancel_outlined,
-    'expired' => Icons.timer_off_outlined,
-    'incident' => Icons.warning_amber_rounded,
-    _ => Icons.local_taxi_outlined,
-  };
+        'published' => Icons.radar_rounded,
+        'accepted' => Icons.person_pin_circle_outlined,
+        'en_route' => Icons.directions_car_filled_outlined,
+        'pickup' => Icons.location_on_outlined,
+        'in_progress' => Icons.alt_route_rounded,
+        'completed' || 'settled' => Icons.check_circle_outline_rounded,
+        'cancelled_by_customer' ||
+        'cancelled_by_driver' =>
+          Icons.cancel_outlined,
+        'expired' => Icons.timer_off_outlined,
+        'incident' => Icons.warning_amber_rounded,
+        _ => Icons.local_taxi_outlined,
+      };
+
+  Widget _liveMap() {
+    Map<String, dynamic>? stored;
+    try {
+      stored = MarketplaceCustomerSessionStore(
+        Hive.box(_metaBox),
+      ).readActiveJobMap(widget.jobId);
+    } catch (_) {
+      // La vista también debe funcionar si el almacenamiento local no carga.
+    }
+    if (stored != null && MarketplaceMapService.publicToken.startsWith('pk.')) {
+      try {
+        final origin = MarketplaceMapPoint.fromMap(
+          Map<String, dynamic>.from(stored['origin'] as Map),
+        );
+        final destination = MarketplaceMapPoint.fromMap(
+          Map<String, dynamic>.from(stored['destination'] as Map),
+        );
+        final rawPoints = stored['route_points'];
+        final points = rawPoints is List
+            ? rawPoints
+                .whereType<Map>()
+                .map((point) => MarketplaceMapPoint.fromMap(point))
+                .toList(growable: false)
+            : <MarketplaceMapPoint>[];
+        final distance = (stored['distance_km'] as num?)?.toDouble() ?? 0;
+        final zoom = distance <= 3
+            ? 13.0
+            : distance <= 8
+                ? 12.1
+                : 11.0;
+        return MarketplaceVectorMap(
+          initialCenter: LatLng(
+            (origin.lat + destination.lat) / 2,
+            (origin.lon + destination.lon) / 2,
+          ),
+          initialZoom: zoom,
+          originPoint: origin,
+          destinationPoint: destination,
+          routePoints: points,
+        );
+      } catch (_) {
+        // Si la caché no es válida, nunca inventar coordenadas.
+      }
+    }
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.asset(
+          'assets/branding/tuktuk_havana_morro_tracking.png',
+          fit: BoxFit.cover,
+        ),
+        const DecoratedBox(decoration: BoxDecoration(color: Color(0x7B050B10))),
+        const Align(
+          alignment: Alignment.center,
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'El mapa de esta carrera no está disponible en este dispositivo.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: Colors.white),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _liveDriverSummary(MarketplaceCustomerJob job) {
+    final vehicleParts = <String?>[
+      job.vehicleBrand,
+      job.vehicleModel,
+    ].whereType<String>().where((text) => text.trim().isNotEmpty).toList();
+    final vehicleName = vehicleParts.isNotEmpty
+        ? vehicleParts.join(' ')
+        : (job.vehicleName ?? 'Vehículo asignado');
+    return Column(
+      children: [
+        Row(
+          children: [
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: TuktukTheme.backgroundSoft,
+              backgroundImage: _media?.driverPhotoSignedUrl == null
+                  ? null
+                  : NetworkImage(_media!.driverPhotoSignedUrl!),
+              child: _media?.driverPhotoSignedUrl == null
+                  ? const Icon(
+                      Icons.person_outline_rounded,
+                      color: TuktukTheme.mint,
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    job.driverDisplayName ?? 'Transportista asignado',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                    ),
+                  ),
+                  Text(
+                    job.vehicleRegistration == null
+                        ? vehicleName
+                        : '$vehicleName · ${job.vehicleRegistration}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: TuktukTheme.muted,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (_media?.vehiclePhotoSignedUrl != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.network(
+                  _media!.vehiclePhotoSignedUrl!,
+                  width: 56,
+                  height: 43,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox(width: 56),
+                ),
+              ),
+          ],
+        ),
+        if (job.driverWhatsappPhone != null) ...[
+          const SizedBox(height: 7),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _openWhatsApp(job.driverWhatsappPhone!),
+              icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
+              label: const Text('Contactar por WhatsApp'),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _liveSheet(MarketplaceCustomerJob job, ScrollController scroller) {
+    final terminal = job.isTerminal;
+    final settled = job.status == 'settled';
+    return Container(
+      decoration: BoxDecoration(
+        color: TuktukTheme.background.withValues(alpha: .83),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+        border: Border.all(color: TuktukTheme.border),
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: ListView(
+          controller: scroller,
+          padding: const EdgeInsets.fromLTRB(17, 12, 17, 24),
+          children: [
+            Align(
+              alignment: Alignment.center,
+              child: Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: TuktukTheme.border,
+                  borderRadius: BorderRadius.circular(5),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(
+                  _statusIcon(job.status),
+                  color: terminal ? TuktukTheme.gold : TuktukTheme.mint,
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    _statusTitle(job.status),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Actualizar estado',
+                  onPressed: _refreshing ? null : _refresh,
+                  icon: const Icon(
+                    Icons.refresh_rounded,
+                    color: TuktukTheme.mint,
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              _statusDescription(job.status),
+              style: const TextStyle(color: TuktukTheme.muted, fontSize: 13),
+            ),
+            if (job.status == 'published' || job.status == 'requested') ...[
+              const SizedBox(height: 11),
+              const LinearProgressIndicator(),
+            ],
+            const SizedBox(height: 11),
+            if (job.hasAssignedDriver) ...[
+              _liveDriverSummary(job),
+              const SizedBox(height: 12),
+            ],
+            Row(
+              children: [
+                const Icon(
+                  Icons.flag_outlined,
+                  size: 19,
+                  color: TuktukTheme.gold,
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    job.destinationText ?? 'Destino',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  '${job.finalPrice.toStringAsFixed(0)} ${job.currency}',
+                  style: const TextStyle(
+                    color: TuktukTheme.gold,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(_error!, style: const TextStyle(color: TuktukTheme.danger)),
+            ],
+            if (job.customerCanFinish) ...[
+              const SizedBox(height: 12),
+              TuktukPrimaryButton(
+                onPressed: _finishing || _cancelling ? null : _finishJob,
+                label: _finishing ? 'Finalizando...' : 'Finalizar carrera',
+                icon: Icons.check_circle_outline_rounded,
+              ),
+            ],
+            if (job.customerCanCancel) ...[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: _cancelling || _finishing ? null : _cancelJob,
+                icon: const Icon(Icons.close_rounded),
+                label:
+                    Text(_cancelling ? 'Cancelando...' : 'Cancelar solicitud'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: TuktukTheme.danger,
+                ),
+              ),
+            ],
+            if (settled) ...[
+              const SizedBox(height: 11),
+              if (_rating == null)
+                TuktukPrimaryButton(
+                  onPressed: () => _openRating(job),
+                  label: 'Calificar transportista',
+                  icon: Icons.star_outline_rounded,
+                )
+              else
+                Text(
+                  'Tu calificación: ${_rating!.stars} estrellas',
+                  textAlign: TextAlign.center,
+                ),
+            ],
+            if (terminal) ...[
+              const SizedBox(height: 11),
+              TuktukPrimaryButton(
+                onPressed: _finish,
+                label: 'Solicitar otro transporte',
+                icon: Icons.arrow_forward_rounded,
+              ),
+            ],
+            const SizedBox(height: 4),
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: const Text(
+                'Detalles del servicio',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              ),
+              children: [
+                _routeCard(context, job),
+                if (job.hasAssignedDriver) ...[
+                  const SizedBox(height: 10),
+                  _driverCard(context, job),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final job = _job;
-
     return PopScope(
       canPop: false,
       child: Scaffold(
         backgroundColor: TuktukTheme.background,
-        body: TuktukHavanaBackdrop(
-          showLighthouse: false,
-          child: SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 640),
-                child: Column(
-                  children: [
-                    TuktukBrandHeader(
-                      trailing: IconButton(
-                        tooltip: 'Actualizar',
-                        onPressed: _refreshing ? null : _refresh,
-                        icon: const Icon(
-                          Icons.refresh_rounded,
-                          color: Colors.white,
-                        ),
+        body: SafeArea(
+          child: Stack(
+            children: [
+              Positioned.fill(child: _liveMap()),
+              const Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.center,
+                        colors: [Color(0xD4050B10), Color(0x00050B10)],
                       ),
                     ),
-                    Expanded(
-                      child: _loading
-                          ? const Center(child: CircularProgressIndicator())
-                          : job == null
-                          ? Padding(
-                              padding: const EdgeInsets.all(24),
-                              child: Center(
-                                child: TuktukGlassCard(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        _error ??
-                                            'No pudimos cargar el servicio.',
-                                        textAlign: TextAlign.center,
-                                      ),
-                                      const SizedBox(height: 16),
-                                      TuktukPrimaryButton(
-                                        onPressed: _refresh,
-                                        label: 'Reintentar',
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            )
-                          : ListView(
-                              padding: const EdgeInsets.fromLTRB(20, 6, 20, 26),
-                              children: [
-                                Text(
-                                  _statusTitle(job.status),
-                                  style: const TextStyle(
-                                    fontSize: 34,
-                                    height: 1.05,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  _statusDescription(job.status),
-                                  style: const TextStyle(
-                                    color: TuktukTheme.muted,
-                                    fontSize: 17,
-                                    height: 1.4,
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(24),
-                                  child: SizedBox(
-                                    height: 250,
-                                    child: Stack(
-                                      fit: StackFit.expand,
-                                      children: [
-                                        Image.asset(
-                                          'assets/branding/tuktuk_havana_morro_tracking.png',
-                                          fit: BoxFit.cover,
-                                          alignment: Alignment.center,
-                                        ),
-                                        const DecoratedBox(
-                                          decoration: BoxDecoration(
-                                            gradient: LinearGradient(
-                                              begin: Alignment.topCenter,
-                                              end: Alignment.bottomCenter,
-                                              colors: [
-                                                Color(0x14000000),
-                                                Color(0x6E061118),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                        Align(
-                                          alignment: Alignment.bottomCenter,
-                                          child: Padding(
-                                            padding: const EdgeInsets.only(
-                                              bottom: 18,
-                                            ),
-                                            child: TuktukStatusOrb(
-                                              icon: _statusIcon(job.status),
-                                              active: !job.isTerminal,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                if (_error != null) ...[
-                                  const SizedBox(height: 10),
-                                  Text(
-                                    _error!,
-                                    style: const TextStyle(
-                                      color: TuktukTheme.danger,
-                                    ),
-                                  ),
-                                ],
-                                const SizedBox(height: 12),
-                                _routeCard(context, job),
-                                const SizedBox(height: 12),
-                                if (job.hasAssignedDriver)
-                                  _driverCard(context, job)
-                                else if (!job.isTerminal)
-                                  const TuktukGlassCard(
-                                    padding: EdgeInsets.all(16),
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          Icons.info_outline_rounded,
-                                          color: TuktukTheme.mint,
-                                        ),
-                                        SizedBox(width: 12),
-                                        Expanded(
-                                          child: Text(
-                                            'Seguimos buscando un transportista disponible.',
-                                            style: TextStyle(
-                                              color: TuktukTheme.text,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                if (job.customerCanFinish) ...[
-                                  const SizedBox(height: 16),
-                                  TuktukPrimaryButton(
-                                    onPressed: (_finishing || _cancelling)
-                                        ? null
-                                        : _finishJob,
-                                    label: _finishing
-                                        ? 'Finalizando...'
-                                        : 'Finalizar carrera',
-                                    icon: Icons.check_circle_outline_rounded,
-                                  ),
-                                ],                                if (job.customerCanCancel) ...[
-                                  const SizedBox(height: 16),
-                                  OutlinedButton.icon(
-                                    onPressed: (_cancelling || _finishing) ? null : _cancelJob,
-                                    icon: const Icon(Icons.close_rounded),
-                                    label: Text(
-                                      _cancelling
-                                          ? 'Cancelando...'
-                                          : 'Cancelar solicitud',
-                                    ),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: TuktukTheme.danger,
-                                      side: const BorderSide(
-                                        color: TuktukTheme.danger,
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 15,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                                if (job.isTerminal) ...[
-                                  const SizedBox(height: 16),
-                                  if (job.status == 'settled')
-                                    _rating == null
-                                        ? TuktukPrimaryButton(
-                                            onPressed: () => _openRating(job),
-                                            label: 'Calificar transportista',
-                                            icon: Icons.star_outline,
-                                          )
-                                        : Text(
-                                            'Tu calificación: ${_rating!.stars} estrellas',
-                                            textAlign: TextAlign.center,
-                                            style: const TextStyle(
-                                              color: TuktukTheme.muted,
-                                            ),
-                                          ),
-                                  if (job.status == 'settled')
-                                    const SizedBox(height: 10),
-                                  TuktukPrimaryButton(
-                                    onPressed: _finish,
-                                    label: 'Volver a servicios',
-                                  ),
-                                ],
-                              ],
-                            ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: TuktukBrandHeader(
+                  trailing: IconButton(
+                    tooltip: 'Actualizar',
+                    onPressed: _refreshing ? null : _refresh,
+                    icon: const Icon(
+                      Icons.refresh_rounded,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+              if (job == null)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: TuktukGlassCard(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_loading)
+                            const CircularProgressIndicator()
+                          else
+                            Text(_error ?? 'No pudimos cargar el servicio.'),
+                          const SizedBox(height: 12),
+                          TuktukPrimaryButton(
+                            onPressed: _refreshing ? null : _refresh,
+                            label: 'Reintentar',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: DraggableScrollableSheet(
+                    initialChildSize: .42,
+                    minChildSize: .24,
+                    maxChildSize: .81,
+                    expand: false,
+                    snap: true,
+                    snapSizes: const [.24, .42, .81],
+                    builder: (context, scroller) => _liveSheet(job, scroller),
+                  ),
+                ),
+            ],
           ),
         ),
       ),
@@ -705,9 +877,15 @@ class _MarketplaceCustomerTrackingScreenState
   }
 
   Future<void> _openRating(MarketplaceCustomerJob job) async {
-    final rating = await Navigator.of(context).push<MarketplaceCustomerRating>(
-      MaterialPageRoute(
-        builder: (_) => MarketplaceCustomerRatingScreen(
+    // Calificar sobre el mismo mapa, sin abrir una nueva página.
+    final rating = await showModalBottomSheet<MarketplaceCustomerRating>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: TuktukTheme.background,
+      builder: (sheetContext) => SizedBox(
+        height: MediaQuery.sizeOf(sheetContext).height * .80,
+        child: MarketplaceCustomerRatingScreen(
           service: widget.service,
           session: widget.session,
           jobId: job.id,
@@ -746,10 +924,12 @@ class MarketplaceCustomerHistory extends StatefulWidget {
   final MarketplaceCustomerSessionSnapshot session;
 
   @override
-  State<MarketplaceCustomerHistory> createState() => _MarketplaceCustomerHistoryState();
+  State<MarketplaceCustomerHistory> createState() =>
+      _MarketplaceCustomerHistoryState();
 }
 
-class _MarketplaceCustomerHistoryState extends State<MarketplaceCustomerHistory> {
+class _MarketplaceCustomerHistoryState
+    extends State<MarketplaceCustomerHistory> {
   final _jobs = <MarketplaceCustomerJob>[];
   bool _loading = false;
   bool _hasMore = true;
@@ -763,7 +943,10 @@ class _MarketplaceCustomerHistoryState extends State<MarketplaceCustomerHistory>
 
   Future<void> _loadMore() async {
     if (_loading || !_hasMore) return;
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final page = await widget.service.history(
         sessionId: widget.session.sessionId,
@@ -777,7 +960,9 @@ class _MarketplaceCustomerHistoryState extends State<MarketplaceCustomerHistory>
         _hasMore = page.length == 50;
       });
     } catch (_) {
-      if (mounted) setState(() => _error = 'No pudimos cargar el historial. Reintenta.');
+      if (mounted) {
+        setState(() => _error = 'No pudimos cargar el historial. Reintenta.');
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -785,29 +970,39 @@ class _MarketplaceCustomerHistoryState extends State<MarketplaceCustomerHistory>
 
   @override
   Widget build(BuildContext context) => SafeArea(
-    child: SizedBox(
-      height: MediaQuery.sizeOf(context).height * .7,
-      child: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          const Text('Historial', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-          for (final job in _jobs)
-            ListTile(
-              title: Text('${job.originText ?? 'Origen'} → ${job.destinationText ?? 'Destino'}'),
-              subtitle: Text('${job.finalPrice} ${job.currency}'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).pop(job),
-            ),
-          if (_error != null) Text(_error!),
-          if (!_loading && _jobs.isEmpty && _error == null)
-            const Text('Todavía no tienes carreras finalizadas.'),
-          if (_loading) const Center(child: CircularProgressIndicator()),
-          if (_hasMore && !_loading)
-            TextButton(onPressed: _loadMore, child: Text(_error == null ? 'Cargar más historial' : 'Reintentar')),
-        ],
-      ),
-    ),
-  );
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * .7,
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              const Text(
+                'Historial',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              for (final job in _jobs)
+                ListTile(
+                  title: Text(
+                    '${job.originText ?? 'Origen'} → ${job.destinationText ?? 'Destino'}',
+                  ),
+                  subtitle: Text('${job.finalPrice} ${job.currency}'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).pop(job),
+                ),
+              if (_error != null) Text(_error!),
+              if (!_loading && _jobs.isEmpty && _error == null)
+                const Text('Todavía no tienes carreras finalizadas.'),
+              if (_loading) const Center(child: CircularProgressIndicator()),
+              if (_hasMore && !_loading)
+                TextButton(
+                  onPressed: _loadMore,
+                  child: Text(
+                    _error == null ? 'Cargar más historial' : 'Reintentar',
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
 }
 
 class _MarketplaceCustomerRatingScreenState
@@ -867,51 +1062,51 @@ class _MarketplaceCustomerRatingScreenState
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Calificar transportista')),
-    body: SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('¿Cómo fue tu experiencia?'),
-            const SizedBox(height: 16),
-            Wrap(
-              children: List.generate(
-                5,
-                (index) => IconButton(
-                  onPressed: _sending
-                      ? null
-                      : () => setState(() => _stars = index + 1),
-                  icon: Icon(
-                    index < _stars
-                        ? Icons.star_rounded
-                        : Icons.star_outline_rounded,
-                    color: kTertiary,
+        appBar: AppBar(title: const Text('Calificar transportista')),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('¿Cómo fue tu experiencia?'),
+                const SizedBox(height: 16),
+                Wrap(
+                  children: List.generate(
+                    5,
+                    (index) => IconButton(
+                      onPressed: _sending
+                          ? null
+                          : () => setState(() => _stars = index + 1),
+                      icon: Icon(
+                        index < _stars
+                            ? Icons.star_rounded
+                            : Icons.star_outline_rounded,
+                        color: kTertiary,
+                      ),
+                      tooltip: '${index + 1} estrellas',
+                    ),
                   ),
-                  tooltip: '${index + 1} estrellas',
                 ),
-              ),
+                TextField(
+                  controller: _comment,
+                  maxLength: 1000,
+                  minLines: 3,
+                  maxLines: 5,
+                  decoration: const InputDecoration(
+                    labelText: 'Comentario (opcional)',
+                  ),
+                ),
+                if (_error != null)
+                  Text(_error!, style: const TextStyle(color: kDanger)),
+                const Spacer(),
+                FilledButton(
+                  onPressed: _sending ? null : _submit,
+                  child: Text(_sending ? 'Enviando...' : 'Enviar calificación'),
+                ),
+              ],
             ),
-            TextField(
-              controller: _comment,
-              maxLength: 1000,
-              minLines: 3,
-              maxLines: 5,
-              decoration: const InputDecoration(
-                labelText: 'Comentario (opcional)',
-              ),
-            ),
-            if (_error != null)
-              Text(_error!, style: const TextStyle(color: kDanger)),
-            const Spacer(),
-            FilledButton(
-              onPressed: _sending ? null : _submit,
-              child: Text(_sending ? 'Enviando...' : 'Enviar calificación'),
-            ),
-          ],
+          ),
         ),
-      ),
-    ),
-  );
+      );
 }
