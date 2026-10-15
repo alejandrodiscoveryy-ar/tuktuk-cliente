@@ -425,36 +425,102 @@ class _MarketplaceCustomerBookingFlowState
   }
 
   Widget _bookingHeader() => Padding(
-    padding: const EdgeInsets.fromLTRB(18, 10, 18, 7),
+    padding: const EdgeInsets.fromLTRB(14, 9, 14, 9),
     child: Row(
       children: [
         const _TuktukBrandLockup(width: 126),
         const Spacer(),
-        TextButton.icon(
-          onPressed: _openHistory,
-          style: TextButton.styleFrom(
-            foregroundColor: TuktukTheme.mint,
-            visualDensity: VisualDensity.compact,
-            padding: const EdgeInsets.symmetric(horizontal: 5),
-          ),
-          icon: const Icon(Icons.history_rounded, size: 18),
-          label: const Text(
-            'Historial',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
-          ),
-        ),
-        IconButton(
-          tooltip: 'Editar perfil',
-          onPressed: widget.onEditCustomer,
-          icon: const Icon(
-            Icons.person_outline_rounded,
-            color: TuktukTheme.mint,
-          ),
+        IconButton.filledTonal(
+          tooltip: 'Abrir menú',
+          onPressed: _openCustomerMenu,
+          icon: const Icon(Icons.menu_rounded, color: TuktukTheme.mint),
         ),
       ],
     ),
   );
 
+  Future<void> _openCustomerMenu() async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) => Dialog(
+        alignment: Alignment.topCenter,
+        insetPadding: EdgeInsets.fromLTRB(
+          18,
+          MediaQuery.paddingOf(dialogContext).top + 75,
+          18,
+          16,
+        ),
+        backgroundColor: TuktukTheme.background,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(26),
+          side: const BorderSide(color: TuktukTheme.border),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Menú TukTuk',
+                style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: _customerMenuItem(
+                      Icons.person_outline_rounded,
+                      'Perfil',
+                      () {
+                        Navigator.of(dialogContext).pop();
+                        widget.onEditCustomer?.call();
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _customerMenuItem(
+                      Icons.history_rounded,
+                      'Historial',
+                      () {
+                        Navigator.of(dialogContext).pop();
+                        unawaited(_openHistory());
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _customerMenuItem(IconData icon, String title, VoidCallback onTap) =>
+      Material(
+        color: TuktukTheme.surface.withValues(alpha: .78),
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 6),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: TuktukTheme.mint, size: 29),
+                const SizedBox(height: 9),
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
   Future<void> _selectPoint({required bool origin}) async {
     if (!origin && flow.origin == null) return;
     _searchDebounce?.cancel();
@@ -775,15 +841,11 @@ class _MarketplaceCustomerBookingFlowState
             child: _floatingOriginDestination(),
           ),
           Positioned(
-            left: 12,
-            right: 12,
-            bottom: 10,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.sizeOf(context).height * .48,
-              ),
-              child: _floatingBookingPanel(),
-            ),
+            left: 10,
+            right: 10,
+            bottom: 0,
+            height: MediaQuery.sizeOf(context).height * .78,
+            child: _floatingBookingPanel(),
           ),
         ],
       ),
@@ -820,17 +882,19 @@ class _MarketplaceCustomerBookingFlowState
               onTap: () => _selectPoint(origin: true),
               tooltip: 'Cambiar recogida',
             ),
-            const Divider(color: TuktukTheme.border, height: 1),
-            _floatingLocationRow(
-              icon: Icons.location_on_rounded,
-              color: TuktukTheme.gold,
-              label: 'Destino',
-              value: flow.destination?.label ?? '¿A dónde vamos?',
-              onTap: flow.origin == null
-                  ? null
-                  : () => _selectPoint(origin: false),
-              tooltip: 'Elegir destino',
-            ),
+            if (flow.destination != null || _selectingOrigin == false) ...[
+              const Divider(color: TuktukTheme.border, height: 1),
+              _floatingLocationRow(
+                icon: Icons.location_on_rounded,
+                color: TuktukTheme.gold,
+                label: 'Destino',
+                value: flow.destination?.label ?? 'Marcar destino',
+                onTap: flow.origin == null
+                    ? null
+                    : () => _selectPoint(origin: false),
+                tooltip: 'Elegir destino',
+              ),
+            ],
           ],
         ),
       ),
@@ -888,28 +952,37 @@ class _MarketplaceCustomerBookingFlowState
     ),
   );
 
-  Widget _floatingBookingPanel() => Container(
-    decoration: BoxDecoration(
-      color: TuktukTheme.background.withValues(alpha: .72),
-      border: Border.all(color: TuktukTheme.border),
-      borderRadius: BorderRadius.circular(26),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x52000000),
-          blurRadius: 22,
-          offset: Offset(0, 9),
-        ),
-      ],
+  Widget _floatingBookingPanel() => DraggableScrollableSheet(
+    key: ValueKey<String>(
+      _selectingOrigin != null
+          ? 'elegir-punto'
+          : flow.origin == null
+          ? 'recogida'
+          : flow.destination == null
+          ? 'destino'
+          : 'cotizacion',
     ),
-    child: Padding(
-      padding: const EdgeInsets.fromLTRB(13, 10, 13, 12),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    expand: false,
+    initialChildSize: flow.destination == null ? .36 : .58,
+    minChildSize: .26,
+    maxChildSize: .96,
+    snap: true,
+    snapSizes: const [.58],
+    builder: (context, scroller) => Container(
+      decoration: BoxDecoration(
+        color: TuktukTheme.background.withValues(alpha: .72),
+        border: Border.all(color: TuktukTheme.border),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(27)),
+        boxShadow: const [BoxShadow(color: Color(0x64000000), blurRadius: 22)],
+      ),
+      child: ListView(
+        controller: scroller,
+        padding: const EdgeInsets.fromLTRB(15, 10, 15, 20),
         children: [
-          Center(
+          Align(
+            alignment: Alignment.center,
             child: Container(
-              width: 40,
+              width: 42,
               height: 4,
               decoration: BoxDecoration(
                 color: TuktukTheme.border,
@@ -917,33 +990,59 @@ class _MarketplaceCustomerBookingFlowState
               ),
             ),
           ),
-          const SizedBox(height: 9),
-          Flexible(
-            child: SingleChildScrollView(
-              child: _selectingOrigin != null
-                  ? _floatingPlaceSelection()
-                  : flow.origin == null
-                  ? _floatingNextAction(
-                      'Tu punto de recogida',
-                      'Usaremos tu ubicación si está disponible. También puedes marcarla en el mapa.',
-                      'Elegir recogida',
-                      () => _selectPoint(origin: true),
-                    )
-                  : flow.destination == null
-                  ? _floatingNextAction(
-                      '¿A dónde vamos?',
-                      'Elige un destino para calcular la ruta y el precio.',
-                      'Elegir destino',
-                      () => _selectPoint(origin: false),
-                    )
-                  : _floatingQuoteOptions(),
-            ),
-          ),
+          const SizedBox(height: 12),
+          if (_selectingOrigin != null)
+            _floatingPlaceSelection()
+          else if (flow.origin == null)
+            _floatingNextAction(
+              'Tu punto de recogida',
+              'Detectamos tu ubicación. Si no aparece, selecciona un punto.',
+              'Elegir recogida',
+              () => _selectPoint(origin: true),
+            )
+          else if (flow.destination == null)
+            _destinationSearchPrompt()
+          else
+            _floatingQuoteOptions(),
         ],
       ),
     ),
   );
 
+  Widget _destinationSearchPrompt() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const Text(
+        '¿A dónde vamos?',
+        style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900),
+      ),
+      const SizedBox(height: 12),
+      Material(
+        color: TuktukTheme.surface.withValues(alpha: .95),
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _selectPoint(origin: false),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+            child: Row(
+              children: [
+                Icon(Icons.search_rounded, color: TuktukTheme.gold),
+                SizedBox(width: 11),
+                Expanded(
+                  child: Text(
+                    'Buscar dirección o marcar en el mapa',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                Icon(Icons.arrow_forward_ios_rounded, size: 16),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
   Widget _floatingNextAction(
     String title,
     String detail,

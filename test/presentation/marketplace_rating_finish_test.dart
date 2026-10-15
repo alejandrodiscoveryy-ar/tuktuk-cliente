@@ -144,6 +144,9 @@ void main() {
         service: service, session: _session,
       )));
       await _pump(tester);
+      // Historial se abre desde el menu; conservar la verificacion de calificacion.
+      await tester.tap(find.byTooltip('Abrir menú'));
+      await _pump(tester);
       await tester.tap(find.text('Historial'));
       await _pump(tester);
       expect(service.historyCalls, 1);
