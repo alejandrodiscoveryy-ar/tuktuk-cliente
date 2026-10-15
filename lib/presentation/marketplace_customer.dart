@@ -376,22 +376,26 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
         _service,
         existingSession,
       );
-      if (_editingExistingSession) return _editCustomerScreen();
-      return MarketplaceCustomerBookingFlow(
-        service: _service,
-        session: existingSession,
-        controller: _bookingFlow,
-        onSessionInvalid: _renewInvalidCustomerSession,
-        onEditCustomer: () => setState(() {
-          _resumeBookingStep = _bookingFlow!.step;
-          _editSessionToken = marketplaceCustomerSessionToken();
-          _editIdempotencyKey = _marketplaceUuid();
-          _nameController.text = existingSession.displayName ?? '';
-          _whatsappController.text = existingSession.whatsappPhone ?? '';
-          _emailController.text = existingSession.email ?? '';
-          _error = null;
-          _editingExistingSession = true;
-        }),
+      return Stack(
+        children: [
+          MarketplaceCustomerBookingFlow(
+            service: _service,
+            session: existingSession,
+            controller: _bookingFlow,
+            onSessionInvalid: _renewInvalidCustomerSession,
+            onEditCustomer: () => setState(() {
+              _resumeBookingStep = _bookingFlow!.step;
+              _editSessionToken = marketplaceCustomerSessionToken();
+              _editIdempotencyKey = _marketplaceUuid();
+              _nameController.text = existingSession.displayName ?? '';
+              _whatsappController.text = existingSession.whatsappPhone ?? '';
+              _emailController.text = existingSession.email ?? '';
+              _error = null;
+              _editingExistingSession = true;
+            }),
+          ),
+          if (_editingExistingSession) _editCustomerScreen(),
+        ],
       );
     }
 
@@ -563,197 +567,126 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
     );
   }
 
-  Widget _editCustomerScreen() => Scaffold(
-    body: SafeArea(
-      child: TuktukHavanaBackdrop(
-        showRelief: true,
-        child: Column(
-          children: [
-            const TuktukFlowHeader(step: 1),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) => SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(22, 14, 22, 18),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight - 32,
-                    ),
-                    child: IntrinsicHeight(
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
+  void _closeCustomerEditor() {
+    if (_loading) return;
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _editingExistingSession = false;
+      _resumeBookingStep = null;
+      _editSessionToken = null;
+      _editIdempotencyKey = null;
+      _error = null;
+    });
+  }
+
+  Widget _editCustomerScreen() => Positioned.fill(
+    child: Material(
+      color: const Color(0xB800070D),
+      child: SafeArea(
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              12,
+              10,
+              12,
+              MediaQuery.viewInsetsOf(context).bottom + 10,
+            ),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 540,
+                maxHeight: MediaQuery.sizeOf(context).height * .79,
+              ),
+              child: Material(
+                color: TuktukTheme.background,
+                borderRadius: BorderRadius.circular(25),
+                clipBehavior: Clip.antiAlias,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 17, 20, 22),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
                           children: [
-                            SizedBox(
-                              height: (constraints.maxHeight * .07)
-                                  .clamp(36.0, 58.0)
-                                  .toDouble(),
-                            ),
-                            const Text(
-                              'Edita tus datos',
-                              style: TextStyle(
-                                fontSize: 34,
-                                fontWeight: FontWeight.w900,
-                                height: 1.05,
-                                letterSpacing: -0.5,
+                            const Expanded(
+                              child: Text(
+                                'Mi perfil',
+                                style: TextStyle(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w900,
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Mantén actualizados tus datos de contacto.',
-                              style: TextStyle(
-                                color: TuktukTheme.muted,
-                                fontSize: 15.5,
-                                height: 1.35,
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            TextFormField(
-                              controller: _nameController,
-                              textInputAction: TextInputAction.next,
-                              autofillHints: const [AutofillHints.name],
-                              style: const TextStyle(
-                                fontSize: 18.5,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              decoration: InputDecoration(
-                                labelText: 'Nombre',
-                                hintText: 'Tu nombre',
-                                isDense: true,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 18,
-                                  vertical: 16,
-                                ),
-                                prefixIcon: const Icon(
-                                  Icons.person_outline_rounded,
-                                  color: TuktukTheme.mint,
-                                  size: 24,
-                                ),
-                                prefixIconConstraints: const BoxConstraints(
-                                  minWidth: 52,
-                                ),
-                                suffixIcon: IconButton(
-                                  tooltip: 'Limpiar',
-                                  onPressed: _nameController.clear,
-                                  icon: const Icon(
-                                    Icons.cancel_outlined,
-                                    size: 24,
-                                  ),
-                                ),
-                                suffixIconConstraints: const BoxConstraints(
-                                  minWidth: 48,
-                                ),
-                              ),
-                              validator: _validateName,
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _whatsappController,
-                              keyboardType: TextInputType.phone,
-                              autofillHints: const [
-                                AutofillHints.telephoneNumber,
-                              ],
-                              style: const TextStyle(
-                                fontSize: 18.5,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              decoration: InputDecoration(
-                                labelText: 'WhatsApp o teléfono',
-                                hintText: '+53 5 123 4567',
-                                isDense: true,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 18,
-                                  vertical: 16,
-                                ),
-                                prefixIcon: const Icon(
-                                  Icons.phone_outlined,
-                                  color: TuktukTheme.mint,
-                                  size: 24,
-                                ),
-                                prefixIconConstraints: const BoxConstraints(
-                                  minWidth: 52,
-                                ),
-                                suffixIcon: IconButton(
-                                  tooltip: 'Limpiar',
-                                  onPressed: _whatsappController.clear,
-                                  icon: const Icon(
-                                    Icons.cancel_outlined,
-                                    size: 24,
-                                  ),
-                                ),
-                                suffixIconConstraints: const BoxConstraints(
-                                  minWidth: 48,
-                                ),
-                              ),
-                              validator: _validateWhatsapp,
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _emailController,
-                              keyboardType: TextInputType.emailAddress,
-                              textInputAction: TextInputAction.done,
-                              autofillHints: const [AutofillHints.email],
-                              style: const TextStyle(
-                                fontSize: 18.5,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              decoration: InputDecoration(
-                                labelText: 'Correo electrónico (opcional)',
-                                hintText: 'nombre@ejemplo.com',
-                                isDense: true,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 18,
-                                  vertical: 16,
-                                ),
-                                prefixIcon: const Icon(
-                                  Icons.email_outlined,
-                                  color: TuktukTheme.mint,
-                                  size: 24,
-                                ),
-                                prefixIconConstraints: const BoxConstraints(
-                                  minWidth: 52,
-                                ),
-                                suffixIcon: IconButton(
-                                  tooltip: 'Limpiar',
-                                  onPressed: _emailController.clear,
-                                  icon: const Icon(
-                                    Icons.cancel_outlined,
-                                    size: 24,
-                                  ),
-                                ),
-                                suffixIconConstraints: const BoxConstraints(
-                                  minWidth: 48,
-                                ),
-                              ),
-                              validator: _validateEmail,
-                            ),
-                            if (_error != null) ...[
-                              const SizedBox(height: 14),
-                              TuktukGlassCard(
-                                padding: const EdgeInsets.all(14),
-                                borderColor: TuktukTheme.danger,
-                                child: Text(
-                                  _error!,
-                                  style: const TextStyle(
-                                    color: TuktukTheme.danger,
-                                  ),
-                                ),
-                              ),
-                            ],
-                            const Spacer(),
-                            TuktukPrimaryButton(
-                              label: _loading ? 'Guardando...' : 'Continuar',
-                              onPressed: _loading ? null : _continue,
+                            IconButton(
+                              tooltip: 'Cerrar perfil',
+                              onPressed: _loading ? null : _closeCustomerEditor,
+                              icon: const Icon(Icons.close_rounded),
                             ),
                           ],
                         ),
-                      ),
+                        const Text(
+                          'Actualiza tus datos sin salir del mapa.',
+                          style: TextStyle(color: TuktukTheme.muted),
+                        ),
+                        const SizedBox(height: 18),
+                        TextFormField(
+                          controller: _nameController,
+                          textInputAction: TextInputAction.next,
+                          autofillHints: const [AutofillHints.name],
+                          decoration: const InputDecoration(
+                            labelText: 'Nombre',
+                            prefixIcon: Icon(Icons.person_outline_rounded),
+                          ),
+                          validator: _validateName,
+                        ),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: _whatsappController,
+                          keyboardType: TextInputType.phone,
+                          autofillHints: const [AutofillHints.telephoneNumber],
+                          decoration: const InputDecoration(
+                            labelText: 'WhatsApp o teléfono',
+                            prefixIcon: Icon(Icons.phone_outlined),
+                          ),
+                          validator: _validateWhatsapp,
+                        ),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          autofillHints: const [AutofillHints.email],
+                          decoration: const InputDecoration(
+                            labelText: 'Correo electrónico (opcional)',
+                            prefixIcon: Icon(Icons.email_outlined),
+                          ),
+                          validator: _validateEmail,
+                        ),
+                        if (_error != null) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            _error!,
+                            style: const TextStyle(color: TuktukTheme.danger),
+                          ),
+                        ],
+                        const SizedBox(height: 20),
+                        TuktukPrimaryButton(
+                          label: _loading ? 'Guardando...' : 'Guardar datos',
+                          onPressed: _loading ? null : _continue,
+                        ),
+                        TextButton(
+                          onPressed: _loading ? null : _closeCustomerEditor,
+                          child: const Text('Volver al mapa'),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     ),
