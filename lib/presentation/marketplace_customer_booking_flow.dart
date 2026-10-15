@@ -430,10 +430,19 @@ class _MarketplaceCustomerBookingFlowState
       children: [
         const _TuktukBrandLockup(width: 126),
         const Spacer(),
-        IconButton.filledTonal(
+        IconButton(
           tooltip: 'Abrir menú',
           onPressed: _openCustomerMenu,
-          icon: const Icon(Icons.menu_rounded, color: TuktukTheme.mint),
+          style: IconButton.styleFrom(
+            backgroundColor: TuktukTheme.background,
+            foregroundColor: Colors.white,
+            side: const BorderSide(color: TuktukTheme.gold, width: 1.3),
+            minimumSize: const Size(48, 48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(15),
+            ),
+          ),
+          icon: const Icon(Icons.menu_rounded, size: 26),
         ),
       ],
     ),
