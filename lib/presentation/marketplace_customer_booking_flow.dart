@@ -41,8 +41,16 @@ String marketplacePassengerVehicleLabel(String code) => switch (code) {
   'bicitaxi' => 'Bicitaxi',
   'tricycle' => 'Triciclo',
   'light_car' => 'Auto',
+  'van' => 'Furgoneta',
+  'truck' => 'Camión',
+  'other' => 'Otro',
   _ => 'Vehículo',
 };
+
+@visibleForTesting
+const marketplaceCargoCourierVehicleCategories = <String>[
+  'light_car', 'bicitaxi', 'tricycle', 'motorcycle', 'van', 'truck', 'other',
+];
 
 class CustomerBookingFlowController extends ChangeNotifier {
   CustomerBookingFlowController(
@@ -76,11 +84,21 @@ class CustomerBookingFlowController extends ChangeNotifier {
   String publishIdempotencyKey = _marketplaceUuid();
   int _pricingRevision = 0;
   List<String> publishedPassengerCategories = marketplacePassengerVehicleCategories;
+  Map<String, List<String>> publishedCategoriesByService = const {};
   List<String> publishedServices = const ['passenger', 'courier', 'cargo'];
-  bool publicationReady = true;
+  bool publicationReady = false;
+  String cargoVehicleCategoryCode = 'light_car';
+  String courierVehicleCategoryCode = 'motorcycle';
 
-  // Lee el catalogo administrado; si no responde, no ofrece modalidades
-  // basandose en listas locales potencialmente desactualizadas.
+  String get selectedVehicleCategoryCode => switch (serviceCode) {
+    'passenger' => passengerVehicleCategoryCode,
+    'cargo' => cargoVehicleCategoryCode,
+    'courier' => courierVehicleCategoryCode,
+    _ => '',
+  };
+  List<String> categoriesForService(String service) =>
+      publishedCategoriesByService[service] ?? const [];
+
   Future<void> loadPublishedModalities() async {
     publicationReady = false;
     notifyListeners();
@@ -90,34 +108,58 @@ class CustomerBookingFlowController extends ChangeNotifier {
         params: {'target_project_slug': 'tuktuk-control'},
       );
       if (response is! List) throw StateError('MODALITY_CATALOG_INVALID');
-      final pairs = response.whereType<Map>();
-      final passenger = marketplacePassengerVehicleCategories.where((category) =>
-        pairs.any((r) => r['service_code'] == 'passenger' && r['vehicle_category_code'] == category)).toList();
-      final services = const ['passenger', 'courier', 'cargo'].where((service) =>
-        pairs.any((r) => r['service_code'] == service)).toList();
-      final changed = !passenger.contains(passengerVehicleCategoryCode) || !services.contains(serviceCode);
-      publishedPassengerCategories = passenger;
+      final pairs = response.whereType<Map>().toList();
+      final categoriesByService = <String, List<String>>{
+        for (final service in const ['passenger', 'courier', 'cargo'])
+          service: (service == 'passenger'
+                  ? marketplacePassengerVehicleCategories
+                  : marketplaceCargoCourierVehicleCategories)
+              .where((category) => pairs.any((r) =>
+                  r['service_code'] == service &&
+                  r['vehicle_category_code'] == category))
+              .toList(growable: false),
+      };
+      final services = const ['passenger', 'courier', 'cargo']
+          .where((service) => categoriesByService[service]!.isNotEmpty)
+          .toList(growable: false);
+      final prevService = serviceCode, prevCategory = selectedVehicleCategoryCode;
+      publishedCategoriesByService = categoriesByService;
+      publishedPassengerCategories = categoriesByService['passenger']!;
       publishedServices = services;
-      if (!services.contains(serviceCode) && services.isNotEmpty) serviceCode = services.first;
-      if (!passenger.contains(passengerVehicleCategoryCode) && passenger.isNotEmpty) {
-        passengerVehicleCategoryCode = passenger.first;
+      if (!services.contains(serviceCode) && services.isNotEmpty) {
+        serviceCode = services.first;
+      }
+      if (!publishedPassengerCategories.contains(passengerVehicleCategoryCode) &&
+          publishedPassengerCategories.isNotEmpty) {
+        passengerVehicleCategoryCode = publishedPassengerCategories.first;
+      }
+      final cargo = categoriesByService['cargo']!;
+      if (!cargo.contains(cargoVehicleCategoryCode) && cargo.isNotEmpty) {
+        cargoVehicleCategoryCode = cargo.first;
+      }
+      final courier = categoriesByService['courier']!;
+      if (!courier.contains(courierVehicleCategoryCode) && courier.isNotEmpty) {
+        courierVehicleCategoryCode = courier.first;
       }
       publicationReady = true;
       error = services.isEmpty ? 'No hay modalidades publicadas en este momento.' : null;
       notifyListeners();
-      if (changed && origin != null && destination != null) {
+      if (origin != null && destination != null &&
+          (prevService != serviceCode || prevCategory != selectedVehicleCategoryCode)) {
         await refreshRoute();
       }
     } catch (_) {
       publicationReady = false;
+      publishedCategoriesByService = const {};
       publishedPassengerCategories = const [];
       publishedServices = const [];
       error = 'No podemos comprobar las modalidades disponibles. Reintenta.';
       notifyListeners();
     }
   }
-
   Map<String, dynamic> get pricing => {
+    'service_code': serviceCode,
+    'scheduled_for': scheduledFor?.toUtc().toIso8601String(),
     'passenger_count': passengerCount,
     'stop_count': stopCount,
     'urgent': urgent,
@@ -125,14 +167,12 @@ class CustomerBookingFlowController extends ChangeNotifier {
     'unload_help': unloadHelp,
     'cargo_weight_kg': cargoWeightKg,
     'cargo_volume_m3': cargoVolumeM3,
-    'vehicle_category_code': serviceCode == 'passenger'
-        ? passengerVehicleCategoryCode
-        : null,
+    'vehicle_category_code': selectedVehicleCategoryCode,
   };
 
   Map<String, dynamic>? get selectedPrice =>
       !publicationReady || !publishedServices.contains(serviceCode) ||
-      (serviceCode == 'passenger' && !publishedPassengerCategories.contains(passengerVehicleCategoryCode))
+      !categoriesForService(serviceCode).contains(selectedVehicleCategoryCode)
       ? null :
       serviceCode == 'cargo' && cargoWeightKg == null && cargoVolumeM3 == null
       ? null
@@ -195,9 +235,24 @@ class CustomerBookingFlowController extends ChangeNotifier {
   }
 
   void setService(String value) {
-    if (!publicationReady || !publishedServices.contains(value)) return;
+    if (!publicationReady || !publishedServices.contains(value) || value == serviceCode) return;
     serviceCode = value;
     notifyListeners();
+    unawaited(reprice());
+  }
+
+  void setServiceVehicleCategory(String value) {
+    if (!publicationReady ||
+        !categoriesForService(serviceCode).contains(value) ||
+        value == selectedVehicleCategoryCode) return;
+    if (serviceCode == 'passenger') {
+      setPassengerVehicleCategory(value);
+      return;
+    }
+    if (serviceCode == 'cargo') cargoVehicleCategoryCode = value;
+    if (serviceCode == 'courier') courierVehicleCategoryCode = value;
+    notifyListeners();
+    unawaited(reprice());
   }
 
   void setPassengerVehicleCategory(String value) {
@@ -279,7 +334,7 @@ class CustomerBookingFlowController extends ChangeNotifier {
   Future<MarketplaceCustomerRequestDraft> submit() async {
     final start = origin, end = destination, current = route;
     if (!publicationReady || !publishedServices.contains(serviceCode) ||
-        (serviceCode == 'passenger' && !publishedPassengerCategories.contains(passengerVehicleCategoryCode))) {
+        !categoriesForService(serviceCode).contains(selectedVehicleCategoryCode)) {
       throw StateError('MODALITY_NOT_PUBLISHED');
     }
     if (start == null ||
@@ -305,9 +360,7 @@ class CustomerBookingFlowController extends ChangeNotifier {
           'target_passenger_count': serviceCode == 'passenger'
               ? passengerCount
               : null,
-          'target_vehicle_category_code': serviceCode == 'passenger'
-              ? passengerVehicleCategoryCode
-              : null,
+          'target_vehicle_category_code': selectedVehicleCategoryCode,
           'target_cargo_weight_kg': cargoWeightKg,
           'target_cargo_volume_m3': cargoVolumeM3,
           'target_cargo_length_cm': null,
@@ -1243,6 +1296,22 @@ class _MarketplaceCustomerBookingFlowState
             priceLabel: (category) =>
                 _priceLabel(_passengerPrice(category), 'passenger'),
             onSelected: flow.setPassengerVehicleCategory,
+          ),
+        ],
+        if (flow.publicationReady && flow.serviceCode != 'passenger') ...[
+          const SizedBox(height: 9),
+          const Text('Tipo de vehículo', style: TextStyle(fontWeight: FontWeight.w800)),
+          Wrap(
+            spacing: 7,
+            runSpacing: 6,
+            children: [
+              for (final category in flow.categoriesForService(flow.serviceCode))
+                ChoiceChip(
+                  label: Text(marketplacePassengerVehicleLabel(category)),
+                  selected: flow.selectedVehicleCategoryCode == category,
+                  onSelected: (_) => flow.setServiceVehicleCategory(category),
+                ),
+            ],
           ),
         ],
         const SizedBox(height: 6),

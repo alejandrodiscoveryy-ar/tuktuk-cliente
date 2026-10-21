@@ -62,6 +62,15 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  test('Carga y Mensajeria usan la categoria publicada en el precio y solicitud', () {
+    final source = File('lib/presentation/marketplace_customer_booking_flow.dart').readAsStringSync();
+    expect(source, contains("'service_code': serviceCode"));
+    expect(source, contains("'vehicle_category_code': selectedVehicleCategoryCode"));
+    expect(source, contains("'target_vehicle_category_code': selectedVehicleCategoryCode"));
+    expect(source, contains('publishedCategoriesByService'));
+    expect(source, contains('onSelected: (_) => flow.setServiceVehicleCategory(category)'));
+  });
+
   testWidgets('ancho pequeno adapta a 2 x 2 sin ocultar vehiculos', (
     tester,
   ) async {
