@@ -68,7 +68,8 @@ void main() {
     expect(source, contains("'vehicle_category_code': selectedVehicleCategoryCode"));
     expect(source, contains("'target_vehicle_category_code': selectedVehicleCategoryCode"));
     expect(source, contains('publishedCategoriesByService'));
-    expect(source, contains('onSelected: (_) => flow.setServiceVehicleCategory(category)'));
+    expect(source, contains('_premiumServiceVehicleChoice(category)'));
+    expect(source, contains('onTap: () => flow.setServiceVehicleCategory(category)'));
   });
 
   testWidgets('ancho pequeno adapta a 2 x 2 sin ocultar vehiculos', (
