@@ -16,6 +16,7 @@ void main() {
     double width,
     ValueChanged<String> select, {
     String selected = 'motorcycle',
+    List<String> categories = marketplacePassengerVehicleCategories,
   }) => MaterialApp(
     home: Scaffold(
       body: Center(
@@ -23,6 +24,7 @@ void main() {
           width: width,
           child: MarketplaceCompactVehicleSelector(
             selectedCategory: selected,
+            categories: categories,
             priceLabel: (category) => prices[category]!,
             onSelected: select,
           ),
@@ -50,6 +52,13 @@ void main() {
     await tester.tap(find.byKey(const Key('vehicle-tricycle')));
     await tester.pump();
     expect(chosen, 'tricycle');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('no muestra Bicitaxi cuando el administrador no lo publica', (tester) async {
+    await tester.pumpWidget(preview(350, (_) {}, categories: const ['motorcycle', 'tricycle', 'light_car']));
+    expect(find.byKey(const Key('vehicle-bicitaxi')), findsNothing);
+    expect(find.byKey(const Key('vehicle-tricycle')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

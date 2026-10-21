@@ -75,6 +75,47 @@ class CustomerBookingFlowController extends ChangeNotifier {
   String idempotencyKey = _marketplaceUuid();
   String publishIdempotencyKey = _marketplaceUuid();
   int _pricingRevision = 0;
+  List<String> publishedPassengerCategories = marketplacePassengerVehicleCategories;
+  List<String> publishedServices = const ['passenger', 'courier', 'cargo'];
+  bool publicationReady = true;
+
+  // Lee el catalogo administrado; si no responde, no ofrece modalidades
+  // basandose en listas locales potencialmente desactualizadas.
+  Future<void> loadPublishedModalities() async {
+    publicationReady = false;
+    notifyListeners();
+    try {
+      final response = await Supabase.instance.client.rpc(
+        'list_marketplace_published_modalities',
+        params: {'target_project_slug': 'tuktuk-control'},
+      );
+      if (response is! List) throw StateError('MODALITY_CATALOG_INVALID');
+      final pairs = response.whereType<Map>();
+      final passenger = marketplacePassengerVehicleCategories.where((category) =>
+        pairs.any((r) => r['service_code'] == 'passenger' && r['vehicle_category_code'] == category)).toList();
+      final services = const ['passenger', 'courier', 'cargo'].where((service) =>
+        pairs.any((r) => r['service_code'] == service)).toList();
+      final changed = !passenger.contains(passengerVehicleCategoryCode) || !services.contains(serviceCode);
+      publishedPassengerCategories = passenger;
+      publishedServices = services;
+      if (!services.contains(serviceCode) && services.isNotEmpty) serviceCode = services.first;
+      if (!passenger.contains(passengerVehicleCategoryCode) && passenger.isNotEmpty) {
+        passengerVehicleCategoryCode = passenger.first;
+      }
+      publicationReady = true;
+      error = services.isEmpty ? 'No hay modalidades publicadas en este momento.' : null;
+      notifyListeners();
+      if (changed && origin != null && destination != null) {
+        await refreshRoute();
+      }
+    } catch (_) {
+      publicationReady = false;
+      publishedPassengerCategories = const [];
+      publishedServices = const [];
+      error = 'No podemos comprobar las modalidades disponibles. Reintenta.';
+      notifyListeners();
+    }
+  }
 
   Map<String, dynamic> get pricing => {
     'passenger_count': passengerCount,
@@ -90,6 +131,9 @@ class CustomerBookingFlowController extends ChangeNotifier {
   };
 
   Map<String, dynamic>? get selectedPrice =>
+      !publicationReady || !publishedServices.contains(serviceCode) ||
+      (serviceCode == 'passenger' && !publishedPassengerCategories.contains(passengerVehicleCategoryCode))
+      ? null :
       serviceCode == 'cargo' && cargoWeightKg == null && cargoVolumeM3 == null
       ? null
       : serviceCode == 'passenger'
@@ -151,12 +195,13 @@ class CustomerBookingFlowController extends ChangeNotifier {
   }
 
   void setService(String value) {
+    if (!publicationReady || !publishedServices.contains(value)) return;
     serviceCode = value;
     notifyListeners();
   }
 
   void setPassengerVehicleCategory(String value) {
-    if (!marketplacePassengerVehicleCategories.contains(value) ||
+    if (!publicationReady || !publishedPassengerCategories.contains(value) ||
         passengerVehicleCategoryCode == value) {
       return;
     }
@@ -233,6 +278,10 @@ class CustomerBookingFlowController extends ChangeNotifier {
 
   Future<MarketplaceCustomerRequestDraft> submit() async {
     final start = origin, end = destination, current = route;
+    if (!publicationReady || !publishedServices.contains(serviceCode) ||
+        (serviceCode == 'passenger' && !publishedPassengerCategories.contains(passengerVehicleCategoryCode))) {
+      throw StateError('MODALITY_NOT_PUBLISHED');
+    }
     if (start == null ||
         end == null ||
         current == null ||
@@ -333,6 +382,7 @@ class _MarketplaceCustomerBookingFlowState
           widget.session,
         );
     _ownsFlow = widget.controller == null;
+    if (kIsWeb) unawaited(flow.loadPublishedModalities());
     noteController.text = flow.note;
     weightController.text = flow.cargoWeightKg?.toString() ?? '';
     volumeController.text = flow.cargoVolumeM3?.toString() ?? '';
@@ -1174,16 +1224,22 @@ class _MarketplaceCustomerBookingFlowState
         const SizedBox(height: 9),
         Row(
           children: [
-            for (final code in const ['passenger', 'courier', 'cargo']) ...[
+            for (final code in flow.publishedServices) ...[
               if (code != 'passenger') const SizedBox(width: 7),
               Expanded(child: _floatingServiceChoice(code)),
             ],
           ],
         ),
-        if (flow.serviceCode == 'passenger') ...[
+        if (!flow.publicationReady)
+          TextButton(
+            onPressed: () => unawaited(flow.loadPublishedModalities()),
+            child: const Text('Reintentar cargar modalidades'),
+          ),
+        if (flow.publicationReady && flow.serviceCode == 'passenger') ...[
           const SizedBox(height: 9),
           MarketplaceCompactVehicleSelector(
             selectedCategory: flow.passengerVehicleCategoryCode,
+            categories: flow.publishedPassengerCategories,
             priceLabel: (category) =>
                 _priceLabel(_passengerPrice(category), 'passenger'),
             onSelected: flow.setPassengerVehicleCategory,
@@ -1871,12 +1927,14 @@ class _MarketplaceCustomerBookingFlowState
 class MarketplaceCompactVehicleSelector extends StatelessWidget {
   const MarketplaceCompactVehicleSelector({
     required this.selectedCategory,
+    this.categories = marketplacePassengerVehicleCategories,
     required this.priceLabel,
     required this.onSelected,
     super.key,
   });
 
   final String selectedCategory;
+  final List<String> categories;
   final String Function(String category) priceLabel;
   final ValueChanged<String> onSelected;
 
@@ -1891,6 +1949,7 @@ class MarketplaceCompactVehicleSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
+      if (categories.isEmpty) return const SizedBox.shrink();
       // En telefonos normales los cuatro se ven a la vez; en anchos
       // realmente estrechos se organizan en una cuadricula 2 x 2.
       final columns = constraints.maxWidth < 335 ? 2 : 4;
@@ -1902,7 +1961,7 @@ class MarketplaceCompactVehicleSelector extends StatelessWidget {
         spacing: gap,
         runSpacing: gap,
         children: [
-          for (final category in marketplacePassengerVehicleCategories)
+          for (final category in categories)
             SizedBox(width: width, child: _tile(category)),
         ],
       );
