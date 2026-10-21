@@ -235,7 +235,11 @@ class CustomerBookingFlowController extends ChangeNotifier {
   }
 
   void setService(String value) {
-    if (!publicationReady || !publishedServices.contains(value) || value == serviceCode) return;
+    if (!publicationReady ||
+        !publishedServices.contains(value) ||
+        value == serviceCode) {
+      return;
+    }
     serviceCode = value;
     notifyListeners();
     unawaited(reprice());
@@ -244,13 +248,19 @@ class CustomerBookingFlowController extends ChangeNotifier {
   void setServiceVehicleCategory(String value) {
     if (!publicationReady ||
         !categoriesForService(serviceCode).contains(value) ||
-        value == selectedVehicleCategoryCode) return;
+        value == selectedVehicleCategoryCode) {
+      return;
+    }
     if (serviceCode == 'passenger') {
       setPassengerVehicleCategory(value);
       return;
     }
-    if (serviceCode == 'cargo') cargoVehicleCategoryCode = value;
-    if (serviceCode == 'courier') courierVehicleCategoryCode = value;
+    if (serviceCode == 'cargo') {
+      cargoVehicleCategoryCode = value;
+    }
+    if (serviceCode == 'courier') {
+      courierVehicleCategoryCode = value;
+    }
     notifyListeners();
     unawaited(reprice());
   }
