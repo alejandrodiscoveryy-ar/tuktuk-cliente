@@ -76,6 +76,10 @@ void main() {
       ),
     );
 
+    flow.publicationReady = true;
+    flow.publishedCategoriesByService = {
+      'passenger': marketplacePassengerVehicleCategories,
+    };
     flow.setPassengerVehicleCategory('tricycle');
 
     expect(flow.passengerVehicleCategoryCode, 'tricycle');
@@ -95,6 +99,13 @@ void main() {
         MarketplaceMapPoint(label: 'Destino', lat: 23.2, lon: -82.4);
     flow.setOrigin(origin);
     flow.setDestination(destination);
+    flow.publicationReady = true;
+    flow.publishedServices = const ['passenger', 'courier', 'cargo'];
+    flow.publishedCategoriesByService = {
+      'passenger': marketplacePassengerVehicleCategories,
+      'courier': marketplaceCargoCourierVehicleCategories,
+      'cargo': marketplaceCargoCourierVehicleCategories,
+    };
     flow.setService('courier');
     flow.setStep(MarketplaceBookingStep.origin);
     expect(flow.origin, origin);

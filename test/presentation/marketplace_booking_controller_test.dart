@@ -135,6 +135,13 @@ void main() {
         token: 'token',
       ),
     );
+    flow.publicationReady = true;
+    flow.publishedServices = const ['passenger', 'courier', 'cargo'];
+    flow.publishedCategoriesByService = {
+      'passenger': marketplacePassengerVehicleCategories,
+      'courier': marketplaceCargoCourierVehicleCategories,
+      'cargo': marketplaceCargoCourierVehicleCategories,
+    };
   });
 
   tearDown(() {

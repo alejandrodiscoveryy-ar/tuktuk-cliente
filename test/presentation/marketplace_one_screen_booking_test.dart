@@ -76,6 +76,10 @@ void main() {
         token: 't',
       ),
     );
+    flow.publicationReady = true;
+    flow.publishedCategoriesByService = {
+      'passenger': marketplacePassengerVehicleCategories,
+    };
     flow.setPassengerVehicleCategory('tricycle');
     flow.passengerCount = 3;
     flow.setPassengerVehicleCategory('motorcycle');

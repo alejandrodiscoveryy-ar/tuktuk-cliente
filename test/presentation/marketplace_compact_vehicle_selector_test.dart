@@ -16,6 +16,7 @@ void main() {
     double width,
     ValueChanged<String> select, {
     String selected = 'motorcycle',
+    List<String> categories = marketplacePassengerVehicleCategories,
   }) => MaterialApp(
     home: Scaffold(
       body: Center(
@@ -23,6 +24,7 @@ void main() {
           width: width,
           child: MarketplaceCompactVehicleSelector(
             selectedCategory: selected,
+            categories: categories,
             priceLabel: (category) => prices[category]!,
             onSelected: select,
           ),
@@ -51,6 +53,22 @@ void main() {
     await tester.pump();
     expect(chosen, 'tricycle');
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('no muestra Bicitaxi cuando el administrador no lo publica', (tester) async {
+    await tester.pumpWidget(preview(350, (_) {}, categories: const ['motorcycle', 'tricycle', 'light_car']));
+    expect(find.byKey(const Key('vehicle-bicitaxi')), findsNothing);
+    expect(find.byKey(const Key('vehicle-tricycle')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  test('Carga y Mensajeria usan la categoria publicada en el precio y solicitud', () {
+    final source = File('lib/presentation/marketplace_customer_booking_flow.dart').readAsStringSync();
+    expect(source, contains("'service_code': serviceCode"));
+    expect(source, contains("'vehicle_category_code': selectedVehicleCategoryCode"));
+    expect(source, contains("'target_vehicle_category_code': selectedVehicleCategoryCode"));
+    expect(source, contains('publishedCategoriesByService'));
+    expect(source, contains('onSelected: (_) => flow.setServiceVehicleCategory(category)'));
   });
 
   testWidgets('ancho pequeno adapta a 2 x 2 sin ocultar vehiculos', (
