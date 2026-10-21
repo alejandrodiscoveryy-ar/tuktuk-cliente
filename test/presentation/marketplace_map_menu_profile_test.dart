@@ -10,7 +10,7 @@ void main() {
     expect(code, contains('DraggableScrollableSheet('));
     expect(code, contains('Widget _floatingBookingPanel()'));
     expect(code, contains('Widget _destinationSearchPrompt()'));
-    expect(code, contains('onPointTap: _selectingOrigin == null'));
+    expect(code, contains('onPointTap: flow.origin == null && _selectingOrigin == null'));
     expect(code, contains('route?.routePoints'));
     expect(code, contains('publishJob('));
     expect(code, contains('saveActiveJobId('));

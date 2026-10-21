@@ -647,8 +647,12 @@ class _MarketplaceCustomerTrackingScreenState
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(17, 10, 17, 14),
       decoration: const BoxDecoration(
-        color: TuktukTheme.background,
-        border: Border(top: BorderSide(color: TuktukTheme.border)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xF018333C), Color(0xF5081720)],
+        ),
+        border: Border(top: BorderSide(color: Color(0x8866A5AB))),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -696,7 +700,11 @@ class _MarketplaceCustomerTrackingScreenState
     final terminal = job.isTerminal;
     return Container(
       decoration: BoxDecoration(
-        color: TuktukTheme.background.withValues(alpha: .98),
+                gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xE8173742), Color(0xEC081720)],
+        ),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
         border: Border.all(color: TuktukTheme.border),
       ),

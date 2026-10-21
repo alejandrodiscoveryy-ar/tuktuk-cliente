@@ -59,7 +59,7 @@ void main() {
     expect(source, contains('? _submit'));
     expect(source, contains('Widget _floatingBookingPanel()'));
     expect(source, contains('MarketplaceVectorMap('));
-    expect(source, contains('onPointTap: _selectingOrigin == null'));
+    expect(source, contains('onPointTap: flow.origin == null && _selectingOrigin == null'));
     expect(source, contains('_floatingPlaceSelection()'));
     expect(source, contains('publishJob('));
     expect(source, contains('saveActiveJobId('));
