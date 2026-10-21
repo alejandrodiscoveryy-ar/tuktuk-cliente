@@ -62,7 +62,7 @@ void main() {
     final source = File(
       'lib/presentation/marketplace_customer_booking_flow.dart',
     ).readAsStringSync();
-    expect(source, contains('TuktukTheme.background.withValues(alpha: .72)'));
+    expect(source, contains('Color(0xEA0F2831)'));
     expect(source, contains('TuktukTheme.background.withValues(alpha: .80)'));
     expect(source, contains('TuktukTheme.background.withValues(alpha: .77)'));
     expect(source, contains('Widget _floatingQuoteOptions()'));

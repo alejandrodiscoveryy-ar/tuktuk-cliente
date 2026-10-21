@@ -734,7 +734,9 @@ class _MarketplaceCustomerBookingFlowState
   }
 
   Future<void> _pickMapPoint(LatLng coordinates) async {
-    final selectingOrigin = _selectingOrigin;
+    // Con la recogida conocida, un toque normal marca o cambia el destino.
+    // El modo explicito de edicion de recogida mantiene prioridad.
+    final selectingOrigin = _selectingOrigin ?? (flow.origin == null ? null : false);
     if (selectingOrigin == null || _resolvingMapPoint) return;
     setState(() => _resolvingMapPoint = true);
     var point = MarketplaceMapPoint(
@@ -749,7 +751,7 @@ class _MarketplaceCustomerBookingFlowState
     } finally {
       if (mounted) setState(() => _resolvingMapPoint = false);
     }
-    if (!mounted || _selectingOrigin != selectingOrigin) return;
+    if (!mounted || (_selectingOrigin ?? (flow.origin == null ? null : false)) != selectingOrigin) return;
     _commitPlace(point, selectingOrigin);
   }
 
@@ -769,7 +771,15 @@ class _MarketplaceCustomerBookingFlowState
     if (a == null || b == null || !mounted) {
       return;
     }
-    _mapCenter.value = LatLng((a.lat + b.lat) / 2, (a.lon + b.lon) / 2);
+    final latitude = (a.lat + b.lat) / 2;
+    final longitude = (a.lon + b.lon) / 2;
+    final zoom = _mapRequestedZoom;
+    final degreesPerPixel = 360.0 * cos(latitude * pi / 180.0) /
+        (512.0 * pow(2.0, zoom).toDouble());
+    final screen = MediaQuery.sizeOf(context);
+    final visualOffset = (screen.height * .13).clamp(45.0, 165.0);
+    // Desplaza los puntos al espacio libre entre encabezado y ficha inferior.
+    _mapCenter.value = LatLng(latitude - degreesPerPixel * visualOffset, longitude);
   } // Se intenta una sola vez al abrir. Si GPS o permisos fallan, la entrada
 
   // manual sigue disponible. Nunca sustituye una recogida elegida por el usuario.
@@ -962,7 +972,7 @@ class _MarketplaceCustomerBookingFlowState
                     destinationPoint: destination,
                     routePoints:
                         route?.routePoints ?? const <MarketplaceMapPoint>[],
-                    onPointTap: _selectingOrigin == null ? null : _pickMapPoint,
+                    onPointTap: flow.origin == null && _selectingOrigin == null ? null : _pickMapPoint,
                   ),
           ),
           const Positioned.fill(
@@ -1107,21 +1117,28 @@ class _MarketplaceCustomerBookingFlowState
                       : 'cotizacion',
         ),
         expand: false,
-        initialChildSize: flow.destination == null ? .36 : .58,
+        initialChildSize: flow.destination == null ? .36 : .64,
         minChildSize: .26,
         maxChildSize: .96,
         snap: true,
-        snapSizes: const [.58],
+        snapSizes: const [.64],
         builder: (context, scroller) => Container(
           decoration: BoxDecoration(
-            color: TuktukTheme.background.withValues(alpha: .72),
+                        gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xEA0F2831), Color(0xF0081720)],
+            ),
             border: Border.all(color: TuktukTheme.border),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(27)),
             boxShadow: const [
               BoxShadow(color: Color(0x64000000), blurRadius: 22)
             ],
           ),
-          child: ListView(
+          child: Column(
+            children: [
+              Expanded(
+                child: ListView(
             controller: scroller,
             padding: const EdgeInsets.fromLTRB(15, 10, 15, 20),
             children: [
@@ -1150,11 +1167,52 @@ class _MarketplaceCustomerBookingFlowState
                 _destinationSearchPrompt()
               else
                 _floatingQuoteOptions(),
+                  ],
+                ),
+              ),
+              if (flow.origin != null && flow.destination != null && _selectingOrigin == null)
+                _quoteStickyFooter(),
             ],
           ),
         ),
       );
 
+  Widget _quoteStickyFooter() {
+    final price = _priceLabel(flow.selectedPrice, flow.serviceCode);
+    final enabled = flow.route != null && flow.selectedPrice != null &&
+        !flow.loading && !_publishing;
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xF018333C), Color(0xF5081720)],
+        ),
+        border: Border(top: BorderSide(color: Color(0x8866A5AB))),
+      ),
+      padding: const EdgeInsets.fromLTRB(15, 8, 15, 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Text('Estimado', style: TextStyle(color: TuktukTheme.muted,
+                  fontWeight: FontWeight.w700)),
+              const Spacer(),
+              Text(price, style: const TextStyle(color: TuktukTheme.gold,
+                  fontSize: 18, fontWeight: FontWeight.w900)),
+            ],
+          ),
+          const SizedBox(height: 7),
+          TuktukPrimaryButton(
+            onPressed: enabled ? _submit : null,
+            label: _publishing ? 'Publicando...' : 'Solicitar transporte',
+          ),
+        ],
+      ),
+    );
+  }
   Widget _destinationSearchPrompt() => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1162,7 +1220,10 @@ class _MarketplaceCustomerBookingFlowState
             '¿A dónde vamos?',
             style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
+          const Text('Toca el mapa para indicar tu destino.',
+              style: TextStyle(fontSize: 13, color: TuktukTheme.muted)),
+          const SizedBox(height: 10),
           Material(
             color: TuktukTheme.surface.withValues(alpha: .95),
             borderRadius: BorderRadius.circular(16),
@@ -1288,7 +1349,7 @@ class _MarketplaceCustomerBookingFlowState
 
   Widget _floatingQuoteOptions() {
     final route = flow.route;
-    final price = _priceLabel(flow.selectedPrice, flow.serviceCode);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1340,15 +1401,20 @@ class _MarketplaceCustomerBookingFlowState
             'Tipo de vehículo',
             style: TextStyle(fontWeight: FontWeight.w800),
           ),
-          Wrap(
-            spacing: 7,
-            runSpacing: 6,
-            children: [
-              for (final category in flow.categoriesForService(
-                flow.serviceCode,
-              ))
-                _premiumServiceVehicleChoice(category),
-            ],
+          LayoutBuilder(
+            builder: (context, available) {
+              final columns = available.maxWidth < 280 ? 2 : 3;
+              const gap = 6.0;
+              final tileWidth = (available.maxWidth - gap * (columns - 1)) / columns;
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                children: [
+                  for (final category in flow.categoriesForService(flow.serviceCode))
+                    SizedBox(width: tileWidth, child: _premiumServiceVehicleChoice(category)),
+                ],
+              );
+            },
           ),
         ],
         const SizedBox(height: 6),
@@ -1369,70 +1435,48 @@ class _MarketplaceCustomerBookingFlowState
             'Indica peso o volumen en Más opciones para cotizar.',
             style: TextStyle(color: TuktukTheme.muted),
           ),
-        const SizedBox(height: 5),
-        Text(
-          'Estimado: $price',
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w900,
-            color: TuktukTheme.gold,
-          ),
-        ),
-        const SizedBox(height: 7),
-        TuktukPrimaryButton(
-          onPressed: route != null &&
-                  flow.selectedPrice != null &&
-                  !flow.loading &&
-                  !_publishing
-              ? _submit
-              : null,
-          label: _publishing ? 'Publicando...' : 'Solicitar transporte',
-        ),
+        const SizedBox(height: 4),
       ],
     );
   }
 
   Widget _premiumServiceVehicleChoice(String category) {
     final selected = flow.selectedVehicleCategoryCode == category;
-    final label = marketplacePassengerVehicleLabel(category);
+    final title = marketplacePassengerVehicleLabel(category);
+    final price = selected && flow.selectedPrice != null
+        ? _priceLabel(flow.selectedPrice, flow.serviceCode)
+        : '';
     return Semantics(
       button: true,
       selected: selected,
-      label: 'Vehículo $label',
+      label: price.isEmpty ? title : '$title. Precio $price',
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: () => flow.setServiceVehicleCategory(category),
-          borderRadius: BorderRadius.circular(17),
+          borderRadius: BorderRadius.circular(15),
           child: _MarineCardSurface(
             selected: selected,
-            radius: 17,
-            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
+            radius: 15,
+            height: 84,
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                Icon(
-                  _marineVehicleIcon(category),
-                  size: 20,
-                  color: selected ? TuktukTheme.gold : TuktukTheme.mintSoft,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    color: selected ? TuktukTheme.text : TuktukTheme.muted,
+                Icon(_marineVehicleIcon(category), size: 20,
+                    color: selected ? TuktukTheme.gold : TuktukTheme.mint),
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+                SizedBox(
+                  height: 15,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(price, maxLines: 1,
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800,
+                            color: selected ? TuktukTheme.gold : TuktukTheme.muted)),
                   ),
                 ),
-                if (selected) ...[
-                  const SizedBox(width: 7),
-                  const Icon(
-                    Icons.check_circle_rounded,
-                    size: 16,
-                    color: TuktukTheme.gold,
-                  ),
-                ],
               ],
             ),
           ),
@@ -1440,7 +1484,6 @@ class _MarketplaceCustomerBookingFlowState
       ),
     );
   }
-
   Widget _floatingServiceChoice(String code) {
     final selected = flow.serviceCode == code;
     return InkWell(
@@ -2100,7 +2143,7 @@ class MarketplaceCompactVehicleSelector extends StatelessWidget {
           if (categories.isEmpty) return const SizedBox.shrink();
           // En telefonos normales los cuatro se ven a la vez; en anchos
           // realmente estrechos se organizan en una cuadricula 2 x 2.
-          final columns = constraints.maxWidth < 335 ? 2 : 4;
+          final columns = constraints.maxWidth < 300 ? 2 : constraints.maxWidth < 335 ? 3 : 4;
           const gap = 6.0;
           final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
 
