@@ -100,7 +100,7 @@ void main() {
     expect(find.byType(AlertDialog), findsNothing);
     expect(service.finishCalls, 0);
     expect(service.ratingCalls, 0);
-    await tester.tap(find.byTooltip('Cerrar calificaciÃ³n'));
+    await tester.tap(find.byTooltip('Cerrar calificación'));
     await _pump(tester);
     expect(service.status, 'in_progress');
     expect(service.rating, isNull);
