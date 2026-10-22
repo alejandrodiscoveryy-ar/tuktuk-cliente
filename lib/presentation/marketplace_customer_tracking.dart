@@ -32,6 +32,8 @@ class _MarketplaceCustomerTrackingScreenState
   bool _refreshing = false;
   bool _cancelling = false;
   bool _finishing = false;
+  final ValueNotifier<double> _trackingMapInset = ValueNotifier<double>(0);
+  double _trackingSheetFraction = .32;
 
   String? _error;
   String? _cancelPayloadSignature;
@@ -49,6 +51,7 @@ class _MarketplaceCustomerTrackingScreenState
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _trackingMapInset.dispose();
     super.dispose();
   }
 
@@ -522,6 +525,7 @@ class _MarketplaceCustomerTrackingScreenState
             (origin.lon + destination.lon) / 2,
           ),
           initialZoom: zoom,
+          ornamentBottomInset: _trackingMapInset,
           originPoint: origin,
           destinationPoint: destination,
           routePoints: points,
@@ -758,7 +762,11 @@ class _MarketplaceCustomerTrackingScreenState
                   if (job.status == 'published' ||
                       job.status == 'requested') ...[
                     const SizedBox(height: 11),
-                    const LinearProgressIndicator(),
+                    const LinearProgressIndicator(
+                      minHeight: 3,
+                      color: TuktukTheme.mint,
+                      backgroundColor: TuktukTheme.border,
+                    ),
                   ],
                   if (job.hasAssignedDriver) ...[
                     const SizedBox(height: 12),
@@ -840,6 +848,11 @@ class _MarketplaceCustomerTrackingScreenState
   @override
   Widget build(BuildContext context) {
     final job = _job;
+    final searching = job?.status == 'published' || job?.status == 'requested';
+    final assigned = job != null && const {
+      'accepted', 'en_route', 'pickup'
+    }.contains(job.status);
+    final initialSheetSize = searching ? .32 : assigned ? .37 : .40;
     return PopScope(
       canPop: false,
       child: Scaffold(
@@ -847,16 +860,9 @@ class _MarketplaceCustomerTrackingScreenState
         body: SafeArea(
           child: Stack(
             children: [
-              Positioned.fill(
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: FractionallySizedBox(
-                    widthFactor: 1,
-                    heightFactor: .61,
-                    child: _liveMap(),
-                  ),
-                ),
-              ),
+              // El mapa ocupa todo el fondo; la ficha flota sobre el.
+              // Nunca recortar el mapa a la altura de la ficha.
+              Positioned.fill(child: _liveMap()),
               const Positioned.fill(
                 child: IgnorePointer(
                   child: DecoratedBox(
@@ -910,14 +916,25 @@ class _MarketplaceCustomerTrackingScreenState
               else
                 Align(
                   alignment: Alignment.bottomCenter,
-                  child: DraggableScrollableSheet(
-                    initialChildSize: .41,
-                    minChildSize: .41,
-                    maxChildSize: .84,
-                    expand: false,
-                    snap: true,
-                    snapSizes: const [.41, .84],
-                    builder: (context, scroller) => _liveSheet(job, scroller),
+                  child: NotificationListener<DraggableScrollableNotification>(
+                    onNotification: (notice) {
+                      _trackingSheetFraction = notice.extent;
+                      final height = MediaQuery.sizeOf(context).height * notice.extent;
+                      if ((_trackingMapInset.value - height).abs() > 2) {
+                        _trackingMapInset.value = height;
+                      }
+                      return false;
+                    },
+                    child: DraggableScrollableSheet(
+                      key: ValueKey<String>(job.status),
+                      initialChildSize: initialSheetSize,
+                      minChildSize: initialSheetSize,
+                      maxChildSize: .82,
+                      expand: false,
+                      snap: true,
+                      snapSizes: const [.82],
+                      builder: (context, scroller) => _liveSheet(job, scroller),
+                    ),
                   ),
                 ),
             ],
@@ -928,21 +945,38 @@ class _MarketplaceCustomerTrackingScreenState
   }
 
   Future<void> _openRating(MarketplaceCustomerJob job) async {
-    // Calificar sobre el mismo mapa, sin abrir una nueva página.
-    final rating = await showModalBottomSheet<MarketplaceCustomerRating>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: TuktukTheme.background,
-      builder: (sheetContext) => SizedBox(
-        height: MediaQuery.sizeOf(sheetContext).height * .62,
-        child: MarketplaceCustomerRatingScreen(
-          service: widget.service,
-          session: widget.session,
-          jobId: job.id,
-        ),
-      ),
-    );
+    // La ficha y el mapa permanecen en la misma pantalla.
+    // Los creditos Mapbox se mantienen en la parte libre del mapa.
+    final height = MediaQuery.sizeOf(context).height;
+    _trackingMapInset.value = height * .68;
+    MarketplaceCustomerRating? rating;
+    try {
+      rating = await showModalBottomSheet<MarketplaceCustomerRating>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (sheetContext) {
+          final viewport = MediaQuery.sizeOf(sheetContext).height;
+          final keyboard = MediaQuery.viewInsetsOf(sheetContext).bottom;
+          final allowedHeight = (viewport - keyboard - 12).clamp(0.0, viewport).toDouble();
+          final contentHeight = (viewport * .66).clamp(0.0, allowedHeight).toDouble();
+          return Padding(
+            padding: EdgeInsets.only(bottom: keyboard),
+            child: SizedBox(
+              height: contentHeight,
+              child: MarketplaceCustomerRatingScreen(
+                service: widget.service,
+                session: widget.session,
+                jobId: job.id,
+              ),
+            ),
+          );
+        },
+      );
+    } finally {
+      if (mounted) _trackingMapInset.value = height * _trackingSheetFraction;
+    }
     if (rating != null && mounted) {
       setState(() => _rating = rating);
       await _refresh();
@@ -1112,56 +1146,113 @@ class _MarketplaceCustomerRatingScreenState
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: TuktukTheme.background,
-    appBar: AppBar(title: const Text('Calificar transportista')),
-    body: SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(22, 12, 22, 24),
+  Widget build(BuildContext context) => Container(
+    decoration: BoxDecoration(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(27)),
+      border: Border.all(color: TuktukTheme.border),
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xF01A3D45), Color(0xFA071722)],
+      ),
+    ),
+    child: SafeArea(
+      top: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            '¿Cómo fue tu experiencia?',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            alignment: WrapAlignment.spaceEvenly,
-            children: List.generate(
-              5,
-              (index) => IconButton(
-                onPressed: _sending
-                    ? null
-                    : () => setState(() => _stars = index + 1),
-                icon: Icon(
-                  index < _stars
-                      ? Icons.star_rounded
-                      : Icons.star_outline_rounded,
-                  size: 32,
-                  color: kTertiary,
-                ),
-                tooltip: '${index + 1} estrellas',
+          const SizedBox(height: 10),
+          Align(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: TuktukTheme.border,
+                borderRadius: BorderRadius.circular(4),
               ),
             ),
           ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _comment,
-            maxLength: 1000,
-            minLines: 3,
-            maxLines: 5,
-            decoration: const InputDecoration(
-              labelText: 'Comentario (opcional)',
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 10, 8),
+            child: Row(
+              children: [
+                const Icon(Icons.verified_rounded, color: TuktukTheme.gold),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Calificar transportista',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Cerrar calificación',
+                  onPressed: _sending ? null : () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
             ),
           ),
-          if (_error != null)
-            Text(_error!, style: const TextStyle(color: kDanger)),
-          const SizedBox(height: 12),
-          FilledButton(
-            onPressed: _sending ? null : _submit,
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(54),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(18, 6, 18, 14),
+              children: [
+                const Text(
+                  '¿Cómo fue tu experiencia?',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Tu valoración ayuda a mejorar el servicio.',
+                  style: TextStyle(color: TuktukTheme.muted, fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  alignment: WrapAlignment.spaceEvenly,
+                  children: List.generate(
+                    5,
+                    (index) => IconButton(
+                      onPressed: _sending
+                          ? null
+                          : () => setState(() => _stars = index + 1),
+                      icon: Icon(
+                        index < _stars
+                            ? Icons.star_rounded
+                            : Icons.star_outline_rounded,
+                        size: 38,
+                        color: TuktukTheme.gold,
+                      ),
+                      tooltip: '${index + 1} estrellas',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _comment,
+                  maxLength: 1000,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Comentario (opcional)',
+                    hintText: 'Cuéntanos cómo fue tu viaje',
+                  ),
+                ),
+                if (_error != null)
+                  Text(_error!, style: const TextStyle(color: kDanger)),
+              ],
             ),
-            child: Text(_sending ? 'Enviando...' : 'Enviar calificación'),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 9, 18, 14),
+            child: FilledButton(
+              onPressed: _sending ? null : _submit,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(54),
+                backgroundColor: TuktukTheme.gold,
+                foregroundColor: TuktukTheme.background,
+                textStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+              ),
+              child: Text(_sending ? 'Enviando...' : 'Enviar calificación'),
+            ),
           ),
         ],
       ),

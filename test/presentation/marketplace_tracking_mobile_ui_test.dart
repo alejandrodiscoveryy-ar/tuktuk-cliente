@@ -21,10 +21,11 @@ void main() {
     final source = File(
       'lib/presentation/marketplace_customer_tracking.dart',
     ).readAsStringSync();
-    expect(source, contains('FractionallySizedBox('));
-    expect(source, contains('heightFactor: .61'));
-    expect(source, contains('initialChildSize: .41'));
-    expect(source, contains('minChildSize: .41'));
+    expect(source, contains('Positioned.fill(child: _liveMap())'));
+    expect(source, contains('initialChildSize: initialSheetSize'));
+    expect(source, contains('NotificationListener<DraggableScrollableNotification>'));
+    expect(source, contains('ornamentBottomInset: _trackingMapInset'));
+    expect(source, contains('_trackingMapInset.value = height * .68'));
     expect(source, contains('_trackingActionFooter(job)'));
     expect(source, contains('Solicitar otro transporte'));
     expect(source, contains('Cancelar solicitud'));
