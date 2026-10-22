@@ -91,8 +91,6 @@ class MarketplaceCustomerJob {
     'requested',
     'published',
     'accepted',
-    'en_route',
-    'pickup',
   }.contains(status);
 
   bool get isTerminal => const {

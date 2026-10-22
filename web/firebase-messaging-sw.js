@@ -1,4 +1,6 @@
 // Scoped strictly to /cliente/tuk/, independent from TUKTUK Conductor's worker.
+// Combined with the existing Firebase worker: preserve the same scope and push logic.
+importScripts('customer-cache-sw.js');
 importScripts('https://www.gstatic.com/firebasejs/12.17.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/12.17.0/firebase-messaging-compat.js');
 

@@ -374,7 +374,10 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
             pitch: 0,
           ),
           onMapCreated: _onMapCreated,
-          onStyleLoadedListener: (_) => unawaited(_onStyleLoaded()),
+          onStyleLoadedListener: (_) {
+            _updateOrnaments();
+            unawaited(_onStyleLoaded());
+          },
           onMapIdleListener: (_) => unawaited(_onMapIdle()),
           onMapLoadErrorListener: (_) {
             if (mounted) {

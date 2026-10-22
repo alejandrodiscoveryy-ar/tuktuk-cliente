@@ -126,6 +126,14 @@ jobs:
           mkdir -p "$STAGE/cliente/tuk"
           cp -a "$RUNNER_TEMP/tuktuk-customer-build/." "$STAGE/cliente/tuk/"
           test -f "$STAGE/cliente/tuk/main.dart.js"
+          test -f "$STAGE/cliente/tuk/customer-cache-sw.js"
+          test -f "$STAGE/cliente/tuk/_headers"
+          # Cloudflare Workers analiza _headers en la raiz de --assets.
+          cp "$STAGE/cliente/tuk/_headers" "$STAGE/_headers"
+          test -f "$STAGE/_headers"
+          # Cache is release-versioned: no stale resources after an approved deploy.
+          sed -i "s/__TUKTUK_RELEASE__/${GITHUB_SHA}/g" "$STAGE/cliente/tuk/customer-cache-sw.js"
+          ! grep -q '__TUKTUK_RELEASE__' "$STAGE/cliente/tuk/customer-cache-sw.js"
           LOCAL_HASH="$(sha256sum "$STAGE/cliente/tuk/main.dart.js" | awk '{print toupper($1)}')"
           echo "STAGE=$STAGE" >> "$GITHUB_ENV"
           echo "LOCAL_HASH=$LOCAL_HASH" >> "$GITHUB_ENV"

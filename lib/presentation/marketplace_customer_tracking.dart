@@ -20,7 +20,7 @@ class MarketplaceCustomerTrackingScreen extends StatefulWidget {
 }
 
 class _MarketplaceCustomerTrackingScreenState
-    extends State<MarketplaceCustomerTrackingScreen> {
+    extends State<MarketplaceCustomerTrackingScreen> with WidgetsBindingObserver {
   Timer? _pollTimer;
 
   MarketplaceCustomerJob? _job;
@@ -43,13 +43,32 @@ class _MarketplaceCustomerTrackingScreenState
   void initState() {
     super.initState();
 
+    WidgetsBinding.instance.addObserver(this);
     _refresh();
+    _startPolling();
+  }
 
+  void _startPolling() {
+    _pollTimer?.cancel();
+    if (_job?.isTerminal == true) return;
     _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) => _refresh());
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _startPolling();
+      _refresh();
+    } else if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      _pollTimer?.cancel();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
     _trackingMapInset.dispose();
     super.dispose();
@@ -642,6 +661,7 @@ class _MarketplaceCustomerTrackingScreenState
     final settled = job.status == 'settled';
     final pendingRating = settled && _rating == null;
     final canFinish = job.customerCanFinish;
+    // La interfaz usa exactamente los estados cancelables aprobados.
     final canCancel = job.customerCanCancel;
     if (!canFinish && !canCancel && !job.isTerminal && !pendingRating) {
       return const SizedBox.shrink();

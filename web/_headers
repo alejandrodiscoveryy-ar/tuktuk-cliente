@@ -1,0 +1,28 @@
+# Cloudflare Workers static assets, strictly scoped to TUKTUK Cliente.
+# The HTML, scripts, and service workers must revalidate on each new release.
+/cliente/tuk/*
+  X-Content-Type-Options: nosniff
+
+/cliente/tuk/
+  Cache-Control: public, max-age=0, must-revalidate
+
+/cliente/tuk/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/cliente/tuk/flutter_bootstrap.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/cliente/tuk/main.dart.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/cliente/tuk/firebase-messaging-sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/cliente/tuk/customer-cache-sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/cliente/tuk/assets/*
+  Cache-Control: public, max-age=3600, s-maxage=604800
+
+/cliente/tuk/icons/*
+  Cache-Control: public, max-age=86400, s-maxage=604800

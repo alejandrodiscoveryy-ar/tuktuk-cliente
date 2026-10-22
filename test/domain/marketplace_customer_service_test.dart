@@ -91,7 +91,15 @@ void main() {
     });
 
     expect(published.customerCanCancel, isTrue);
-    expect(pickup.customerCanCancel, isTrue);
+    expect(pickup.customerCanCancel, isFalse);
+    expect(MarketplaceCustomerJob.fromMap({
+      'job_id': 'job-en-route', 'status': 'en_route', 'final_price': 500,
+      'currency': 'CUP',
+    }).customerCanCancel, isFalse);
+    expect(MarketplaceCustomerJob.fromMap({
+      'job_id': 'job-accepted', 'status': 'accepted', 'final_price': 500,
+      'currency': 'CUP',
+    }).customerCanCancel, isTrue);
     expect(inProgress.customerCanCancel, isFalse);
     expect(settled.customerCanCancel, isFalse);
     expect(settled.isTerminal, isTrue);
