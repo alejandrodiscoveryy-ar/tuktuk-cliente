@@ -7,7 +7,7 @@ import 'package:tuktuk_cliente/main.dart';
 
 class _Service extends MarketplaceCustomerService {
   _Service(super.client);
-  String status = 'en_route';
+  String status = 'in_progress';
   bool offline = false;
   int finishCalls = 0;
   int ratingCalls = 0;
@@ -83,6 +83,14 @@ void main() {
     await _pump(tester);
   }
 
+  testWidgets('durante recogida no ofrece finalizar prematuramente', (tester) async {
+    service.status = 'en_route';
+    await open(tester);
+    expect(find.text('Finalizar carrera'), findsNothing);
+    expect(find.text('Cancelar solicitud'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('customer Finish directly opens rating; abandonment leaves ride open', (tester) async {
     await open(tester);
     await tester.scrollUntilVisible(find.text('Finalizar carrera'), 300);
@@ -92,9 +100,9 @@ void main() {
     expect(find.byType(AlertDialog), findsNothing);
     expect(service.finishCalls, 0);
     expect(service.ratingCalls, 0);
-    await tester.pageBack();
+    await tester.tap(find.byTooltip('Cerrar calificación'));
     await _pump(tester);
-    expect(service.status, 'en_route');
+    expect(service.status, 'in_progress');
     expect(service.rating, isNull);
     await tester.pumpWidget(const SizedBox());
   });
@@ -126,7 +134,7 @@ void main() {
     await tester.tap(find.byTooltip('5 estrellas'));
     await tester.tap(find.text('Enviar calificación'));
     await _pump(tester);
-    expect(service.status, 'en_route');
+    expect(service.status, 'in_progress');
     expect(service.rating, isNull);
     service.offline = false;
     await tester.tap(find.text('Enviar calificación'));

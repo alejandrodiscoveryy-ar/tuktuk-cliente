@@ -84,8 +84,9 @@ class MarketplaceCustomerJob {
 
   bool get hasAssignedDriver => driverDisplayName != null || vehicleId != null;
 
-  bool get customerCanFinish =>
-      const {'en_route', 'pickup', 'in_progress'}.contains(status);
+  // En Cliente, finalizar solo se ofrece si ya comenzo la carrera.
+  // La regla transaccional compartida del backend se revisara por separado.
+  bool get customerCanFinish => status == 'in_progress';
   bool get customerCanCancel => const {
     'requested',
     'published',
