@@ -19,6 +19,16 @@ void main() {
     expect(source, isNot(contains('LogoSettings(enabled: false)')));
   });
 
+  test('Mapbox tiene margen inicial aun sin arrastrar la ficha', () {
+    final source = File('lib/presentation/marketplace_customer_booking_flow.dart').readAsStringSync();
+    final map = File('lib/presentation/marketplace_vector_map.dart').readAsStringSync();
+    expect(source, contains('void _syncInitialMapboxCredits()'));
+    expect(source, contains('_syncInitialMapboxCredits();'));
+    expect(source, contains('_mapPanelInset.value = viewportHeight * .78 * panelFraction'));
+    expect(map, contains('onStyleLoadedListener: (_) {'));
+    expect(map, contains('_updateOrnaments();'));
+  });
+
   test('panel compacto y CTA fijo se conservan', () {
     final source = File('lib/presentation/marketplace_customer_booking_flow.dart').readAsStringSync();
     expect(source, contains('initialChildSize: flow.destination == null ? .36 : .56'));

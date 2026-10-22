@@ -41,11 +41,30 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
-  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
+
   <script>
+    // Turnstile is required only for an explicit notification opt-in.
+    // Avoid a third-party request on every booking and map startup.
+    window.tuktukLoadTurnstile = function () {
+      if (window.turnstile) return Promise.resolve();
+      if (window.tuktukTurnstileLoading) return window.tuktukTurnstileLoading;
+      window.tuktukTurnstileLoading = new Promise(function (resolve, reject) {
+        const script = document.createElement('script');
+        script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+        script.async = true;
+        script.onload = function () { window.turnstile ? resolve() : reject(new Error('Verificación no disponible')); };
+        script.onerror = function () { script.remove(); reject(new Error('No se pudo cargar la verificación')); };
+        document.head.appendChild(script);
+      }).catch(function (error) {
+        window.tuktukTurnstileLoading = null;
+        throw error;
+      });
+      return window.tuktukTurnstileLoading;
+    };
     // The Turnstile site key is public and injected by Flutter --dart-define.
     // The SERVER must verify the token before registering an anonymous device.
-    window.tuktukCustomerTurnstileProof = function (siteKey) {
+    window.tuktukCustomerTurnstileProof = async function (siteKey) {
+      await window.tuktukLoadTurnstile();
       return new Promise(function (resolve, reject) {
         if (!siteKey || !window.turnstile) {
           reject(new Error('Verificacion de alertas no disponible. Intenta de nuevo.'));
@@ -85,6 +104,7 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
         navigator.serviceWorker.register('firebase-messaging-sw.js', {
+          updateViaCache: 'none',
           scope: './'
         }).catch(function () {
           // Notification support is optional for the booking flow.

@@ -9,6 +9,8 @@ on:
       - 'test/presentation/marketplace_tracking_mobile_ui_test.dart'
       - 'test/presentation/marketplace_map_route_glass_test.dart'
       - '.github/workflows/customer-ui-pr-check.yml'
+      - 'web/**'
+      - 'test/web/**'
 
 permissions:
   contents: read
@@ -32,3 +34,16 @@ jobs:
         run: flutter analyze --no-fatal-infos
       - name: Test
         run: flutter test
+      - name: Check service workers syntax
+        run: |
+          node --check web/customer-cache-sw.js
+          node --check web/firebase-messaging-sw.js
+      - name: Build web release smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build web --release --base-href "/cliente/tuk/"
+          test -f build/web/main.dart.js
+          test -f build/web/customer-cache-sw.js
+          test -f build/web/_headers
+          du -h build/web/main.dart.js

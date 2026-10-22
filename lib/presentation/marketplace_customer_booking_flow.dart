@@ -532,6 +532,7 @@ class _MarketplaceCustomerBookingFlowState
   bool _tryingAutoPickup = false;
   final ValueNotifier<LatLng?> _mapCenter = ValueNotifier<LatLng?>(null);
   final ValueNotifier<double> _mapPanelInset = ValueNotifier<double>(0);
+  String? _mapPanelLayoutKey;
   final TextEditingController _placeSearch = TextEditingController();
   Timer? _searchDebounce;
   bool? _selectingOrigin;
@@ -1025,11 +1026,23 @@ class _MarketplaceCustomerBookingFlowState
           ),
         ),
       );
+  void _syncInitialMapboxCredits() {
+    // El panel no siempre emite una notificacion al crearse.
+    // Coloca los creditos antes de que aparezca sobre el mapa.
+    final viewportHeight = MediaQuery.sizeOf(context).height;
+    final panelFraction = flow.destination == null ? .36 : .56;
+    final layoutKey = '${viewportHeight.round()}:$panelFraction';
+    if (_mapPanelLayoutKey == layoutKey) return;
+    _mapPanelLayoutKey = layoutKey;
+    _mapPanelInset.value = viewportHeight * .78 * panelFraction;
+  }
+
   Widget _quote() {
     final route = flow.route;
     final origin = flow.origin;
     final destination = flow.destination;
     final center = origin?.latLng ?? const LatLng(23.1136, -82.3666);
+    _syncInitialMapboxCredits();
     return SafeArea(
       child: Stack(
         children: [
