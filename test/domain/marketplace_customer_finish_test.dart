@@ -18,8 +18,8 @@ void main() {
 
     expect(job('published').customerCanFinish, isFalse);
     expect(job('accepted').customerCanFinish, isFalse);
-    expect(job('en_route').customerCanFinish, isTrue);
-    expect(job('pickup').customerCanFinish, isTrue);
+    expect(job('en_route').customerCanFinish, isFalse);
+    expect(job('pickup').customerCanFinish, isFalse);
     expect(job('in_progress').customerCanFinish, isTrue);
     expect(job('settled').customerCanFinish, isFalse);
     expect(job('incident').customerCanFinish, isFalse);
