@@ -852,7 +852,7 @@ class _MarketplaceCustomerTrackingScreenState
                   alignment: Alignment.topCenter,
                   child: FractionallySizedBox(
                     widthFactor: 1,
-                    heightFactor: .54,
+                    heightFactor: .61,
                     child: _liveMap(),
                   ),
                 ),
@@ -911,12 +911,12 @@ class _MarketplaceCustomerTrackingScreenState
                 Align(
                   alignment: Alignment.bottomCenter,
                   child: DraggableScrollableSheet(
-                    initialChildSize: .46,
-                    minChildSize: .46,
+                    initialChildSize: .41,
+                    minChildSize: .41,
                     maxChildSize: .84,
                     expand: false,
                     snap: true,
-                    snapSizes: const [.46, .84],
+                    snapSizes: const [.41, .84],
                     builder: (context, scroller) => _liveSheet(job, scroller),
                   ),
                 ),

@@ -106,6 +106,84 @@ class CustomerBookingFlowController extends ChangeNotifier {
   List<String> categoriesForService(String service) =>
       publishedCategoriesByService[service] ?? const [];
 
+  final Map<String, Object> _categoryQuoteCache = <String, Object>{};
+  String? _categoryQuoteSignature;
+  int _categoryQuoteRequestId = 0;
+
+  String get _priceComparisonKey => jsonEncode(<String, Object?>{
+    'route_token': route?.routeToken,
+    'service': serviceCode,
+    'distance_km': route?.distanceKm,
+    'stop_count': stopCount,
+    'urgent': urgent,
+    'load_help': loadHelp,
+    'unload_help': unloadHelp,
+    'cargo_weight_kg': cargoWeightKg,
+    'cargo_volume_m3': cargoVolumeM3,
+    'scheduled_for': scheduledFor?.toUtc().toIso8601String(),
+  });
+
+  Object? vehiclePriceForCard(String category) {
+    if (route == null || !publicationReady ||
+        !categoriesForService(serviceCode).contains(category)) {
+      return null;
+    }
+    if (serviceCode == 'passenger') {
+      final passenger = route!.prices['passenger_by_category'];
+      return passenger is Map ? passenger[category] : null;
+    }
+    if (serviceCode == 'cargo' && cargoWeightKg == null && cargoVolumeM3 == null) {
+      return null;
+    }
+    if (category == selectedVehicleCategoryCode) return selectedPrice;
+    if (_categoryQuoteSignature != _priceComparisonKey) return null;
+    return _categoryQuoteCache[category];
+  }
+
+  // Solo el gateway autorizado calcula importes: no hay precios inventados.
+  // Una peticion cada vez para evitar rafagas; los resultados caducos se descartan.
+  Future<void> loadCategoryComparisons() async {
+    final start = origin;
+    final end = destination;
+    final snapshot = route;
+    final currentService = serviceCode;
+    final generation = ++_categoryQuoteRequestId;
+    if (start == null || end == null || snapshot == null ||
+        !publicationReady || currentService == 'passenger' ||
+        (currentService == 'cargo' && cargoWeightKg == null && cargoVolumeM3 == null)) {
+      _categoryQuoteCache.clear();
+      _categoryQuoteSignature = null;
+      return;
+    }
+    final signature = _priceComparisonKey;
+    if (_categoryQuoteSignature != signature) {
+      _categoryQuoteSignature = signature;
+      _categoryQuoteCache.clear();
+    }
+    final parameters = Map<String, dynamic>.from(pricing);
+    for (final category in categoriesForService(currentService)) {
+      if (generation != _categoryQuoteRequestId || _priceComparisonKey != signature) return;
+      if (category == selectedVehicleCategoryCode ||
+          _categoryQuoteCache.containsKey(category)) continue;
+      try {
+        final quote = await mapService.reprice(
+          origin: start,
+          destination: end,
+          routeToken: snapshot.routeToken,
+          pricing: <String, dynamic>{...parameters, 'vehicle_category_code': category},
+        );
+        if (generation != _categoryQuoteRequestId || _priceComparisonKey != signature) return;
+        final result = quote.prices[currentService];
+        if (result is Map) {
+          _categoryQuoteCache[category] = Map<String, dynamic>.from(result);
+          notifyListeners();
+        }
+      } catch (_) {
+        // Sin tarifa del servidor no mostramos un importe supuesto.
+      }
+    }
+  }
+
   Future<void> loadPublishedModalities() async {
     publicationReady = false;
     notifyListeners();
@@ -314,7 +392,10 @@ class CustomerBookingFlowController extends ChangeNotifier {
         destination: end,
         pricing: pricing,
       );
-      if (revision == _pricingRevision) route = result;
+      if (revision == _pricingRevision) {
+        route = result;
+        unawaited(loadCategoryComparisons());
+      }
     } catch (_) {
       error =
           'No pudimos calcular la ruta. Comprueba tu conexión e inténtalo de nuevo.';
@@ -348,6 +429,7 @@ class CustomerBookingFlowController extends ChangeNotifier {
         prices: updated.prices,
       );
       error = null;
+      unawaited(loadCategoryComparisons());
     } catch (cause) {
       if (cause.toString().contains('ROUTE_TOKEN_EXPIRED')) {
         loading = false;
@@ -449,6 +531,7 @@ class _MarketplaceCustomerBookingFlowState
   bool _publishing = false;
   bool _tryingAutoPickup = false;
   final ValueNotifier<LatLng?> _mapCenter = ValueNotifier<LatLng?>(null);
+  final ValueNotifier<double> _mapPanelInset = ValueNotifier<double>(0);
   final TextEditingController _placeSearch = TextEditingController();
   Timer? _searchDebounce;
   bool? _selectingOrigin;
@@ -504,6 +587,7 @@ class _MarketplaceCustomerBookingFlowState
     pricingDebounce?.cancel();
     _searchDebounce?.cancel();
     _mapCenter.dispose();
+    _mapPanelInset.dispose();
     _placeSearch.dispose();
     super.dispose();
   }
@@ -968,6 +1052,7 @@ class _MarketplaceCustomerBookingFlowState
                     initialZoom: 13.2,
                     requestedCenter: _mapCenter,
                     requestedZoom: _mapRequestedZoom,
+                    ornamentBottomInset: _mapPanelInset,
                     originPoint: origin,
                     destinationPoint: destination,
                     routePoints:
@@ -999,7 +1084,16 @@ class _MarketplaceCustomerBookingFlowState
             right: 10,
             bottom: 0,
             height: MediaQuery.sizeOf(context).height * .78,
-            child: _floatingBookingPanel(),
+            child: NotificationListener<DraggableScrollableNotification>(
+              onNotification: (notice) {
+                final height = MediaQuery.sizeOf(context).height * .78 * notice.extent;
+                if ((_mapPanelInset.value - height).abs() > 2) {
+                  _mapPanelInset.value = height;
+                }
+                return false;
+              },
+              child: _floatingBookingPanel(),
+            ),
           ),
         ],
       ),
@@ -1117,11 +1211,11 @@ class _MarketplaceCustomerBookingFlowState
                       : 'cotizacion',
         ),
         expand: false,
-        initialChildSize: flow.destination == null ? .36 : .64,
+        initialChildSize: flow.destination == null ? .36 : .56,
         minChildSize: .26,
         maxChildSize: .96,
         snap: true,
-        snapSizes: const [.64],
+        snapSizes: const [.56],
         builder: (context, scroller) => Container(
           decoration: BoxDecoration(
                         gradient: const LinearGradient(
@@ -1443,13 +1537,12 @@ class _MarketplaceCustomerBookingFlowState
   Widget _premiumServiceVehicleChoice(String category) {
     final selected = flow.selectedVehicleCategoryCode == category;
     final title = marketplacePassengerVehicleLabel(category);
-    final price = selected && flow.selectedPrice != null
-        ? _priceLabel(flow.selectedPrice, flow.serviceCode)
-        : '';
+    final quote = flow.vehiclePriceForCard(category);
+    final price = _priceLabel(quote, flow.serviceCode);
     return Semantics(
       button: true,
       selected: selected,
-      label: price.isEmpty ? title : '$title. Precio $price',
+      label: '$title. Precio $price',
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -1458,8 +1551,8 @@ class _MarketplaceCustomerBookingFlowState
           child: _MarineCardSurface(
             selected: selected,
             radius: 15,
-            height: 84,
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            height: 70,
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
@@ -2176,8 +2269,8 @@ class MarketplaceCompactVehicleSelector extends StatelessWidget {
           child: _MarineCardSurface(
             selected: selected,
             radius: 15,
-            height: 84,
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            height: 70,
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [

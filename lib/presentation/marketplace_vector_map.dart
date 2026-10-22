@@ -43,6 +43,7 @@ class MarketplaceVectorMap extends StatefulWidget {
     required this.initialZoom,
     this.requestedCenter,
     this.requestedZoom,
+    this.ornamentBottomInset,
     this.markerPoint,
     this.markerIsDestination = false,
     this.originPoint,
@@ -57,6 +58,7 @@ class MarketplaceVectorMap extends StatefulWidget {
   final double initialZoom;
   final ValueNotifier<LatLng?>? requestedCenter;
   final double? requestedZoom;
+  final ValueNotifier<double>? ornamentBottomInset;
   final MarketplaceMapPoint? markerPoint;
   final bool markerIsDestination;
   final MarketplaceMapPoint? originPoint;
@@ -85,6 +87,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
     super.initState();
     _lastCenter = widget.initialCenter;
     widget.requestedCenter?.addListener(_centerRequested);
+    widget.ornamentBottomInset?.addListener(_updateOrnaments);
   }
 
   @override
@@ -93,6 +96,11 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
     if (oldWidget.requestedCenter != widget.requestedCenter) {
       oldWidget.requestedCenter?.removeListener(_centerRequested);
       widget.requestedCenter?.addListener(_centerRequested);
+    }
+    if (oldWidget.ornamentBottomInset != widget.ornamentBottomInset) {
+      oldWidget.ornamentBottomInset?.removeListener(_updateOrnaments);
+      widget.ornamentBottomInset?.addListener(_updateOrnaments);
+      _updateOrnaments();
     }
     if (oldWidget.markerPoint != widget.markerPoint ||
         oldWidget.markerIsDestination != widget.markerIsDestination ||
@@ -106,6 +114,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
   @override
   void dispose() {
     widget.requestedCenter?.removeListener(_centerRequested);
+    widget.ornamentBottomInset?.removeListener(_updateOrnaments);
     _map = null;
     super.dispose();
   }
@@ -141,6 +150,20 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
       map.scaleBar.updateSettings(mbx.ScaleBarSettings(enabled: false)),
     );
     _centerRequested();
+    _updateOrnaments();
+  }
+
+  void _updateOrnaments() {
+    final map = _map;
+    if (map == null) return;
+    final inset = (widget.ornamentBottomInset?.value ?? 0).clamp(0.0, 750.0).toDouble();
+    // Creditos siempre visibles en el mapa libre, nunca debajo del CTA.
+    unawaited(map.logo.updateSettings(
+      mbx.LogoSettings(marginBottom: inset + 10, marginLeft: 8),
+    ));
+    unawaited(map.attribution.updateSettings(
+      mbx.AttributionSettings(marginBottom: inset + 10, marginRight: 8),
+    ));
   }
 
   void _centerRequested() {
