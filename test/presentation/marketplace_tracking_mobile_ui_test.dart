@@ -22,9 +22,9 @@ void main() {
       'lib/presentation/marketplace_customer_tracking.dart',
     ).readAsStringSync();
     expect(source, contains('FractionallySizedBox('));
-    expect(source, contains('heightFactor: .54'));
-    expect(source, contains('initialChildSize: .46'));
-    expect(source, contains('minChildSize: .46'));
+    expect(source, contains('heightFactor: .61'));
+    expect(source, contains('initialChildSize: .41'));
+    expect(source, contains('minChildSize: .41'));
     expect(source, contains('_trackingActionFooter(job)'));
     expect(source, contains('Solicitar otro transporte'));
     expect(source, contains('Cancelar solicitud'));
