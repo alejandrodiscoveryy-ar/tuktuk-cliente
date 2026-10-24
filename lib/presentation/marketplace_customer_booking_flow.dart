@@ -969,7 +969,7 @@ class _MarketplaceCustomerBookingFlowState
         builder: (_) => MarketplaceCustomerTrackingScreen(
           service: widget.service,
           session: widget.session,
-          jobId: job.id,
+          jobId: job!.id,
           onDone: () async {},
         ),
       ),
