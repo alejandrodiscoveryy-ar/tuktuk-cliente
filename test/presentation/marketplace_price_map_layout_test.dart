@@ -24,7 +24,8 @@ void main() {
     final map = File('lib/presentation/marketplace_vector_map.dart').readAsStringSync();
     expect(source, contains('void _syncInitialMapboxCredits()'));
     expect(source, contains('_syncInitialMapboxCredits();'));
-    expect(source, contains('_mapPanelInset.value = viewportHeight * .78 * panelFraction'));
+    expect(source, contains('_bookingPanelHeight = viewportHeight * .78 * panelFraction;'));
+    expect(source, contains('_refreshMapOrnaments();'));
     expect(map, contains('onStyleLoadedListener: (_) {'));
     expect(map, contains('_updateOrnaments();'));
   });

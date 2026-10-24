@@ -506,6 +506,7 @@ class MarketplaceCustomerBookingFlow extends StatefulWidget {
     required this.session,
     this.controller,
     this.onEditCustomer,
+    this.profileEditorOpen = false,
     this.onSessionInvalid,
     super.key,
   });
@@ -513,6 +514,7 @@ class MarketplaceCustomerBookingFlow extends StatefulWidget {
   final MarketplaceCustomerSessionSnapshot session;
   final CustomerBookingFlowController? controller;
   final VoidCallback? onEditCustomer;
+  final bool profileEditorOpen;
   final Future<bool> Function()? onSessionInvalid;
 
   @override
@@ -533,6 +535,8 @@ class _MarketplaceCustomerBookingFlowState
   final ValueNotifier<LatLng?> _mapCenter = ValueNotifier<LatLng?>(null);
   final ValueNotifier<double> _mapPanelInset = ValueNotifier<double>(0);
   String? _mapPanelLayoutKey;
+  double _bookingPanelHeight = 0;
+  bool _historyOpen = false;
   final TextEditingController _placeSearch = TextEditingController();
   Timer? _searchDebounce;
   bool? _selectingOrigin;
@@ -564,6 +568,16 @@ class _MarketplaceCustomerBookingFlowState
         unawaited(_autoLocatePickup());
       }
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant MarketplaceCustomerBookingFlow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.profileEditorOpen != widget.profileEditorOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _refreshMapOrnaments();
+      });
+    }
   }
 
   void _changed() {
@@ -690,9 +704,24 @@ class _MarketplaceCustomerBookingFlowState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Menú TukTuk',
-                style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Menú TukTuk',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 21,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Cerrar menú',
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
               ),
               const SizedBox(height: 14),
               Row(
@@ -909,21 +938,38 @@ class _MarketplaceCustomerBookingFlowState
   }
 
   Future<void> _openHistory() async {
-    final job = await showModalBottomSheet<MarketplaceCustomerJob>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => MarketplaceCustomerHistory(
-        service: widget.service,
-        session: widget.session,
-      ),
-    );
+    _historyOpen = true;
+    _refreshMapOrnaments();
+
+    MarketplaceCustomerJob? job;
+
+    try {
+      job = await showModalBottomSheet<MarketplaceCustomerJob>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: TuktukTheme.background,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(24),
+          ),
+        ),
+        builder: (_) => MarketplaceCustomerHistory(
+          service: widget.service,
+          session: widget.session,
+        ),
+      );
+    } finally {
+      _historyOpen = false;
+      if (mounted) _refreshMapOrnaments();
+    }
+
     if (job == null || !mounted) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => MarketplaceCustomerTrackingScreen(
           service: widget.service,
           session: widget.session,
-          jobId: job.id,
+          jobId: job!.id,
           onDone: () async {},
         ),
       ),
@@ -1026,15 +1072,33 @@ class _MarketplaceCustomerBookingFlowState
           ),
         ),
       );
+  void _refreshMapOrnaments() {
+    final height = MediaQuery.sizeOf(context).height;
+    final covered = widget.profileEditorOpen || _historyOpen;
+    final raised = (height * .82)
+        .clamp(0.0, max(0.0, height - 72))
+        .toDouble();
+
+    final inset = covered
+        ? max(_bookingPanelHeight, raised)
+        : _bookingPanelHeight;
+
+    if ((_mapPanelInset.value - inset).abs() > 2) {
+      _mapPanelInset.value = inset;
+    }
+  }
+
   void _syncInitialMapboxCredits() {
-    // El panel no siempre emite una notificacion al crearse.
-    // Coloca los creditos antes de que aparezca sobre el mapa.
     final viewportHeight = MediaQuery.sizeOf(context).height;
     final panelFraction = flow.destination == null ? .36 : .56;
     final layoutKey = '${viewportHeight.round()}:$panelFraction';
-    if (_mapPanelLayoutKey == layoutKey) return;
-    _mapPanelLayoutKey = layoutKey;
-    _mapPanelInset.value = viewportHeight * .78 * panelFraction;
+
+    if (_mapPanelLayoutKey != layoutKey) {
+      _mapPanelLayoutKey = layoutKey;
+      _bookingPanelHeight = viewportHeight * .78 * panelFraction;
+    }
+
+    _refreshMapOrnaments();
   }
 
   Widget _quote() {
@@ -1100,9 +1164,8 @@ class _MarketplaceCustomerBookingFlowState
             child: NotificationListener<DraggableScrollableNotification>(
               onNotification: (notice) {
                 final height = MediaQuery.sizeOf(context).height * .78 * notice.extent;
-                if ((_mapPanelInset.value - height).abs() > 2) {
-                  _mapPanelInset.value = height;
-                }
+                _bookingPanelHeight = height;
+                _refreshMapOrnaments();
                 return false;
               },
               child: _floatingBookingPanel(),

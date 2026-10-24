@@ -156,7 +156,10 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
   void _updateOrnaments() {
     final map = _map;
     if (map == null) return;
-    final inset = (widget.ornamentBottomInset?.value ?? 0).clamp(0.0, 750.0).toDouble();
+    final height = MediaQuery.sizeOf(context).height;
+    final inset = (widget.ornamentBottomInset?.value ?? 0)
+        .clamp(0.0, max(0.0, height - 72))
+        .toDouble();
     // Creditos siempre visibles en el mapa libre, nunca debajo del CTA.
     unawaited(map.logo.updateSettings(
       mbx.LogoSettings(marginBottom: inset + 10, marginLeft: 8),

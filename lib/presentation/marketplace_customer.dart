@@ -390,6 +390,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
             session: existingSession,
             controller: _bookingFlow,
             onSessionInvalid: _renewInvalidCustomerSession,
+            profileEditorOpen: _editingExistingSession,
             onEditCustomer: () => setState(() {
               _resumeBookingStep = _bookingFlow!.step;
               _editSessionToken = marketplaceCustomerSessionToken();
