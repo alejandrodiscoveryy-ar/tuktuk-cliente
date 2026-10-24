@@ -1080,10 +1080,25 @@ class _MarketplaceCustomerHistoryState
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          const Text(
-            'Historial',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Historial',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Cerrar historial',
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
           ),
+          const SizedBox(height: 10),
           for (final job in _jobs)
             ListTile(
               title: Text(

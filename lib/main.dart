@@ -49,17 +49,21 @@ Future<void> main() async {
   await Supabase.initialize(
       url: _supabaseUrl, publishableKey: _supabasePublishableKey);
 
+  // Consultar el mapa mientras Firebase se inicializa.
+  // Ambas operaciones finalizan antes de construir la interfaz.
+  final mapConfiguration = MarketplaceMapService.loadPublicConfiguration(
+    Supabase.instance.client,
+  );
+
   if (kIsWeb) {
     try {
       await Firebase.initializeApp(options: customerRateFirebaseWebOptions);
     } catch (_) {
-      // Push is optional. Ride booking must work when Firebase is unavailable.
+      // Las notificaciones son opcionales.
     }
   }
 
-  await MarketplaceMapService.loadPublicConfiguration(
-    Supabase.instance.client,
-  );
+  await mapConfiguration;
 
   if (MarketplaceMapService.publicToken.startsWith('pk.')) {
     mbx.MapboxOptions.setAccessToken(MarketplaceMapService.publicToken);
