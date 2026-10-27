@@ -97,6 +97,8 @@ class _TuktukCustomerEltoqueBannerState
   StreamSubscription<RemoteMessage>? _pushMessages;
   late final CustomerRatePushClient _pushClient;
   bool _pushEnabled = false;
+  bool _pushReady = false;
+  bool _pushInitUnavailable = false;
   bool _pushBusy = false;
   String? _pushError;
   MarketplacePublicEltoqueRate? _snapshot;
@@ -109,28 +111,39 @@ class _TuktukCustomerEltoqueBannerState
     WidgetsBinding.instance.addObserver(this);
     _pushClient = CustomerRatePushClient(widget.client);
     _pushEnabled = _pushClient.hasSavedSubscription;
-    if (_pushEnabled) unawaited(_pushClient.refreshExisting());
-    if (kIsWeb) {
-      try {
-        _pushMessages = FirebaseMessaging.onMessage.listen((message) {
-          if (message.data['kind'] != 'customer_exchange_rate_update') return;
-          unawaited(_refresh());
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text(
-                  'elTOQUE: la tasa ha cambiado. Consulta la franja superior.'),
-            ));
-          }
-        });
-      } catch (_) {
-        // Firebase notifications are optional.
-      }
-    }
+    if (kIsWeb) unawaited(_enablePushWhenReady());
     _refresh();
     _refreshTimer = Timer.periodic(
       const Duration(minutes: 5),
       (_) => _refresh(),
     );
+  }
+
+  Future<void> _enablePushWhenReady() async {
+    final ready = await customerFirebaseReady;
+    if (!mounted) return;
+    if (!ready) {
+      setState(() => _pushInitUnavailable = true);
+      return;
+    }
+
+    setState(() => _pushReady = true);
+    if (_pushEnabled) unawaited(_pushClient.refreshExisting());
+
+    try {
+      _pushMessages = FirebaseMessaging.onMessage.listen((message) {
+        if (message.data['kind'] != 'customer_exchange_rate_update') return;
+        unawaited(_refresh());
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'elTOQUE: la tasa ha cambiado. Consulta la franja superior.'),
+          ));
+        }
+      });
+    } catch (_) {
+      // Los avisos opcionales no afectan viajes, mapas ni tarifas.
+    }
   }
 
   @override
@@ -281,7 +294,7 @@ class _TuktukCustomerEltoqueBannerState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     TextButton.icon(
-                      onPressed: _pushBusy ? null : _toggleAlerts,
+                      onPressed: _pushBusy || (!_pushReady && !_pushEnabled) ? null : _toggleAlerts,
                       icon: Icon(_pushEnabled
                           ? Icons.notifications_off_outlined
                           : Icons.notifications_active_outlined),
@@ -289,7 +302,11 @@ class _TuktukCustomerEltoqueBannerState
                           ? 'Comprobando...'
                           : _pushEnabled
                               ? 'Desactivar alertas'
-                              : 'Activar alertas gratuitas'),
+                              : _pushInitUnavailable
+                                  ? 'Alertas no disponibles'
+                                  : !_pushReady
+                                      ? 'Preparando alertas...'
+                                      : 'Activar alertas gratuitas'),
                     ),
                     if (_pushError != null)
                       Text(_pushError!,

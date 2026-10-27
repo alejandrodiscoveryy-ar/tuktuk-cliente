@@ -42,6 +42,19 @@ const _supabaseUrl = String.fromEnvironment('SUPABASE_URL');
 const _supabasePublishableKey =
     String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
 
+Future<bool> customerFirebaseReady = Future<bool>.value(false);
+
+Future<void> _initializeCustomerFirebaseAfterFirstFrame(
+    Completer<bool> ready) async {
+  try {
+    await Firebase.initializeApp(options: customerRateFirebaseWebOptions);
+    ready.complete(true);
+  } catch (_) {
+    // Las alertas son opcionales y nunca bloquean el transporte.
+    ready.complete(false);
+  }
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
@@ -53,24 +66,21 @@ Future<void> main() async {
   await Supabase.initialize(
       url: _supabaseUrl, publishableKey: _supabasePublishableKey);
 
-  // Consultar el mapa mientras Firebase se inicializa.
-  // Ambas operaciones finalizan antes de construir la interfaz.
-  final mapConfiguration = MarketplaceMapService.loadPublicConfiguration(
+  // El estilo y token de Mapbox siguen listos antes de dibujar el mapa.
+  await MarketplaceMapService.loadPublicConfiguration(
     Supabase.instance.client,
   );
 
-  if (kIsWeb) {
-    try {
-      await Firebase.initializeApp(options: customerRateFirebaseWebOptions);
-    } catch (_) {
-      // Las notificaciones son opcionales.
-    }
-  }
-
-  await mapConfiguration;
-
   if (MarketplaceMapService.publicToken.startsWith('pk.')) {
     mbx.MapboxOptions.setAccessToken(MarketplaceMapService.publicToken);
+  }
+  if (kIsWeb) {
+    final ready = Completer<bool>();
+    customerFirebaseReady = ready.future;
+    // Firebase no debe retener la primera pantalla por una red lenta.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_initializeCustomerFirebaseAfterFirstFrame(ready));
+    });
   }
   runApp(MarketplaceCustomerApp(client: Supabase.instance.client));
 }
