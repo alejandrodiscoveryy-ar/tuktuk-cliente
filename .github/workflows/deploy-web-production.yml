@@ -70,6 +70,13 @@ jobs:
           test -n "${MAPBOX_PUBLIC_TOKEN:-}"
           test -n "${CUSTOMER_TURNSTILE_SITE_KEY:-}"
 
+      - name: Provision licensed TUKTUK arrival horn
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assets/sounds
+          curl -fsSL --retry 3 --connect-timeout 20 'https://assets.mixkit.co/active_storage/sfx/719/719.wav' -o 'assets/sounds/tuktuk-car-double-horn.wav'
+          echo '15c3836597e2b820a9543a1fa671d4b2691bca46ef98f7d4ca767936b5109ed0  assets/sounds/tuktuk-car-double-horn.wav' | sha256sum --check
       - name: Install dependencies
         run: flutter pub get
 
@@ -127,6 +134,7 @@ jobs:
           cp -a "$RUNNER_TEMP/tuktuk-customer-build/." "$STAGE/cliente/tuk/"
           test -f "$STAGE/cliente/tuk/main.dart.js"
           test -f "$STAGE/cliente/tuk/customer-cache-sw.js"
+          test -f "$STAGE/cliente/tuk/assets/assets/sounds/tuktuk-car-double-horn.wav"
           test -f "$STAGE/cliente/tuk/_headers"
           # Cloudflare Workers analiza _headers en la raiz de --assets.
           cp "$STAGE/cliente/tuk/_headers" "$STAGE/_headers"

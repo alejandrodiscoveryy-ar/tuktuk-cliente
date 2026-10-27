@@ -1,0 +1,7 @@
+TUKTUK - Claxon de llegada numero 2
+Origen: Mixkit, Car double horn, SFX 719
+URL: https://assets.mixkit.co/active_storage/sfx/719/719.wav
+Licencia: https://mixkit.co/license/modal/sfxFree/
+SHA256: 15c3836597e2b820a9543a1fa671d4b2691bca46ef98f7d4ca767936b5109ed0
+El archivo WAV se obtiene durante la compilacion.
+No se incluye el WAV en el repositorio publico.
