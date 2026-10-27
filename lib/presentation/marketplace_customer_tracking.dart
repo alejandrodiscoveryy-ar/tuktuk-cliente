@@ -20,8 +20,13 @@ class MarketplaceCustomerTrackingScreen extends StatefulWidget {
 }
 
 class _MarketplaceCustomerTrackingScreenState
-    extends State<MarketplaceCustomerTrackingScreen> with WidgetsBindingObserver {
+    extends State<MarketplaceCustomerTrackingScreen>
+    with WidgetsBindingObserver {
   Timer? _pollTimer;
+  final MarketplaceCustomerArrivalGeofence _arrivalGeofence =
+      MarketplaceCustomerArrivalGeofence();
+  bool _arrivalNotified = false;
+  String get _arrivalNoticeKey => 'arrival_notified_${widget.jobId}';
 
   MarketplaceCustomerJob? _job;
   MarketplaceCustomerJobMedia? _media;
@@ -33,6 +38,10 @@ class _MarketplaceCustomerTrackingScreenState
   bool _cancelling = false;
   bool _finishing = false;
   final ValueNotifier<double> _trackingMapInset = ValueNotifier<double>(0);
+  final ValueNotifier<LatLng?> _driverCameraTarget =
+      ValueNotifier<LatLng?>(null);
+  bool _followDriver = true;
+  DateTime? _lastDriverPositionTime;
   double _trackingSheetFraction = .32;
 
   String? _error;
@@ -43,6 +52,11 @@ class _MarketplaceCustomerTrackingScreenState
   void initState() {
     super.initState();
 
+    try {
+      _arrivalNotified = Hive.box(_metaBox).get(_arrivalNoticeKey) == true;
+    } catch (_) {
+      _arrivalNotified = false;
+    }
     WidgetsBinding.instance.addObserver(this);
     _refresh();
     _startPolling();
@@ -71,6 +85,7 @@ class _MarketplaceCustomerTrackingScreenState
     WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
     _trackingMapInset.dispose();
+    _driverCameraTarget.dispose();
     super.dispose();
   }
 
@@ -92,11 +107,12 @@ class _MarketplaceCustomerTrackingScreenState
         _job = job;
         _error = null;
       });
+      _observeArrival(job);
+      _updateDriverCamera(job);
 
       final mediaSignature =
           '${job.driverPhotoAssetId ?? ''}:${job.vehicleMainPhotoAssetId ?? ''}';
-      final mediaExpiresSoon =
-          _media?.expiresAt == null ||
+      final mediaExpiresSoon = _media?.expiresAt == null ||
           _media!.expiresAt!.isBefore(
             DateTime.now().toUtc().add(const Duration(minutes: 2)),
           );
@@ -139,8 +155,8 @@ class _MarketplaceCustomerTrackingScreenState
 
       final invalidSession =
           detailText?.contains('CUSTOMER_SESSION_NOT_FOUND') == true ||
-          detailText?.contains('CUSTOMER_SESSION_EXPIRED') == true ||
-          detailText?.contains('CUSTOMER_SESSION_INVALID') == true;
+              detailText?.contains('CUSTOMER_SESSION_EXPIRED') == true ||
+              detailText?.contains('CUSTOMER_SESSION_INVALID') == true;
 
       if (invalidSession) {
         _pollTimer?.cancel();
@@ -148,8 +164,7 @@ class _MarketplaceCustomerTrackingScreenState
         return;
       }
 
-      final staleJob =
-          detailText?.contains('ACCESS_DENIED') == true ||
+      final staleJob = detailText?.contains('ACCESS_DENIED') == true ||
           detailText?.contains('JOB_NOT_FOUND') == true;
 
       if (staleJob) {
@@ -180,38 +195,97 @@ class _MarketplaceCustomerTrackingScreenState
     }
   }
 
+  void _updateDriverCamera(MarketplaceCustomerJob job) {
+    if (!_followDriver) return;
+    final gps = job.driverLocation;
+    if (gps == null || !gps.isFresh || gps.capturedAt == null) return;
+    if (_lastDriverPositionTime == gps.capturedAt) return;
+    _lastDriverPositionTime = gps.capturedAt;
+    _driverCameraTarget.value = LatLng(gps.latitude, gps.longitude);
+  }
+
+  void _recenterOnDriver() {
+    final gps = _job?.driverLocation;
+    if (gps == null || !gps.isFresh) return;
+    setState(() => _followDriver = true);
+    _lastDriverPositionTime = gps.capturedAt;
+    _driverCameraTarget.value = LatLng(gps.latitude, gps.longitude);
+  }
+
+  void _onCustomerMapMoved(LatLng center) {
+    if (!mounted || !_followDriver) return;
+    setState(() => _followDriver = false);
+  }
+
+  MarketplaceMapPoint? _pickupForArrival() {
+    try {
+      final route = MarketplaceCustomerSessionStore(
+        Hive.box(_metaBox),
+      ).readActiveJobMap(widget.jobId);
+      final origin = route?['origin'];
+      if (origin is Map) {
+        return MarketplaceMapPoint.fromMap(Map<String, dynamic>.from(origin));
+      }
+    } catch (_) {
+      // Nunca inferir una recogida sin coordenadas verificadas.
+    }
+    return null;
+  }
+
+  Future<void> _playArrivalSound() async {
+    await customer_arrival_sound.playArrivalClaxon();
+  }
+
+  void _observeArrival(MarketplaceCustomerJob job) {
+    if (_arrivalNotified) return;
+    final arrived = _arrivalGeofence.observe(
+      status: job.status,
+      location: job.driverLocation,
+      pickup: _pickupForArrival(),
+      now: DateTime.now().toUtc(),
+    );
+    if (!arrived || !mounted) return;
+    setState(() => _arrivalNotified = true);
+    try {
+      unawaited(Hive.box(_metaBox).put(_arrivalNoticeKey, true));
+    } catch (_) {
+      // El aviso visible permanece aunque falle la persistencia local.
+    }
+    unawaited(_playArrivalSound());
+  }
+
   String _statusTitle(String status) => switch (status) {
-    'requested' => 'Preparando solicitud',
-    'published' => 'Buscando transportista',
-    'accepted' => 'Transportista asignado',
-    'en_route' => 'El transportista va hacia ti',
-    'pickup' => 'Transportista en el punto de recogida',
-    'in_progress' => 'Servicio en curso',
-    'completed' => 'Servicio completado',
-    'settled' => 'Servicio finalizado',
-    'cancelled_by_customer' => 'Solicitud cancelada',
-    'cancelled_by_driver' => 'Cancelada por el transportista',
-    'expired' => 'La solicitud expiró',
-    'incident' => 'Servicio en revisión',
-    _ => 'Estado del servicio',
-  };
+        'requested' => 'Preparando solicitud',
+        'published' => 'Buscando transportista',
+        'accepted' => 'Transportista asignado',
+        'en_route' => 'El transportista va hacia ti',
+        'pickup' => 'Transportista en el punto de recogida',
+        'in_progress' => 'Servicio en curso',
+        'completed' => 'Servicio completado',
+        'settled' => 'Servicio finalizado',
+        'cancelled_by_customer' => 'Solicitud cancelada',
+        'cancelled_by_driver' => 'Cancelada por el transportista',
+        'expired' => 'La solicitud expiró',
+        'incident' => 'Servicio en revisión',
+        _ => 'Estado del servicio',
+      };
 
   String _statusDescription(String status) => switch (status) {
-    'published' =>
-      'Tu solicitud está visible para los transportistas compatibles.',
-    'accepted' =>
-      'Un transportista aceptó tu solicitud. Ya puedes ver sus datos.',
-    'en_route' => 'Tu transportista se dirige al punto de recogida.',
-    'pickup' => 'El transportista indicó que llegó al punto de recogida.',
-    'in_progress' => 'El servicio ya comenzó.',
-    'completed' => 'El transportista marcó el servicio como completado.',
-    'settled' => 'El servicio quedó cerrado correctamente.',
-    'cancelled_by_customer' => 'Cancelaste esta solicitud.',
-    'cancelled_by_driver' => 'El transportista canceló el servicio.',
-    'expired' => 'Ningún transportista aceptó antes del vencimiento.',
-    'incident' => 'El servicio requiere revisión.',
-    _ => 'El estado se actualizará automáticamente.',
-  };
+        'published' =>
+          'Tu solicitud está visible para los transportistas compatibles.',
+        'accepted' =>
+          'Un transportista aceptó tu solicitud. Ya puedes ver sus datos.',
+        'en_route' => 'Tu transportista se dirige al punto de recogida.',
+        'pickup' => 'El transportista indicó que llegó al punto de recogida.',
+        'in_progress' => 'El servicio ya comenzó.',
+        'completed' => 'El transportista marcó el servicio como completado.',
+        'settled' => 'El servicio quedó cerrado correctamente.',
+        'cancelled_by_customer' => 'Cancelaste esta solicitud.',
+        'cancelled_by_driver' => 'El transportista canceló el servicio.',
+        'expired' => 'Ningún transportista aceptó antes del vencimiento.',
+        'incident' => 'El servicio requiere revisión.',
+        _ => 'El estado se actualizará automáticamente.',
+      };
 
   Future<String?> _askCancellationReason() async {
     final controller = TextEditingController();
@@ -494,17 +568,19 @@ class _MarketplaceCustomerTrackingScreenState
   }
 
   IconData _statusIcon(String status) => switch (status) {
-    'published' => Icons.radar_rounded,
-    'accepted' => Icons.person_pin_circle_outlined,
-    'en_route' => Icons.directions_car_filled_outlined,
-    'pickup' => Icons.location_on_outlined,
-    'in_progress' => Icons.alt_route_rounded,
-    'completed' || 'settled' => Icons.check_circle_outline_rounded,
-    'cancelled_by_customer' || 'cancelled_by_driver' => Icons.cancel_outlined,
-    'expired' => Icons.timer_off_outlined,
-    'incident' => Icons.warning_amber_rounded,
-    _ => Icons.local_taxi_outlined,
-  };
+        'published' => Icons.radar_rounded,
+        'accepted' => Icons.person_pin_circle_outlined,
+        'en_route' => Icons.directions_car_filled_outlined,
+        'pickup' => Icons.location_on_outlined,
+        'in_progress' => Icons.alt_route_rounded,
+        'completed' || 'settled' => Icons.check_circle_outline_rounded,
+        'cancelled_by_customer' ||
+        'cancelled_by_driver' =>
+          Icons.cancel_outlined,
+        'expired' => Icons.timer_off_outlined,
+        'incident' => Icons.warning_amber_rounded,
+        _ => Icons.local_taxi_outlined,
+      };
 
   Widget _liveMap() {
     Map<String, dynamic>? stored;
@@ -526,18 +602,26 @@ class _MarketplaceCustomerTrackingScreenState
         final rawPoints = stored['route_points'];
         final points = rawPoints is List
             ? rawPoints
-                  .whereType<Map>()
-                  .map((point) => MarketplaceMapPoint.fromMap(point))
-                  .toList(growable: false)
+                .whereType<Map>()
+                .map((point) => MarketplaceMapPoint.fromMap(point))
+                .toList(growable: false)
             : <MarketplaceMapPoint>[];
+        final gps = _job?.driverLocation;
+        final driverPoint = gps != null && gps.isFresh
+            ? MarketplaceMapPoint(
+                label: 'Conductor',
+                lat: gps.latitude,
+                lon: gps.longitude,
+              )
+            : null;
         final distance = (stored['distance_km'] as num?)?.toDouble() ?? 0;
         // El mapa de seguimiento ocupa la zona visible superior, no la
         // pantalla completa bajo la ficha. Adaptar el zoom a esa altura.
         final zoom = distance <= 3
             ? 12.3
             : distance <= 8
-            ? 11.3
-            : 10.3;
+                ? 11.3
+                : 10.3;
         return MarketplaceVectorMap(
           initialCenter: LatLng(
             (origin.lat + destination.lat) / 2,
@@ -545,6 +629,10 @@ class _MarketplaceCustomerTrackingScreenState
           ),
           initialZoom: zoom,
           ornamentBottomInset: _trackingMapInset,
+          requestedCenter: _driverCameraTarget,
+          requestedZoom: 14.0,
+          onCenterMoved: _onCustomerMapMoved,
+          driverPoint: driverPoint,
           originPoint: origin,
           destinationPoint: destination,
           routePoints: points,
@@ -724,7 +812,7 @@ class _MarketplaceCustomerTrackingScreenState
     final terminal = job.isTerminal;
     return Container(
       decoration: BoxDecoration(
-                gradient: const LinearGradient(
+        gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [Color(0xE8173742), Color(0xEC081720)],
@@ -779,6 +867,67 @@ class _MarketplaceCustomerTrackingScreenState
                       fontSize: 13,
                     ),
                   ),
+                  if (job.hasAssignedDriver &&
+                      const {'accepted', 'en_route', 'pickup', 'in_progress'}
+                          .contains(job.status)) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      job.driverLocation?.isFresh == true
+                          ? 'Ubicación del conductor actualizada'
+                          : 'Ubicación del conductor temporalmente no disponible',
+                      style: const TextStyle(
+                          color: TuktukTheme.muted, fontSize: 12),
+                    ),
+                  ],
+                  if (_arrivalNotified &&
+                      const {'accepted', 'en_route', 'pickup'}
+                          .contains(job.status)) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF174A43),
+                        border: Border.all(color: TuktukTheme.mint, width: 1.3),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.notifications_active_rounded,
+                              color: TuktukTheme.mint, size: 28),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Tu conductor está cerca',
+                                    style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w900)),
+                                SizedBox(height: 4),
+                                Text(
+                                    'El GPS lo sitúa en la zona de recogida. '
+                                    'Comprueba el vehículo y contacta si es necesario.',
+                                    style: TextStyle(fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (!_arrivalNotified &&
+                      const {'accepted', 'en_route', 'pickup'}
+                          .contains(job.status)) ...[
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () => unawaited(_playArrivalSound()),
+                        icon: const Icon(Icons.volume_up_rounded, size: 18),
+                        label: const Text('Probar aviso sonoro de llegada'),
+                      ),
+                    ),
+                  ],
                   if (job.status == 'published' ||
                       job.status == 'requested') ...[
                     const SizedBox(height: 11),
@@ -869,10 +1018,13 @@ class _MarketplaceCustomerTrackingScreenState
   Widget build(BuildContext context) {
     final job = _job;
     final searching = job?.status == 'published' || job?.status == 'requested';
-    final assigned = job != null && const {
-      'accepted', 'en_route', 'pickup'
-    }.contains(job.status);
-    final initialSheetSize = searching ? .32 : assigned ? .37 : .40;
+    final assigned = job != null &&
+        const {'accepted', 'en_route', 'pickup'}.contains(job.status);
+    final initialSheetSize = searching
+        ? .32
+        : assigned
+            ? .37
+            : .40;
     return PopScope(
       canPop: false,
       child: Scaffold(
@@ -911,6 +1063,29 @@ class _MarketplaceCustomerTrackingScreenState
                   ),
                 ),
               ),
+              if (job?.hasAssignedDriver == true &&
+                  job?.driverLocation?.isFresh == true)
+                Positioned(
+                  top: 76,
+                  right: 12,
+                  child: Material(
+                    color: TuktukTheme.backgroundSoft,
+                    borderRadius: BorderRadius.circular(14),
+                    elevation: 3,
+                    child: TextButton.icon(
+                      onPressed: _recenterOnDriver,
+                      icon: Icon(
+                        _followDriver ? Icons.gps_fixed : Icons.my_location,
+                        size: 18,
+                      ),
+                      label: Text(
+                        _followDriver
+                            ? 'Siguiendo conductor'
+                            : 'Seguir conductor',
+                      ),
+                    ),
+                  ),
+                ),
               if (job == null)
                 Center(
                   child: Padding(
@@ -939,7 +1114,8 @@ class _MarketplaceCustomerTrackingScreenState
                   child: NotificationListener<DraggableScrollableNotification>(
                     onNotification: (notice) {
                       _trackingSheetFraction = notice.extent;
-                      final height = MediaQuery.sizeOf(context).height * notice.extent;
+                      final height =
+                          MediaQuery.sizeOf(context).height * notice.extent;
                       if ((_trackingMapInset.value - height).abs() > 2) {
                         _trackingMapInset.value = height;
                       }
@@ -979,8 +1155,10 @@ class _MarketplaceCustomerTrackingScreenState
         builder: (sheetContext) {
           final viewport = MediaQuery.sizeOf(sheetContext).height;
           final keyboard = MediaQuery.viewInsetsOf(sheetContext).bottom;
-          final allowedHeight = (viewport - keyboard - 12).clamp(0.0, viewport).toDouble();
-          final contentHeight = (viewport * .66).clamp(0.0, allowedHeight).toDouble();
+          final allowedHeight =
+              (viewport - keyboard - 12).clamp(0.0, viewport).toDouble();
+          final contentHeight =
+              (viewport * .66).clamp(0.0, allowedHeight).toDouble();
           return Padding(
             padding: EdgeInsets.only(bottom: keyboard),
             child: SizedBox(
@@ -1075,54 +1253,54 @@ class _MarketplaceCustomerHistoryState
 
   @override
   Widget build(BuildContext context) => SafeArea(
-    child: SizedBox(
-      height: MediaQuery.sizeOf(context).height * .7,
-      child: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Row(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * .7,
+          child: ListView(
+            padding: const EdgeInsets.all(20),
             children: [
-              const Expanded(
-                child: Text(
-                  'Historial',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Historial',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Cerrar historial',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              for (final job in _jobs)
+                ListTile(
+                  title: Text(
+                    '${job.originText ?? 'Origen'} → ${job.destinationText ?? 'Destino'}',
+                  ),
+                  subtitle: Text('${job.finalPrice} ${job.currency}'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).pop(job),
+                ),
+              if (_error != null) Text(_error!),
+              if (!_loading && _jobs.isEmpty && _error == null)
+                const Text('Todavía no tienes carreras finalizadas.'),
+              if (_loading) const Center(child: CircularProgressIndicator()),
+              if (_hasMore && !_loading)
+                TextButton(
+                  onPressed: _loadMore,
+                  child: Text(
+                    _error == null ? 'Cargar más historial' : 'Reintentar',
                   ),
                 ),
-              ),
-              IconButton(
-                tooltip: 'Cerrar historial',
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close_rounded),
-              ),
             ],
           ),
-          const SizedBox(height: 10),
-          for (final job in _jobs)
-            ListTile(
-              title: Text(
-                '${job.originText ?? 'Origen'} → ${job.destinationText ?? 'Destino'}',
-              ),
-              subtitle: Text('${job.finalPrice} ${job.currency}'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).pop(job),
-            ),
-          if (_error != null) Text(_error!),
-          if (!_loading && _jobs.isEmpty && _error == null)
-            const Text('Todavía no tienes carreras finalizadas.'),
-          if (_loading) const Center(child: CircularProgressIndicator()),
-          if (_hasMore && !_loading)
-            TextButton(
-              onPressed: _loadMore,
-              child: Text(
-                _error == null ? 'Cargar más historial' : 'Reintentar',
-              ),
-            ),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 }
 
 class _MarketplaceCustomerRatingScreenState
@@ -1182,115 +1360,119 @@ class _MarketplaceCustomerRatingScreenState
 
   @override
   Widget build(BuildContext context) => Container(
-    decoration: BoxDecoration(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(27)),
-      border: Border.all(color: TuktukTheme.border),
-      gradient: const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xF01A3D45), Color(0xFA071722)],
-      ),
-    ),
-    child: SafeArea(
-      top: false,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: 10),
-          Align(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: TuktukTheme.border,
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
+        decoration: BoxDecoration(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(27)),
+          border: Border.all(color: TuktukTheme.border),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xF01A3D45), Color(0xFA071722)],
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 10, 8),
-            child: Row(
-              children: [
-                const Icon(Icons.verified_rounded, color: TuktukTheme.gold),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Text(
-                    'Calificar transportista',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 10),
+              Align(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: TuktukTheme.border,
+                    borderRadius: BorderRadius.circular(4),
                   ),
                 ),
-                IconButton(
-                  tooltip: 'Cerrar calificación',
-                  onPressed: _sending ? null : () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close_rounded),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(18, 6, 18, 14),
-              children: [
-                const Text(
-                  '¿Cómo fue tu experiencia?',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Tu valoración ayuda a mejorar el servicio.',
-                  style: TextStyle(color: TuktukTheme.muted, fontSize: 13),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  alignment: WrapAlignment.spaceEvenly,
-                  children: List.generate(
-                    5,
-                    (index) => IconButton(
-                      onPressed: _sending
-                          ? null
-                          : () => setState(() => _stars = index + 1),
-                      icon: Icon(
-                        index < _stars
-                            ? Icons.star_rounded
-                            : Icons.star_outline_rounded,
-                        size: 38,
-                        color: TuktukTheme.gold,
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 10, 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.verified_rounded, color: TuktukTheme.gold),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        'Calificar transportista',
+                        style: TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.w900),
                       ),
-                      tooltip: '${index + 1} estrellas',
                     ),
-                  ),
+                    IconButton(
+                      tooltip: 'Cerrar calificación',
+                      onPressed:
+                          _sending ? null : () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _comment,
-                  maxLength: 1000,
-                  minLines: 2,
-                  maxLines: 4,
-                  decoration: const InputDecoration(
-                    labelText: 'Comentario (opcional)',
-                    hintText: 'Cuéntanos cómo fue tu viaje',
-                  ),
-                ),
-                if (_error != null)
-                  Text(_error!, style: const TextStyle(color: kDanger)),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 9, 18, 14),
-            child: FilledButton(
-              onPressed: _sending ? null : _submit,
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(54),
-                backgroundColor: TuktukTheme.gold,
-                foregroundColor: TuktukTheme.background,
-                textStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
               ),
-              child: Text(_sending ? 'Enviando...' : 'Enviar calificación'),
-            ),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(18, 6, 18, 14),
+                  children: [
+                    const Text(
+                      '¿Cómo fue tu experiencia?',
+                      style:
+                          TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Tu valoración ayuda a mejorar el servicio.',
+                      style: TextStyle(color: TuktukTheme.muted, fontSize: 13),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      alignment: WrapAlignment.spaceEvenly,
+                      children: List.generate(
+                        5,
+                        (index) => IconButton(
+                          onPressed: _sending
+                              ? null
+                              : () => setState(() => _stars = index + 1),
+                          icon: Icon(
+                            index < _stars
+                                ? Icons.star_rounded
+                                : Icons.star_outline_rounded,
+                            size: 38,
+                            color: TuktukTheme.gold,
+                          ),
+                          tooltip: '${index + 1} estrellas',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _comment,
+                      maxLength: 1000,
+                      minLines: 2,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        labelText: 'Comentario (opcional)',
+                        hintText: 'Cuéntanos cómo fue tu viaje',
+                      ),
+                    ),
+                    if (_error != null)
+                      Text(_error!, style: const TextStyle(color: kDanger)),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 9, 18, 14),
+                child: FilledButton(
+                  onPressed: _sending ? null : _submit,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(54),
+                    backgroundColor: TuktukTheme.gold,
+                    foregroundColor: TuktukTheme.background,
+                    textStyle: const TextStyle(
+                        fontWeight: FontWeight.w900, fontSize: 16),
+                  ),
+                  child: Text(_sending ? 'Enviando...' : 'Enviar calificación'),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 }

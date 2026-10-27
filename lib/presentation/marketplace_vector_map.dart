@@ -3,20 +3,20 @@ part of '../main.dart';
 // Shared vector renderer for the real customer booking flow.
 // Only public map configuration and data for this booking are rendered.
 String marketplaceVectorPointGeoJson(MarketplaceMapPoint? point) => jsonEncode({
-  'type': 'FeatureCollection',
-  'features': point == null
-      ? <Object>[]
-      : <Object>[
-          {
-            'type': 'Feature',
-            'geometry': {
-              'type': 'Point',
-              'coordinates': [point.lon, point.lat],
-            },
-            'properties': <String, Object>{},
-          },
-        ],
-});
+      'type': 'FeatureCollection',
+      'features': point == null
+          ? <Object>[]
+          : <Object>[
+              {
+                'type': 'Feature',
+                'geometry': {
+                  'type': 'Point',
+                  'coordinates': [point.lon, point.lat],
+                },
+                'properties': <String, Object>{},
+              },
+            ],
+    });
 
 String marketplaceVectorLineGeoJson(List<MarketplaceMapPoint> points) =>
     jsonEncode({
@@ -46,6 +46,7 @@ class MarketplaceVectorMap extends StatefulWidget {
     this.ornamentBottomInset,
     this.markerPoint,
     this.markerIsDestination = false,
+    this.driverPoint,
     this.originPoint,
     this.destinationPoint,
     this.routePoints = const <MarketplaceMapPoint>[],
@@ -61,6 +62,7 @@ class MarketplaceVectorMap extends StatefulWidget {
   final ValueNotifier<double>? ornamentBottomInset;
   final MarketplaceMapPoint? markerPoint;
   final bool markerIsDestination;
+  final MarketplaceMapPoint? driverPoint;
   final MarketplaceMapPoint? originPoint;
   final MarketplaceMapPoint? destinationPoint;
   final List<MarketplaceMapPoint> routePoints;
@@ -74,6 +76,7 @@ class MarketplaceVectorMap extends StatefulWidget {
 class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
   static const _sourceOrigin = 'tuktuk-client-vector-origin';
   static const _sourceDestination = 'tuktuk-client-vector-destination';
+  static const _sourceDriver = 'tuktuk-client-vector-driver';
   static const _sourceRoute = 'tuktuk-client-vector-route';
 
   mbx.MapboxMap? _map;
@@ -109,6 +112,9 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
         oldWidget.routePoints != widget.routePoints) {
       unawaited(_refreshGeometry());
     }
+    if (oldWidget.driverPoint != widget.driverPoint) {
+      unawaited(_refreshDriverPoint());
+    }
   }
 
   @override
@@ -119,15 +125,13 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
     super.dispose();
   }
 
-  MarketplaceMapPoint? get _origin =>
-      widget.onPointTap != null &&
+  MarketplaceMapPoint? get _origin => widget.onPointTap != null &&
           widget.markerPoint != null &&
           !widget.markerIsDestination
       ? widget.markerPoint
       : widget.originPoint;
 
-  MarketplaceMapPoint? get _destination =>
-      widget.onPointTap != null &&
+  MarketplaceMapPoint? get _destination => widget.onPointTap != null &&
           widget.markerPoint != null &&
           widget.markerIsDestination
       ? widget.markerPoint
@@ -238,6 +242,12 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
           data: marketplaceVectorLineGeoJson(widget.routePoints),
         ),
       );
+      await map.addSource(
+        mbx.GeoJsonSource(
+          id: _sourceDriver,
+          data: marketplaceVectorPointGeoJson(widget.driverPoint),
+        ),
+      );
       // La geometria vial verificada se representa siempre en dorado.
       // Sin slot: sobre el mapa base dark-v11 y estilos privados por igual.
       // Aura tenue + trazo opaco: contraste legible sin tapar las calles.
@@ -312,12 +322,23 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
           slot: 'top',
         ),
       );
+      await map.addLayer(
+        mbx.CircleLayer(
+          id: 'tuktuk-client-driver-live-position',
+          sourceId: _sourceDriver,
+          circleColor: 0xFF28C7FF,
+          circleRadius: 10,
+          circleStrokeColor: 0xFFFFFFFF,
+          circleStrokeWidth: 3,
+        ),
+      );
       if (!mounted || map != _map) return;
       setState(() {
         _layersReady = true;
         _loadError = null;
       });
       await _refreshGeometry();
+      await _refreshDriverPoint();
     } catch (_) {
       if (mounted && map == _map) {
         setState(() => _loadError = 'No se pudo dibujar el mapa.');
@@ -331,6 +352,19 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
       throw StateError('Map source unavailable: $id');
     }
     await source.updateGeoJSON(data);
+  }
+
+  Future<void> _refreshDriverPoint() async {
+    if (!_layersReady || _map == null) return;
+    try {
+      // Actualización ligera, sin recrear mapa, estilo ni ruta.
+      await _updateSource(
+        _sourceDriver,
+        marketplaceVectorPointGeoJson(widget.driverPoint),
+      );
+    } catch (_) {
+      // Si falla la actualización GPS, preservar el mapa de la carrera.
+    }
   }
 
   Future<void> _refreshGeometry() async {

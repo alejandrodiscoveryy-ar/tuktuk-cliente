@@ -33,6 +33,60 @@ class MarketplaceCustomerSession {
       );
 }
 
+/// GPS expuesto únicamente desde el gateway de la carrera propia.
+class MarketplaceDriverLiveLocation {
+  const MarketplaceDriverLiveLocation({
+    required this.latitude,
+    required this.longitude,
+    required this.capturedAt,
+    this.accuracyM,
+    this.speedMps,
+  });
+
+  final double latitude;
+  final double longitude;
+  final DateTime? capturedAt;
+  final double? accuracyM;
+  final double? speedMps;
+
+  bool get isFresh {
+    if (capturedAt == null ||
+        accuracyM == null ||
+        accuracyM! > 50 ||
+        accuracyM! < 0) {
+      return false;
+    }
+    final delta = DateTime.now().toUtc().difference(capturedAt!);
+    return delta >= const Duration(seconds: -15) &&
+        delta <= const Duration(seconds: 60);
+  }
+
+  static MarketplaceDriverLiveLocation? fromMap(Object? raw) {
+    if (raw is! Map) return null;
+    final lat = double.tryParse('${raw['latitude']}');
+    final lon = double.tryParse('${raw['longitude']}');
+    if (lat == null ||
+        lon == null ||
+        !lat.isFinite ||
+        !lon.isFinite ||
+        lat < -90 ||
+        lat > 90 ||
+        lon < -180 ||
+        lon > 180) {
+      return null;
+    }
+    final accuracy = double.tryParse('${raw['accuracy_m']}');
+    final speed = double.tryParse('${raw['speed_mps']}');
+    return MarketplaceDriverLiveLocation(
+      latitude: lat,
+      longitude: lon,
+      capturedAt: _marketDate(raw['captured_at']),
+      accuracyM: accuracy?.isFinite == true ? accuracy : null,
+      speedMps: speed?.isFinite == true ? speed : null,
+    );
+  }
+}
+
 class MarketplaceCustomerJob {
   const MarketplaceCustomerJob({
     required this.id,
@@ -46,6 +100,7 @@ class MarketplaceCustomerJob {
     this.publishedAt,
     this.expiresAt,
     this.createdAt,
+    this.driverLocation,
     this.driverDisplayName,
     this.driverWhatsappPhone,
     this.driverPhotoAssetId,
@@ -70,6 +125,7 @@ class MarketplaceCustomerJob {
   final DateTime? expiresAt;
   final DateTime? createdAt;
 
+  final MarketplaceDriverLiveLocation? driverLocation;
   final String? driverDisplayName;
   final String? driverWhatsappPhone;
   final String? driverPhotoAssetId;
@@ -88,42 +144,45 @@ class MarketplaceCustomerJob {
   // La regla transaccional compartida del backend se revisara por separado.
   bool get customerCanFinish => status == 'in_progress';
   bool get customerCanCancel => const {
-    'requested',
-    'published',
-    'accepted',
-  }.contains(status);
+        'requested',
+        'published',
+        'accepted',
+      }.contains(status);
 
   bool get isTerminal => const {
-    'settled',
-    'cancelled_by_customer',
-    'cancelled_by_driver',
-    'expired',
-    'incident',
-  }.contains(status);
+        'settled',
+        'cancelled_by_customer',
+        'cancelled_by_driver',
+        'expired',
+        'incident',
+      }.contains(status);
 
   factory MarketplaceCustomerJob.fromMap(Map map) => MarketplaceCustomerJob(
-    id: _marketText(map['job_id'] ?? map['id']) ?? '',
-    status: _marketText(map['status']) ?? 'unknown',
-    serviceCode: _marketText(map['service_code']),
-    originText: _marketText(map['origin_text']),
-    destinationText: _marketText(map['destination_text']),
-    scheduledFor: _marketDate(map['scheduled_for']),
-    finalPrice: _marketNumber(map['final_price']),
-    currency: _marketText(map['currency']) ?? 'CUP',
-    publishedAt: _marketDate(map['published_at']),
-    expiresAt: _marketDate(map['expires_at']),
-    createdAt: _marketDate(map['created_at']),
-    driverDisplayName: _marketText(map['driver_display_name']),
-    driverWhatsappPhone: _marketText(map['driver_whatsapp_phone']),
-    driverPhotoAssetId: _marketText(map['driver_photo_asset_id']),
-    vehicleId: _marketText(map['vehicle_id']),
-    vehicleName: _marketText(map['vehicle_name']),
-    vehicleCategoryCode: _marketText(map['vehicle_category_code']),
-    vehicleBrand: _marketText(map['vehicle_brand']),
-    vehicleModel: _marketText(map['vehicle_model']),
-    vehicleRegistration: _marketText(map['vehicle_registration']),
-    vehicleMainPhotoAssetId: _marketText(map['vehicle_main_photo_asset_id']),
-  );
+        id: _marketText(map['job_id'] ?? map['id']) ?? '',
+        status: _marketText(map['status']) ?? 'unknown',
+        serviceCode: _marketText(map['service_code']),
+        originText: _marketText(map['origin_text']),
+        destinationText: _marketText(map['destination_text']),
+        scheduledFor: _marketDate(map['scheduled_for']),
+        finalPrice: _marketNumber(map['final_price']),
+        currency: _marketText(map['currency']) ?? 'CUP',
+        publishedAt: _marketDate(map['published_at']),
+        expiresAt: _marketDate(map['expires_at']),
+        createdAt: _marketDate(map['created_at']),
+        driverLocation:
+            MarketplaceDriverLiveLocation.fromMap(map['driver_location']),
+        driverDisplayName: _marketText(map['driver_display_name']),
+        driverWhatsappPhone: _marketText(map['driver_whatsapp_phone']),
+        driverPhotoAssetId: _marketText(map['driver_photo_asset_id']),
+        vehicleId: _marketText(map['vehicle_id']),
+        vehicleName: _marketText(map['vehicle_name']),
+        vehicleCategoryCode: _marketText(map['vehicle_category_code']),
+        vehicleBrand: _marketText(map['vehicle_brand']),
+        vehicleModel: _marketText(map['vehicle_model']),
+        vehicleRegistration: _marketText(map['vehicle_registration']),
+        vehicleMainPhotoAssetId:
+            _marketText(map['vehicle_main_photo_asset_id']),
+      );
 }
 
 class MarketplaceCustomerCancellation {
@@ -398,22 +457,24 @@ class MarketplaceCustomerService {
     required String sessionToken,
     required String idempotencyKey,
     String? email,
-  }) => _gatewayOne('start_session', {
-    'target_display_name': displayName,
-    'target_whatsapp_phone': whatsappPhone,
-    'target_email': email,
-    'target_session_token': sessionToken,
-    'target_idempotency_key': idempotencyKey,
-  }).then(MarketplaceCustomerSession.fromMap);
+  }) =>
+      _gatewayOne('start_session', {
+        'target_display_name': displayName,
+        'target_whatsapp_phone': whatsappPhone,
+        'target_email': email,
+        'target_session_token': sessionToken,
+        'target_idempotency_key': idempotencyKey,
+      }).then(MarketplaceCustomerSession.fromMap);
   Future<MarketplaceCustomerJob> getJob({
     required String sessionId,
     required String sessionToken,
     required String jobId,
-  }) => _gatewayOne('get_job', {
-    'target_session_id': sessionId,
-    'target_session_token': sessionToken,
-    'target_job_id': jobId,
-  }).then(MarketplaceCustomerJob.fromMap);
+  }) =>
+      _gatewayOne('get_job', {
+        'target_session_id': sessionId,
+        'target_session_token': sessionToken,
+        'target_job_id': jobId,
+      }).then(MarketplaceCustomerJob.fromMap);
 
   Future<MarketplaceCustomerCancellation> cancelJob({
     required String sessionId,
@@ -421,25 +482,27 @@ class MarketplaceCustomerService {
     required String jobId,
     required String reason,
     required String idempotencyKey,
-  }) => _gatewayOne('cancel', {
-    'target_session_id': sessionId,
-    'target_session_token': sessionToken,
-    'target_job_id': jobId,
-    'target_reason': reason,
-    'target_idempotency_key': idempotencyKey,
-  }).then(MarketplaceCustomerCancellation.fromMap);
+  }) =>
+      _gatewayOne('cancel', {
+        'target_session_id': sessionId,
+        'target_session_token': sessionToken,
+        'target_job_id': jobId,
+        'target_reason': reason,
+        'target_idempotency_key': idempotencyKey,
+      }).then(MarketplaceCustomerCancellation.fromMap);
 
   Future<MarketplaceCustomerFinish> finishJob({
     required String sessionId,
     required String sessionToken,
     required String jobId,
     required String idempotencyKey,
-  }) => _gatewayOne('finish', {
-    'target_session_id': sessionId,
-    'target_session_token': sessionToken,
-    'target_job_id': jobId,
-    'target_idempotency_key': idempotencyKey,
-  }).then(MarketplaceCustomerFinish.fromMap);
+  }) =>
+      _gatewayOne('finish', {
+        'target_session_id': sessionId,
+        'target_session_token': sessionToken,
+        'target_job_id': jobId,
+        'target_idempotency_key': idempotencyKey,
+      }).then(MarketplaceCustomerFinish.fromMap);
   Future<MarketplaceCustomerRating?> getRating({
     required String sessionId,
     required String sessionToken,
@@ -463,22 +526,24 @@ class MarketplaceCustomerService {
     required int stars,
     required String idempotencyKey,
     String? comment,
-  }) => _gatewayOne('create_rating', {
-    'target_session_id': sessionId,
-    'target_session_token': sessionToken,
-    'target_job_id': jobId,
-    'target_stars': stars,
-    'target_comment': comment,
-    'target_idempotency_key': idempotencyKey,
-  }).then(MarketplaceCustomerRating.fromMap);
+  }) =>
+      _gatewayOne('create_rating', {
+        'target_session_id': sessionId,
+        'target_session_token': sessionToken,
+        'target_job_id': jobId,
+        'target_stars': stars,
+        'target_comment': comment,
+        'target_idempotency_key': idempotencyKey,
+      }).then(MarketplaceCustomerRating.fromMap);
 
   Future<MarketplaceCustomerJobMedia> getJobMedia({
     required String sessionId,
     required String sessionToken,
     required String jobId,
-  }) => _gatewayOne('media', {
-    'target_session_id': sessionId,
-    'target_session_token': sessionToken,
-    'target_job_id': jobId,
-  }).then(MarketplaceCustomerJobMedia.fromMap);
+  }) =>
+      _gatewayOne('media', {
+        'target_session_id': sessionId,
+        'target_session_token': sessionToken,
+        'target_job_id': jobId,
+      }).then(MarketplaceCustomerJobMedia.fromMap);
 }
