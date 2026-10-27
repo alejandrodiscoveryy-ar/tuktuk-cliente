@@ -17,6 +17,7 @@
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="TUKTUK Cliente.">
 
@@ -39,8 +40,10 @@
     #tuktuk-startup.tuktuk-startup-hidden { opacity: 0; pointer-events: none; }
     .tuktuk-startup-inner { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; padding: 24px; }
     .tuktuk-startup-icon { width: 82px; height: 82px; object-fit: contain; }
-    .tuktuk-startup-title { font-weight: 800; letter-spacing: 0.12em; font-size: 24px; color: #F3F8F7; }
-    .tuktuk-startup-subtitle { color: #93A2B5; font-size: 13px; letter-spacing: 0.08em; }
+    .tuktuk-startup-brand { display: flex; align-items: baseline; justify-content: center; white-space: nowrap; font-size: clamp(30px, 8vw, 38px); font-weight: 900; letter-spacing: -1.9px; line-height: 1; }
+    .tuktuk-startup-tuk-white { color: #FFFFFF; }
+    .tuktuk-startup-tuk-gold { color: #E5A84E; }
+    .tuktuk-startup-slogan { color: #D0D6DC; font-size: clamp(9px, 2.5vw, 11px); font-weight: 600; letter-spacing: .12em; white-space: nowrap; }
     .tuktuk-startup-spinner { box-sizing: border-box; margin-top: 12px; height: 28px; width: 28px; border-radius: 50%; border: 3px solid #1B3B39; border-top-color: #2DD4A3; animation: tuktuk-spin 0.85s linear infinite; }
     #tuktuk-startup-message { color: #93A2B5; font-size: 12px; max-width: 270px; line-height: 1.5; }
     #tuktuk-startup-retry { border: 1px solid #2DD4A3; background: transparent; color: #2DD4A3; padding: 10px 18px; border-radius: 12px; font: inherit; cursor: pointer; }
@@ -53,8 +56,8 @@
   <div id="tuktuk-startup" role="status" aria-live="polite" aria-label="Iniciando TUKTUK Cliente">
     <div class="tuktuk-startup-inner">
       <img class="tuktuk-startup-icon" src="icons/Icon-192.png" width="82" height="82" alt="" decoding="async">
-      <div class="tuktuk-startup-title">TUKTUK</div>
-      <div class="tuktuk-startup-subtitle">CLIENTE</div>
+      <div class="tuktuk-startup-brand" aria-label="TUKTUK - Tu ciudad te mueve"><span class="tuktuk-startup-tuk-white">TUK</span><span class="tuktuk-startup-tuk-gold">TUK</span></div>
+      <div class="tuktuk-startup-slogan">TU CIUDAD TE MUEVE</div>
       <div class="tuktuk-startup-spinner" aria-hidden="true"></div>
       <div id="tuktuk-startup-message">Iniciando la aplicacion...</div>
       <button type="button" id="tuktuk-startup-retry" hidden>Reintentar</button>
