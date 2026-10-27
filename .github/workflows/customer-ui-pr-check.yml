@@ -45,6 +45,7 @@ jobs:
         run: |
           node --check web/customer-cache-sw.js
           node --check web/firebase-messaging-sw.js
+          node --test test/web/tuktuk_startup_test.js
       - name: Build web release smoke
         shell: bash
         run: |
