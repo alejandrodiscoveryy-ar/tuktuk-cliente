@@ -56,3 +56,5 @@ jobs:
           test -f build/web/assets/assets/sounds/tuktuk-car-double-horn.wav
           test -f build/web/_headers
           du -h build/web/main.dart.js
+          # El HTML compilado debe contener el bootstrap real, no el placeholder.
+          node -e 'const fs=require("node:fs");const h=fs.readFileSync("build/web/index.html","utf8");if(h.includes("{{flutter_bootstrap_js}}")||!h.includes("_flutter.loader.load(")){process.exit(1)}'
