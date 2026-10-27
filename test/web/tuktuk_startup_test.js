@@ -40,6 +40,11 @@ function setup() {
 }
 
 test('HTML dibuja un fondo oscuro y marca el inicio antes de bootstrap', () => {
+  assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1">/);
+  assert.match(html, /class="tuktuk-startup-tuk-white">TUK<\/span>/);
+  assert.match(html, /class="tuktuk-startup-tuk-gold">TUK<\/span>/);
+  assert.match(html, /class="tuktuk-startup-slogan">TU CIUDAD TE MUEVE<\/div>/);
+  assert.doesNotMatch(html, /class="tuktuk-startup-subtitle"/);
   assert.match(html, /<meta name="theme-color" content="#050B10">/);
   assert.match(html, /html, body \{[^}]*background:\s*#050B10/i);
   assert.match(html, /id="tuktuk-startup"/);
