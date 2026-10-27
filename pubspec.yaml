@@ -31,3 +31,4 @@ flutter:
     - assets/branding/tuktuk_havana_shadow_relief.jpg
     - assets/map_markers/pickup_green.png
     - assets/map_markers/destination_red.png
+    - assets/sounds/tuktuk-car-double-horn.wav
