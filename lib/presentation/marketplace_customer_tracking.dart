@@ -38,6 +38,10 @@ class _MarketplaceCustomerTrackingScreenState
   bool _cancelling = false;
   bool _finishing = false;
   final ValueNotifier<double> _trackingMapInset = ValueNotifier<double>(0);
+  final ValueNotifier<LatLng?> _driverCameraTarget =
+      ValueNotifier<LatLng?>(null);
+  bool _followDriver = true;
+  DateTime? _lastDriverPositionTime;
   double _trackingSheetFraction = .32;
 
   String? _error;
@@ -81,6 +85,7 @@ class _MarketplaceCustomerTrackingScreenState
     WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
     _trackingMapInset.dispose();
+    _driverCameraTarget.dispose();
     super.dispose();
   }
 
@@ -103,6 +108,7 @@ class _MarketplaceCustomerTrackingScreenState
         _error = null;
       });
       _observeArrival(job);
+      _updateDriverCamera(job);
 
       final mediaSignature =
           '${job.driverPhotoAssetId ?? ''}:${job.vehicleMainPhotoAssetId ?? ''}';
@@ -187,6 +193,28 @@ class _MarketplaceCustomerTrackingScreenState
         });
       }
     }
+  }
+
+  void _updateDriverCamera(MarketplaceCustomerJob job) {
+    if (!_followDriver) return;
+    final gps = job.driverLocation;
+    if (gps == null || !gps.isFresh || gps.capturedAt == null) return;
+    if (_lastDriverPositionTime == gps.capturedAt) return;
+    _lastDriverPositionTime = gps.capturedAt;
+    _driverCameraTarget.value = LatLng(gps.latitude, gps.longitude);
+  }
+
+  void _recenterOnDriver() {
+    final gps = _job?.driverLocation;
+    if (gps == null || !gps.isFresh) return;
+    setState(() => _followDriver = true);
+    _lastDriverPositionTime = gps.capturedAt;
+    _driverCameraTarget.value = LatLng(gps.latitude, gps.longitude);
+  }
+
+  void _onCustomerMapMoved(LatLng center) {
+    if (!mounted || !_followDriver) return;
+    setState(() => _followDriver = false);
   }
 
   MarketplaceMapPoint? _pickupForArrival() {
@@ -601,6 +629,9 @@ class _MarketplaceCustomerTrackingScreenState
           ),
           initialZoom: zoom,
           ornamentBottomInset: _trackingMapInset,
+          requestedCenter: _driverCameraTarget,
+          requestedZoom: 14.0,
+          onCenterMoved: _onCustomerMapMoved,
           driverPoint: driverPoint,
           originPoint: origin,
           destinationPoint: destination,
@@ -1032,6 +1063,29 @@ class _MarketplaceCustomerTrackingScreenState
                   ),
                 ),
               ),
+              if (job?.hasAssignedDriver == true &&
+                  job?.driverLocation?.isFresh == true)
+                Positioned(
+                  top: 76,
+                  right: 12,
+                  child: Material(
+                    color: TuktukTheme.backgroundSoft,
+                    borderRadius: BorderRadius.circular(14),
+                    elevation: 3,
+                    child: TextButton.icon(
+                      onPressed: _recenterOnDriver,
+                      icon: Icon(
+                        _followDriver ? Icons.gps_fixed : Icons.my_location,
+                        size: 18,
+                      ),
+                      label: Text(
+                        _followDriver
+                            ? 'Siguiendo conductor'
+                            : 'Seguir conductor',
+                      ),
+                    ),
+                  ),
+                ),
               if (job == null)
                 Center(
                   child: Padding(
