@@ -4,7 +4,7 @@ const TUKTUK_CACHE_PREFIX = 'tuktuk-cliente-static-';
 const TUKTUK_CACHE_NAME = TUKTUK_CACHE_PREFIX + '__TUKTUK_RELEASE__';
 const TUKTUK_SCOPE = new URL(self.registration.scope);
 const TUKTUK_SHELL = [
-  '', 'index.html', 'flutter_bootstrap.js', 'main.dart.js',
+  '', 'index.html', 'main.dart.js',
   'manifest.json', 'favicon.png', 'icons/Icon-192.png',
 ];
 const TUKTUK_REVALIDATE = /^(?:index\.html|flutter_bootstrap\.js|flutter\.js|main\.dart\.js|manifest\.json)$/;

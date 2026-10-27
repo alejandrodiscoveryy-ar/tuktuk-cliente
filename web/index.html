@@ -33,6 +33,7 @@
   <title>TUKTUK Cliente</title>
   <link rel="manifest" href="manifest.json">
   <link rel="preconnect" href="https://api.mapbox.com" crossorigin>
+  <link rel="preload" href="main.dart.js" as="script" fetchpriority="high">
   <meta name="theme-color" content="#050B10">
   <style>
     html, body { margin: 0; min-height: 100%; background: #050B10; color: #F3F8F7; }
@@ -180,6 +181,6 @@
   }());
 </script>
 <!-- TUKTUK_STARTUP_SCRIPT_END -->
-  <script src="flutter_bootstrap.js" async></script>
+  <script>{{flutter_bootstrap_js}}</script>
 </body>
 </html>

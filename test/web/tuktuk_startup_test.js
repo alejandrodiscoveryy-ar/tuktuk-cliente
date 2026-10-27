@@ -40,6 +40,9 @@ function setup() {
 }
 
 test('HTML dibuja un fondo oscuro y marca el inicio antes de bootstrap', () => {
+  assert.match(html, /<link rel="preload" href="main\.dart\.js" as="script" fetchpriority="high">/);
+  assert.match(html, /<script>\{\{flutter_bootstrap_js\}\}<\/script>/);
+  assert.doesNotMatch(html, /<script src="flutter_bootstrap\.js" async><\/script>/);
   assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1">/);
   assert.match(html, /class="tuktuk-startup-tuk-white">TUK<\/span>/);
   assert.match(html, /class="tuktuk-startup-tuk-gold">TUK<\/span>/);
@@ -49,7 +52,7 @@ test('HTML dibuja un fondo oscuro y marca el inicio antes de bootstrap', () => {
   assert.match(html, /html, body \{[^}]*background:\s*#050B10/i);
   assert.match(html, /id="tuktuk-startup"/);
   assert.match(html, /src="icons\/Icon-192\.png"/);
-  assert.ok(html.indexOf('TUKTUK_STARTUP_SCRIPT_BEGIN') < html.indexOf('src="flutter_bootstrap.js"'));
+  assert.ok(html.indexOf('TUKTUK_STARTUP_SCRIPT_BEGIN') < html.indexOf('<script>{{flutter_bootstrap_js}}</script>'));
   assert.match(html, /prefers-reduced-motion/);
 });
 
