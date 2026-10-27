@@ -28,6 +28,13 @@ jobs:
           flutter-version: '3.44.4'
           channel: stable
           cache: true
+      - name: Provision licensed TUKTUK arrival horn
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assets/sounds
+          curl -fsSL --retry 3 --connect-timeout 20 'https://assets.mixkit.co/active_storage/sfx/719/719.wav' -o 'assets/sounds/tuktuk-car-double-horn.wav'
+          echo '6f6df4fb336b64476b7bf0ff1bb838345e316442ed7b112f93e4e2dacf0f628b  assets/sounds/tuktuk-car-double-horn.wav' | sha256sum --check
       - name: Dependencies
         run: flutter pub get
       - name: Analyze
@@ -45,5 +52,6 @@ jobs:
           flutter build web --release --base-href "/cliente/tuk/"
           test -f build/web/main.dart.js
           test -f build/web/customer-cache-sw.js
+          test -f build/web/assets/assets/sounds/tuktuk-car-double-horn.wav
           test -f build/web/_headers
           du -h build/web/main.dart.js

@@ -924,7 +924,7 @@ class _MarketplaceCustomerTrackingScreenState
                       child: TextButton.icon(
                         onPressed: () => unawaited(_playArrivalSound()),
                         icon: const Icon(Icons.volume_up_rounded, size: 18),
-                        label: const Text('Probar aviso sonoro de llegada'),
+                        label: const Text('Activar y probar claxon'),
                       ),
                     ),
                   ],
