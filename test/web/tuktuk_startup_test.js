@@ -85,3 +85,22 @@ test('Tras inicio lento ofrece reintentar sin ocultar la pantalla', () => {
   h.events['retry:click']();
   assert.equal(h.reloaded, true);
 });
+test('Firebase se inicializa despues del primer fotograma sin perder las alertas', () => {
+  const main = fs.readFileSync('lib/main.dart', 'utf8');
+  const banner = fs.readFileSync('lib/presentation/customer_eltoque_banner.dart', 'utf8');
+  const start = main.indexOf('Future<void> main() async {');
+  const end = main.indexOf('\ndouble _marketNumber(');
+  assert.ok(start >= 0 && end > start);
+  const entrypoint = main.slice(start, end);
+  assert.doesNotMatch(entrypoint, /await Firebase\.initializeApp/);
+  assert.match(entrypoint, /await MarketplaceMapService\.loadPublicConfiguration/);
+  assert.match(entrypoint, /addPostFrameCallback/);
+  assert.match(entrypoint, /runApp\(MarketplaceCustomerApp/);
+  assert.match(main, /customerFirebaseReady = ready\.future/);
+  assert.match(main, /ready\.complete\(true\)/);
+  assert.match(main, /ready\.complete\(false\)/);
+  assert.match(banner, /final ready = await customerFirebaseReady/);
+  assert.match(banner, /if \(_pushEnabled\) unawaited\(_pushClient\.refreshExisting\(\)\)/);
+  assert.match(banner, /FirebaseMessaging\.onMessage\.listen/);
+  assert.match(banner, /_pushBusy \|\| \(!_pushReady && !_pushEnabled\)/);
+});
