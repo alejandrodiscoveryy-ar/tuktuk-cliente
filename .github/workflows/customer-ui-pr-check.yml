@@ -34,7 +34,7 @@ jobs:
           set -euo pipefail
           mkdir -p assets/sounds
           curl -fsSL --retry 3 --connect-timeout 20 'https://assets.mixkit.co/active_storage/sfx/719/719.wav' -o 'assets/sounds/tuktuk-car-double-horn.wav'
-          echo '6f6df4fb336b64476b7bf0ff1bb838345e316442ed7b112f93e4e2dacf0f628b  assets/sounds/tuktuk-car-double-horn.wav' | sha256sum --check
+          echo '15c3836597e2b820a9543a1fa671d4b2691bca46ef98f7d4ca767936b5109ed0  assets/sounds/tuktuk-car-double-horn.wav' | sha256sum --check
       - name: Dependencies
         run: flutter pub get
       - name: Analyze
