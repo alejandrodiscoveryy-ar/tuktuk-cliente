@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'services/customer_arrival_sound_stub.dart'
+    if (dart.library.html) 'services/customer_arrival_sound_web.dart'
+    as customer_arrival_sound;
 import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -23,6 +26,7 @@ part 'data/marketplace_map_service.dart';
 part 'presentation/marketplace_customer.dart';
 part 'presentation/marketplace_customer_booking_flow.dart';
 part 'presentation/marketplace_customer_tracking.dart';
+part 'domain/marketplace_customer_arrival_geofence.dart';
 part 'presentation/marketplace_location_picker.dart';
 part 'presentation/marketplace_vector_map.dart';
 part 'presentation/tuktuk_ui.dart';
