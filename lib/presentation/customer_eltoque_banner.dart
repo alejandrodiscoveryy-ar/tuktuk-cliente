@@ -94,6 +94,8 @@ class TuktukCustomerEltoqueBanner extends StatefulWidget {
 class _TuktukCustomerEltoqueBannerState
     extends State<TuktukCustomerEltoqueBanner> with WidgetsBindingObserver {
   Timer? _refreshTimer;
+  Timer? _initialRateTimer;
+  bool _appVisible = true;
   StreamSubscription<RemoteMessage>? _pushMessages;
   late final CustomerRatePushClient _pushClient;
   bool _pushEnabled = false;
@@ -112,10 +114,16 @@ class _TuktukCustomerEltoqueBannerState
     _pushClient = CustomerRatePushClient(widget.client);
     _pushEnabled = _pushClient.hasSavedSubscription;
     if (kIsWeb) unawaited(_enablePushWhenReady());
-    _refresh();
+    // La tasa es solo informativa: no competir con la carga de carreras.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _initialRateTimer = Timer(const Duration(seconds: 3), () {
+        if (mounted) unawaited(_refresh());
+      });
+    });
     _refreshTimer = Timer.periodic(
       const Duration(minutes: 5),
-      (_) => _refresh(),
+      (_) => unawaited(_refresh()),
     );
   }
 
@@ -148,11 +156,17 @@ class _TuktukCustomerEltoqueBannerState
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _refresh();
+    _appVisible = state == AppLifecycleState.resumed;
+    if (_appVisible) {
+      _initialRateTimer?.cancel();
+      _initialRateTimer = null;
+      unawaited(_refresh());
+    }
   }
 
   @override
   void dispose() {
+    _initialRateTimer?.cancel();
     _refreshTimer?.cancel();
     _pushMessages?.cancel();
     WidgetsBinding.instance.removeObserver(this);
@@ -183,10 +197,12 @@ class _TuktukCustomerEltoqueBannerState
   }
 
   Future<void> _refresh() async {
-    if (_loading) return;
+    if (_loading || !_appVisible) return;
     _loading = true;
     try {
-      final raw = await widget.client.rpc('marketplace_public_eltoque_rate');
+      final raw = await widget.client
+          .rpc('marketplace_public_eltoque_rate')
+          .timeout(const Duration(seconds: 10));
       if (!mounted) return;
       setState(() => _snapshot = MarketplacePublicEltoqueRate.parse(raw));
     } catch (_) {

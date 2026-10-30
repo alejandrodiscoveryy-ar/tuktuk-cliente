@@ -7,13 +7,16 @@ class MarketplaceCustomerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'TUKTUK',
-      theme: buildAppTheme(Brightness.dark),
-      darkTheme: buildAppTheme(Brightness.dark),
-      themeMode: ThemeMode.dark,
-      home: TuktukCustomerHomeWithRate(client: client),
+    return ValueListenableBuilder<int>(
+      valueListenable: MarketplaceMapService.publicVisualRevision,
+      builder: (context, revision, child) => MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'TUKTUK',
+        theme: buildAppTheme(Brightness.dark),
+        darkTheme: buildAppTheme(Brightness.dark),
+        themeMode: ThemeMode.dark,
+        home: TuktukCustomerHomeWithRate(client: client),
+      ),
     );
   }
 }

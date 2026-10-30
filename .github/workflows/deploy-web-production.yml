@@ -115,6 +115,25 @@ jobs:
             --dart-define="MAPBOX_PUBLIC_TOKEN=${MAPBOX_PUBLIC_TOKEN}" \
             --dart-define="CUSTOMER_TURNSTILE_SITE_KEY=${CUSTOMER_TURNSTILE_SITE_KEY}"
 
+      - name: Prepare Lite public runtime config
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_PUBLISHABLE_KEY:-}"
+          python3 - <<'PY'
+          import json, os, pathlib
+          out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'tuktuk-customer-build' / 'lite' / 'config.json'
+          out.parent.mkdir(parents=True, exist_ok=True)
+          # Public key: allowed in browser. Never use service_role/secret.
+          cfg = {
+              'supabaseUrl': os.environ['SUPABASE_URL'],
+              'supabasePublishableKey': os.environ['SUPABASE_PUBLISHABLE_KEY'],
+              'projectId': 'dfb41cea-a812-46f2-b511-7a60bd3d78af'
+          }
+          out.write_text(json.dumps(cfg, separators=(',', ':')), encoding='utf-8')
+          PY
+          test -s "$RUNNER_TEMP/tuktuk-customer-build/lite/config.json"
       - name: Stage exact route and calculate hash
         shell: bash
         run: |
@@ -134,6 +153,8 @@ jobs:
           cp -a "$RUNNER_TEMP/tuktuk-customer-build/." "$STAGE/cliente/tuk/"
           test -f "$STAGE/cliente/tuk/main.dart.js"
           test -f "$STAGE/cliente/tuk/customer-cache-sw.js"
+          test -f "$STAGE/cliente/tuk/lite/index.html"
+          test -f "$STAGE/cliente/tuk/lite/config.json"
           test -f "$STAGE/cliente/tuk/assets/assets/sounds/tuktuk-car-double-horn.wav"
           test -f "$STAGE/cliente/tuk/_headers"
           # Cloudflare Workers analiza _headers en la raiz de --assets.

@@ -63,6 +63,9 @@ class MarketplaceMapService {
   static String _mapStyle = 'mapbox/dark-v11';
   static int _tileSize = 256;
 
+  // Cambios publicos de estilo/token: redibujar sin perder el estado del cliente.
+  static final ValueNotifier<int> publicVisualRevision = ValueNotifier<int>(0);
+
   static String get publicToken => _publicToken;
 
   static String get vectorStyleUri =>
@@ -103,25 +106,30 @@ class MarketplaceMapService {
 
   static Future<void> loadPublicConfiguration(SupabaseClient client) async {
     try {
+      final previousToken = _publicToken;
+      final previousStyle = _mapStyle;
+      final previousTileSize = _tileSize;
       final value = await client.rpc(
         'get_public_marketplace_map_capabilities_by_slug',
         params: {
           'target_project_slug': 'tuktuk-control',
         },
-      );
+      ).timeout(const Duration(seconds: 8));
 
       if (value is! Map) return;
-
       final capabilities = value['capabilities'];
       if (capabilities is! List) return;
 
       for (final item in capabilities) {
         if (item is Map && applyPublicVisualCapability(item)) break;
       }
+      if (_publicToken != previousToken ||
+          _mapStyle != previousStyle ||
+          _tileSize != previousTileSize) {
+        publicVisualRevision.value++;
+      }
     } catch (_) {
-      // Si la configuración remota no está disponible, la aplicación
-      // continúa funcionando. El mapa utilizará el fallback de compilación
-      // si existe; de lo contrario mostrará el estado no configurado.
+      // El mapa usa el token publico integrado; un fallo de red no bloquea la app.
     }
   }
 

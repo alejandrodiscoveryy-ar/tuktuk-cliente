@@ -33,7 +33,47 @@
   <title>TUKTUK Cliente</title>
   <link rel="manifest" href="manifest.json">
   <link rel="preconnect" href="https://api.mapbox.com" crossorigin>
-  <link rel="preload" href="main.dart.js" as="script" fetchpriority="high">
+  <!-- TUKTUK_UNIFIED_ENTRY_BEGIN -->
+<script>
+(function () {
+  'use strict';
+  // Un mismo acceso de TukTuk; este control corre ANTES de descargar Flutter.
+  // Solo detecta red al ingresar, nunca interrumpe una carrera en curso.
+  var params = new URLSearchParams(window.location.search);
+  var connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  var slow = Boolean(connection && (
+    connection.saveData === true || connection.effectiveType === 'slow-2g' ||
+    connection.effectiveType === '2g' ||
+    (typeof connection.downlink === 'number' && connection.downlink > 0 && connection.downlink <= 1.5) ||
+    (typeof connection.rtt === 'number' && connection.rtt >= 700)
+  ));
+  function startFullPreload() {
+    var link = document.createElement('link');
+    link.rel = 'preload';
+    link.href = 'main.dart.js';
+    link.as = 'script';
+    link.setAttribute('fetchpriority', 'high');
+    document.head.appendChild(link);
+  }
+  if (params.get('preview') === 'lite') {
+    window.location.replace(new URL('lite/?preview=1', document.baseURI).href);
+    return;
+  }
+  // La vuelta desde Lite sin operador, o un cambio manual a Completa,
+  // nunca puede provocar un bucle de redireccion.
+  if (params.get('mode') === 'full' || params.get('lite') === 'unavailable') {
+    startFullPreload();
+    return;
+  }
+  if (slow) {
+    window.location.replace(new URL('lite/', document.baseURI).href);
+    return;
+  }
+  // Buena red o calidad no verificable: siempre Cliente completo optimizado.
+  startFullPreload();
+})();
+</script>
+<!-- TUKTUK_UNIFIED_ENTRY_END -->
   <meta name="theme-color" content="#050B10">
   <style>
     html, body { margin: 0; min-height: 100%; background: #050B10; color: #F3F8F7; }
@@ -49,6 +89,7 @@
     #tuktuk-startup-message { color: #93A2B5; font-size: 12px; max-width: 270px; line-height: 1.5; }
     #tuktuk-startup-retry { border: 1px solid #2DD4A3; background: transparent; color: #2DD4A3; padding: 10px 18px; border-radius: 12px; font: inherit; cursor: pointer; }
     #tuktuk-startup-retry[hidden] { display: none; }
+
     @keyframes tuktuk-spin { to { transform: rotate(360deg); } }
     @media (max-height: 640px) { .tuktuk-startup-icon { width: 132px; height: 132px; } }
     @media (prefers-reduced-motion: reduce) { #tuktuk-startup { transition: none; } .tuktuk-startup-spinner { animation: none; border-top-color: #2DD4A3; } }
@@ -63,6 +104,7 @@
       <div class="tuktuk-startup-spinner" aria-hidden="true"></div>
       <div id="tuktuk-startup-message">Iniciando la aplicacion...</div>
       <button type="button" id="tuktuk-startup-retry" hidden>Reintentar</button>
+
     </div>
   </div>
   <!--
