@@ -36,10 +36,35 @@
   const PUBLIC_PROJECT_ID = 'dfb41cea-a812-46f2-b511-7a60bd3d78af';
   const SUPPORT_CACHE_KEY = 'tuktuk_lite_support_cache_v1';
   const SUPPORT_CACHE_TTL = 24 * 60 * 60 * 1000;
-  function saveCachedSupport(storage, number, projectId, now = Date.now()) {
-    if (!storage || !E164.test(number) || !UUID.test(projectId)) return false;
+  const DEFAULT_HOURS = { enabled: false, days: [1,2,3,4,5,6,7],
+    open: '08:00', close: '20:00', timezone: 'America/Havana' };
+  function validSupportHours(hours) {
+    return hours && typeof hours === 'object' && !Array.isArray(hours) &&
+      typeof hours.enabled === 'boolean' && hours.timezone === 'America/Havana' &&
+      Array.isArray(hours.days) && hours.days.length > 0 && hours.days.length <= 7 &&
+      hours.days.every(day => Number.isInteger(day) && day >= 1 && day <= 7) &&
+      typeof hours.open === 'string' && /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(hours.open) &&
+      typeof hours.close === 'string' && /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(hours.close) &&
+      hours.open < hours.close;
+  }
+  function supportHoursOpen(hours, at = new Date()) {
+    if (!hours || hours.enabled === false) return true;
+    if (!validSupportHours(hours)) return false;
     try {
-      storage.setItem(SUPPORT_CACHE_KEY, JSON.stringify({ number, projectId, checkedAt: now }));
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Havana', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+      }).formatToParts(at);
+      const get = key => parts.find(p => p.type === key)?.value || '';
+      const day = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].indexOf(get('weekday')) + 1;
+      const clock = get('hour') + ':' + get('minute');
+      return hours.days.includes(day) && clock >= hours.open && clock < hours.close;
+    } catch (_) { return false; }
+  }
+  function saveCachedSupport(storage, number, projectId, now = Date.now(), hours = DEFAULT_HOURS) {
+    if (!storage || !E164.test(number) || !UUID.test(projectId)) return false;
+    if (!validSupportHours(hours)) return false;
+    try {
+      storage.setItem(SUPPORT_CACHE_KEY, JSON.stringify({ number, projectId, checkedAt: now, hours }));
       return true;
     } catch (_) { return false; }
   }
@@ -49,7 +74,8 @@
       const data = JSON.parse(storage.getItem(SUPPORT_CACHE_KEY) || 'null');
       if (!data || data.projectId !== projectId || !E164.test(data.number) ||
           !Number.isFinite(data.checkedAt) || data.checkedAt > now ||
-          now - data.checkedAt > SUPPORT_CACHE_TTL) return null;
+          now - data.checkedAt > SUPPORT_CACHE_TTL ||
+          !validSupportHours(data.hours) || !supportHoursOpen(data.hours, new Date(now))) return null;
       return data.number;
     } catch (_) { return null; }
   }
@@ -150,8 +176,11 @@
     if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
     if (data.project_id !== projectId) return null;
     const support = data.support;
-    if (!support || support.enabled !== true || typeof support.number !== 'string') return null;
-    if (!E164.test(support.number)) return null;
+    if (!support || typeof support.number !== 'string') return null;
+    // Nueva configuracion Lite independiente del interruptor de soporte global.
+    const liteEnabled = typeof support.lite_enabled === 'boolean' ? support.lite_enabled : support.enabled === true;
+    if (!liteEnabled) return null;
+    if (!E164.test(support.number) || support.lite_open === false) return null;
     // payment.number NO determina disponibilidad de un operador; soporte manda.
     return support.number;
   }
@@ -205,12 +234,15 @@
     if (!data) return { status: 'unreachable' };
     // Respuesta explicita de Admin: una desactivacion invalida la cache.
     const number = currentSupportNumber(data, config.projectId);
-    return number ? { status: 'active', number } : { status: 'inactive' };
+    if (!number) return { status: 'inactive' };
+    const hours = data.support && data.support.hours;
+    if (hours != null && !validSupportHours(hours)) return { status: 'unreachable' };
+    return hours ? { status: 'active', number, hours } : { status: 'active', number };
   }
 
   const core = { slowNetwork, validateForm, messageFor, whatsappUrl, smsMessageFor, smsUrl, parseConfig,
     currentSupportNumber, requestJson, loadConfig, fetchCurrentSupport, fetchSupportState,
-    saveCachedSupport, readCachedSupport, clearCachedSupport, originGps, addressMapSearch };
+    saveCachedSupport, readCachedSupport, clearCachedSupport, supportHoursOpen, originGps, addressMapSearch };
   if (typeof module === 'object' && module.exports) module.exports = core;
   if (typeof document === 'undefined') return;
 
@@ -426,13 +458,14 @@
     if (info.status === 'active') {
       liveNumber = info.number;
       cachedNumber = info.number;
-      saveCachedSupport(root.localStorage, info.number, config.projectId);
+      saveCachedSupport(root.localStorage, info.number, config.projectId, Date.now(), info.hours || DEFAULT_HOURS);
       render('Servicio disponible');
     } else if (info.status === 'inactive') {
       liveNumber = null;
       cachedNumber = null;
       clearCachedSupport(root.localStorage);
       render('Contacto desactivado. Usa TukTuk completo.');
+      root.location.replace('../?lite=unavailable');
     } else {
       liveNumber = null;
       cachedNumber = readCachedSupport(root.localStorage,
