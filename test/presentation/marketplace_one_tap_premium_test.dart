@@ -20,7 +20,9 @@ void main() {
   });
 
   test('tarjetas marinas uniformes y capa de seguimiento translucida', () {
-    expect(quote, contains('final columns = constraints.maxWidth < 300 ? 2 : constraints.maxWidth < 335 ? 3 : 4;'));
+    expect(quote, contains('final columns = constraints.maxWidth < 540 ? 2 : 4;'));
+    expect(quote, contains('Color marketplaceVehicleAccent(String category)'));
+    expect(quote, contains('tint: accent,'));
     expect(quote, contains('final columns = available.maxWidth < 280 ? 2 : 3;'));
     expect(quote, contains('class _MarineCardSurface extends StatelessWidget'));
     expect(tracking, contains('Color(0xE8173742)'));

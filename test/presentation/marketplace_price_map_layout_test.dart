@@ -32,7 +32,10 @@ void main() {
 
   test('panel compacto y CTA fijo se conservan', () {
     final source = File('lib/presentation/marketplace_customer_booking_flow.dart').readAsStringSync();
-    expect(source, contains('initialChildSize: flow.destination == null ? .36 : .56'));
+    expect(source, contains('initialChildSize: _initialBookingPanelFraction()'));
+    expect(source, contains('if (flow.destination == null) return .36;'));
+    expect(source, contains("return MediaQuery.sizeOf(context).height < 760 ? .82 : .72;"));
+    expect(source, contains('snapSizes: const [.56, .72, .82]'));
     expect(source, contains('Widget _quoteStickyFooter()'));
     expect(source, contains('NotificationListener<DraggableScrollableNotification>'));
     expect(source, contains('class _MarineCardSurface'));
