@@ -425,7 +425,7 @@
       liveNumber = info.number;
       cachedNumber = info.number;
       saveCachedSupport(root.localStorage, info.number, config.projectId);
-      render('Mensajería disponible. Elige WhatsApp o SMS.');
+      render('Disponible por WhatsApp o SMS.');
     } else if (info.status === 'inactive') {
       liveNumber = null;
       cachedNumber = null;
@@ -443,7 +443,7 @@
     return liveNumber;
   }
   consent.addEventListener('change', () => render(liveNumber ?
-    'Mensajería disponible. Elige WhatsApp o SMS.' : cachedNumber ?
+    'Disponible por WhatsApp o SMS.' : cachedNumber ?
       'SMS con último contacto verificado (máximo 24 h).' :
       'Contacto no disponible. Usa TukTuk completo.'));
   async function openMessaging(channel) {
