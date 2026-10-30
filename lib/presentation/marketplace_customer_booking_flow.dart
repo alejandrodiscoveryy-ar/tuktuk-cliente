@@ -1231,9 +1231,16 @@ class _MarketplaceCustomerBookingFlowState
     }
   }
 
+  // Abre suficiente espacio para las cuatro fichas en dos filas.
+  double _initialBookingPanelFraction() {
+    if (flow.destination == null) return .36;
+    if (flow.serviceCode != 'passenger' || !flow.publicationReady) return .56;
+    return MediaQuery.sizeOf(context).height < 760 ? .82 : .72;
+  }
+
   void _syncInitialMapboxCredits() {
     final viewportHeight = MediaQuery.sizeOf(context).height;
-    final panelFraction = flow.destination == null ? .36 : .56;
+    final panelFraction = _initialBookingPanelFraction();
     final layoutKey = '${viewportHeight.round()}:$panelFraction';
 
     if (_mapPanelLayoutKey != layoutKey) {
@@ -1427,14 +1434,14 @@ class _MarketplaceCustomerBookingFlowState
                   ? 'recogida'
                   : flow.destination == null
                       ? 'destino'
-                      : 'cotizacion',
+                      : 'cotizacion-${flow.serviceCode}-${flow.publicationReady}',
         ),
         expand: false,
-        initialChildSize: flow.destination == null ? .36 : .56,
+        initialChildSize: _initialBookingPanelFraction(),
         minChildSize: .26,
         maxChildSize: .96,
         snap: true,
-        snapSizes: const [.56],
+        snapSizes: const [.56, .72, .82],
         builder: (context, scroller) => Container(
           decoration: BoxDecoration(
                         gradient: const LinearGradient(
@@ -1755,6 +1762,7 @@ class _MarketplaceCustomerBookingFlowState
 
   Widget _premiumServiceVehicleChoice(String category) {
     final selected = flow.selectedVehicleCategoryCode == category;
+    final accent = marketplaceVehicleAccent(category);
     final title = marketplacePassengerVehicleLabel(category);
     final quote = flow.vehiclePriceForCard(category);
     final price = _priceLabel(quote, flow.serviceCode);
@@ -1769,14 +1777,15 @@ class _MarketplaceCustomerBookingFlowState
           borderRadius: BorderRadius.circular(15),
           child: _MarineCardSurface(
             selected: selected,
+            tint: accent,
             radius: 15,
-            height: 70,
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            height: 76,
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 Icon(_marineVehicleIcon(category), size: 20,
-                    color: selected ? TuktukTheme.gold : TuktukTheme.mint),
+                    color: selected ? Color.lerp(accent, Colors.white, .22)! : accent),
                 Text(title, maxLines: 1, overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
@@ -1786,7 +1795,7 @@ class _MarketplaceCustomerBookingFlowState
                     fit: BoxFit.scaleDown,
                     child: Text(price, maxLines: 1,
                         style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800,
-                            color: selected ? TuktukTheme.gold : TuktukTheme.muted)),
+                            color: selected ? accent : Color.lerp(TuktukTheme.muted, accent, .60)!)),
                   ),
                 ),
               ],
@@ -2425,6 +2434,15 @@ class _MarketplaceCustomerBookingFlowState
   }
 }
 
+@visibleForTesting
+Color marketplaceVehicleAccent(String category) => switch (category) {
+      'motorcycle' => const Color(0xFFE5A84E),
+      'bicitaxi' => const Color(0xFF63D7AF),
+      'tricycle' => const Color(0xFF60BDD0),
+      'light_car' => const Color(0xFFA9A3E0),
+      _ => TuktukTheme.mint,
+    };
+
 // Selector de cuatro vehiculos visible sin scroll horizontal.
 // Unicamente recibe precios calculados por el gateway existente.
 class MarketplaceCompactVehicleSelector extends StatelessWidget {
@@ -2455,8 +2473,8 @@ class MarketplaceCompactVehicleSelector extends StatelessWidget {
           if (categories.isEmpty) return const SizedBox.shrink();
           // En telefonos normales los cuatro se ven a la vez; en anchos
           // realmente estrechos se organizan en una cuadricula 2 x 2.
-          final columns = constraints.maxWidth < 300 ? 2 : constraints.maxWidth < 335 ? 3 : 4;
-          const gap = 6.0;
+          final columns = constraints.maxWidth < 540 ? 2 : 4;
+          const gap = 8.0;
           final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
 
           return Wrap(
@@ -2473,6 +2491,7 @@ class MarketplaceCompactVehicleSelector extends StatelessWidget {
 
   Widget _tile(String category) {
     final selected = selectedCategory == category;
+    final accent = marketplaceVehicleAccent(category);
     final price = priceLabel(category);
     final title = marketplacePassengerVehicleLabel(category);
     return Semantics(
@@ -2487,16 +2506,17 @@ class MarketplaceCompactVehicleSelector extends StatelessWidget {
           borderRadius: BorderRadius.circular(15),
           child: _MarineCardSurface(
             selected: selected,
+            tint: accent,
             radius: 15,
-            height: 70,
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            height: 76,
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 Icon(
                   _icon(category),
                   size: 20,
-                  color: selected ? TuktukTheme.gold : TuktukTheme.mint,
+                  color: selected ? Color.lerp(accent, Colors.white, .22)! : accent,
                 ),
                 Text(
                   title,
@@ -2518,7 +2538,7 @@ class MarketplaceCompactVehicleSelector extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
-                        color: selected ? TuktukTheme.gold : TuktukTheme.muted,
+                        color: selected ? accent : Color.lerp(TuktukTheme.muted, accent, .60)!,
                       ),
                     ),
                   ),
@@ -2551,6 +2571,7 @@ class _MarineCardSurface extends StatelessWidget {
     required this.padding,
     this.radius = 16,
     this.height,
+    this.tint,
   });
 
   final bool selected;
@@ -2558,6 +2579,7 @@ class _MarineCardSurface extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final double radius;
   final double? height;
+  final Color? tint;
 
   @override
   Widget build(BuildContext context) => AnimatedContainer(
@@ -2568,28 +2590,41 @@ class _MarineCardSurface extends StatelessWidget {
           gradient: RadialGradient(
             center: const Alignment(-.8, -.85),
             radius: 1.7,
-            colors: selected
-                ? const [
-                    Color(0xF28B6A39),
-                    Color(0xF0263C46),
-                    Color(0xF5091724)
-                  ]
-                : const [
-                    Color(0xF23A5D65),
-                    Color(0xF01A303C),
-                    Color(0xF5081722)
+            colors: tint == null
+                ? (selected
+                    ? const [
+                        Color(0xF28B6A39),
+                        Color(0xF0263C46),
+                        Color(0xF5091724)
+                      ]
+                    : const [
+                        Color(0xF23A5D65),
+                        Color(0xF01A303C),
+                        Color(0xF5081722)
+                      ])
+                : <Color>[
+                    Color.lerp(const Color(0xFF17333E), tint,
+                            selected ? .52 : .28)!
+                        .withValues(alpha: .94),
+                    Color.lerp(const Color(0xFF0D2230), tint,
+                            selected ? .19 : .10)!
+                        .withValues(alpha: .94),
+                    const Color(0xF5081722),
                   ],
             stops: const [0, .48, 1],
           ),
           border: Border.all(
-            color: selected ? TuktukTheme.gold : const Color(0xB56A9EA6),
+            color: tint == null
+                ? (selected ? TuktukTheme.gold : const Color(0xB56A9EA6))
+                : tint!.withValues(alpha: selected ? .95 : .55),
             width: selected ? 1.8 : 1,
           ),
           borderRadius: BorderRadius.circular(radius),
           boxShadow: [
             BoxShadow(
-              color:
-                  selected ? const Color(0x66E5A84E) : const Color(0x55000000),
+              color: tint == null
+                  ? (selected ? const Color(0x66E5A84E) : const Color(0x55000000))
+                  : tint!.withValues(alpha: selected ? .30 : .08),
               blurRadius: selected ? 16 : 9,
               offset: const Offset(0, 4),
             ),
