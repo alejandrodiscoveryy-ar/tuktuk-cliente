@@ -52,6 +52,8 @@ jobs:
           node --test test/web/tuktuk_lite_contract_test.js
           node --test test/web/tuktuk_unified_entry_test.js
           node --test test/web/tuktuk_cache_network_test.js
+          node --check web/lite/lite-sw.js
+          node --test test/web/tuktuk_lite_geo_cache_test.js
       - name: Build web release smoke
         shell: bash
         run: |

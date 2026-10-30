@@ -31,17 +31,74 @@
     return null;
   }
 
+  // Proyecto publico: permite verificar la ultima configuracion si la red falla.
+  // Solo se guarda el numero que una consulta RPC valida devolvio como activo.
+  const PUBLIC_PROJECT_ID = 'dfb41cea-a812-46f2-b511-7a60bd3d78af';
+  const SUPPORT_CACHE_KEY = 'tuktuk_lite_support_cache_v1';
+  const SUPPORT_CACHE_TTL = 24 * 60 * 60 * 1000;
+  function saveCachedSupport(storage, number, projectId, now = Date.now()) {
+    if (!storage || !E164.test(number) || !UUID.test(projectId)) return false;
+    try {
+      storage.setItem(SUPPORT_CACHE_KEY, JSON.stringify({ number, projectId, checkedAt: now }));
+      return true;
+    } catch (_) { return false; }
+  }
+  function readCachedSupport(storage, projectId = PUBLIC_PROJECT_ID, now = Date.now()) {
+    if (!storage) return null;
+    try {
+      const data = JSON.parse(storage.getItem(SUPPORT_CACHE_KEY) || 'null');
+      if (!data || data.projectId !== projectId || !E164.test(data.number) ||
+          !Number.isFinite(data.checkedAt) || data.checkedAt > now ||
+          now - data.checkedAt > SUPPORT_CACHE_TTL) return null;
+      return data.number;
+    } catch (_) { return null; }
+  }
+  function clearCachedSupport(storage) {
+    try { storage?.removeItem(SUPPORT_CACHE_KEY); } catch (_) {}
+  }
+
+  function cleanMessage(value) {
+    return String(value || '').replace(/[\r\n\t]+/g, ' ').trim();
+  }
+  function originGps(fields) {
+    const lat = fields.originLatitude;
+    const lng = fields.originLongitude;
+    if (typeof lat !== 'number' || typeof lng !== 'number' ||
+        !Number.isFinite(lat) || !Number.isFinite(lng) ||
+        lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    const coords = lat.toFixed(6) + ',' + lng.toFixed(6);
+    const accuracy = fields.originAccuracy;
+    return { coords, url: 'https://maps.google.com/?q=' + coords,
+      accuracy: Number.isFinite(accuracy) && accuracy >= 0 ? Math.round(accuracy) : null };
+  }
+  function addressMapSearch(address) {
+    return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(cleanMessage(address));
+  }
+
   function messageFor(fields) {
+    const gps = originGps(fields);
+    const origin = cleanMessage(fields.origin);
+    const destination = cleanMessage(fields.destination);
     return [
-      'TUKTUK CLIENTE LITE - SOLICITUD POR WHATSAPP',
-      'Servicio: ' + String(fields.service).trim(),
-      'Cliente: ' + String(fields.name).trim(),
-      'Contacto: ' + String(fields.phone).trim(),
-      'Origen: ' + String(fields.origin).trim(),
-      'Destino: ' + String(fields.destination).trim(),
-      'Indicaciones: ' + (String(fields.notes || '').trim() || 'Sin indicaciones'),
-      'Canal: WhatsApp Lite',
-      'Solicitud pendiente de respuesta humana. No hay precio ni reserva confirmados.'
+      '🚕 *TUKTUK | NUEVA SOLICITUD*',
+      '',
+      '🛵 *Servicio:* ' + cleanMessage(fields.service),
+      '👤 *Cliente:* ' + cleanMessage(fields.name),
+      '📞 *Contacto:* ' + cleanMessage(fields.phone),
+      '',
+      '📍 *RECOGIDA*',
+      origin,
+      gps ? '🧭 *GPS:* ' + gps.coords + (gps.accuracy === null ? '' : ' (precisión aprox. ' + gps.accuracy + ' m)') : '🧭 *GPS:* No proporcionado',
+      gps ? '🗺️ *Abrir pin de recogida:* ' + gps.url : '🗺️ *Buscar origen (dirección, no pin):* ' + addressMapSearch(origin),
+      '',
+      '🏁 *DESTINO*',
+      destination,
+      '🗺️ *Buscar destino (dirección, no pin):* ' + addressMapSearch(destination),
+      '',
+      '📝 *Indicaciones:* ' + (cleanMessage(fields.notes) || 'Ninguna'),
+      '📲 *Canal:* WhatsApp Lite',
+      '⏳ *Estado:* Pendiente de respuesta humana.',
+      '_No hay precio ni reserva confirmados._'
     ].join('\n');
   }
 
@@ -54,15 +111,19 @@
 
   // SMS uses the same dynamic support number. The line must be able to receive SMS.
   function smsMessageFor(fields) {
+    const gps = originGps(fields);
     return [
       'TukTuk - Solicitud',
-      'Servicio: ' + String(fields.service).trim(),
-      'Origen: ' + String(fields.origin).trim(),
-      'Destino: ' + String(fields.destination).trim(),
-      'Nombre: ' + String(fields.name).trim(),
-      'Tel: ' + String(fields.phone).trim(),
-      String(fields.notes || '').trim() ? 'Nota: ' + String(fields.notes).trim() : '',
-      'Pendiente de respuesta'
+      'Servicio: ' + cleanMessage(fields.service),
+      'Origen: ' + cleanMessage(fields.origin),
+      gps ? 'GPS origen: ' + gps.coords + (gps.accuracy === null ? '' : ' +/-' + gps.accuracy + 'm') : '',
+      gps ? 'Mapa origen: ' + gps.url : '',
+      'Destino: ' + cleanMessage(fields.destination),
+      'Buscar destino: ' + addressMapSearch(fields.destination),
+      'Nombre: ' + cleanMessage(fields.name),
+      'Tel: ' + cleanMessage(fields.phone),
+      cleanMessage(fields.notes) ? 'Nota: ' + cleanMessage(fields.notes) : '',
+      'Pendiente de respuesta, sin precio confirmado'
     ].filter(Boolean).join('\n');
   }
   function smsUrl(phone, fields, userAgent) {
@@ -130,8 +191,26 @@
     return currentSupportNumber(data, config.projectId);
   }
 
+  async function fetchSupportState(fetchFn, config) {
+    if (!config) return { status: 'unreachable' };
+    const data = await requestJson(fetchFn,
+      config.supabaseUrl + '/rest/v1/rpc/get_public_whatsapp_settings', {
+        method: 'POST', cache: 'no-store', credentials: 'omit', redirect: 'error',
+        headers: {
+          apikey: config.supabasePublishableKey,
+          'Content-Type': 'application/json', Accept: 'application/json'
+        },
+        body: JSON.stringify({ target_project_id: config.projectId })
+      });
+    if (!data) return { status: 'unreachable' };
+    // Respuesta explicita de Admin: una desactivacion invalida la cache.
+    const number = currentSupportNumber(data, config.projectId);
+    return number ? { status: 'active', number } : { status: 'inactive' };
+  }
+
   const core = { slowNetwork, validateForm, messageFor, whatsappUrl, smsMessageFor, smsUrl, parseConfig,
-    currentSupportNumber, requestJson, loadConfig, fetchCurrentSupport };
+    currentSupportNumber, requestJson, loadConfig, fetchCurrentSupport, fetchSupportState,
+    saveCachedSupport, readCachedSupport, clearCachedSupport, originGps, addressMapSearch };
   if (typeof module === 'object' && module.exports) module.exports = core;
   if (typeof document === 'undefined') return;
 
@@ -149,10 +228,16 @@
   const thanks = document.getElementById('lite-thanks');
   const another = document.getElementById('lite-another');
   const intro = document.getElementById('lite-intro');
+  const locate = document.getElementById('lite-locate');
+  const geoStatus = document.getElementById('lite-geo-status');
   if (!form || !status || !submit || !consent || !retry || !smsButton ||
       !next || !back || !stepRoute || !stepContact || !feedback || !thanks || !another || !intro) return;
   const connection = root.navigator && (root.navigator.connection || root.navigator.mozConnection || root.navigator.webkitConnection);
   const params = new URLSearchParams(root.location.search);
+  // Permite reabrir Lite desde la carcasa publica previamente cacheada.
+  if (root.location.protocol === 'https:' && root.navigator && root.navigator.serviceWorker) {
+    root.navigator.serviceWorker.register('./lite-sw.js', { scope: './' }).catch(() => {});
+  }
   // Acceso directo con red claramente buena: se prioriza siempre la app completa.
   // La URL ?preview=1 permite pruebas manuales, sin afectar a usuarios normales.
   if (connection && !slowNetwork(connection) && params.get('preview') !== '1') {
@@ -163,6 +248,9 @@
   let busy = false;
   let enabled = false;
   let config = null;
+  let liveNumber = null;
+  let cachedNumber = readCachedSupport(root.localStorage);
+  let pickedOrigin = null;
   let externalPending = false;
   let leftBrowser = false;
   const RETURN_KEY = 'tuktuk_lite_message_return_v1';
@@ -213,6 +301,8 @@
     leftBrowser = false;
     if (typeof form.reset === 'function') form.reset();
     consent.checked = false;
+    pickedOrigin = null;
+    if (geoStatus) geoStatus.hidden = true;
     thanks.hidden = true;
     form.hidden = false;
     status.hidden = false;
@@ -224,13 +314,22 @@
   });
   function render(message) {
     status.textContent = message;
-    status.classList.toggle('is-ready', enabled);
-    status.classList.toggle('is-unavailable', !busy && !enabled);
-    retry.hidden = busy || enabled;
-    submit.disabled = busy || !enabled || !consent.checked;
-    smsButton.disabled = busy || !enabled || !consent.checked;
+    const available = Boolean(liveNumber || cachedNumber);
+    status.classList.toggle('is-ready', available);
+    status.classList.toggle('is-unavailable', !busy && !available);
+    retry.hidden = busy || Boolean(liveNumber);
+    submit.disabled = busy || !liveNumber || !consent.checked;
+    smsButton.disabled = busy || !available || !consent.checked;
   }
-  function readForm() { return Object.fromEntries(new FormData(form).entries()); }
+  function readForm() {
+    const fields = Object.fromEntries(new FormData(form).entries());
+    if (pickedOrigin) {
+      fields.originLatitude = pickedOrigin.latitude;
+      fields.originLongitude = pickedOrigin.longitude;
+      fields.originAccuracy = pickedOrigin.accuracy;
+    }
+    return fields;
+  }
   function showError(message) {
     feedback.textContent = message;
     feedback.hidden = false;
@@ -239,6 +338,52 @@
     feedback.textContent = '';
     feedback.hidden = true;
   }
+  // GPS nativo, opcional; no descarga mapas, no bloquea el formulario.
+  const originField = form.elements.namedItem('origin');
+  if (originField && typeof originField.addEventListener === 'function') {
+    originField.addEventListener('input', () => {
+      pickedOrigin = null;
+      if (geoStatus) geoStatus.hidden = true;
+    });
+  }
+  if (locate) locate.addEventListener('click', () => {
+    const geolocation = root.navigator && root.navigator.geolocation;
+    if (!geolocation || typeof geolocation.getCurrentPosition !== 'function') {
+      if (geoStatus) {
+        geoStatus.hidden = false;
+        geoStatus.textContent = 'GPS no disponible. Escribe la dirección de recogida.';
+      }
+      return;
+    }
+    locate.disabled = true;
+    if (geoStatus) {
+      geoStatus.hidden = false;
+      geoStatus.textContent = 'Buscando ubicación GPS...';
+    }
+    geolocation.getCurrentPosition(position => {
+      locate.disabled = false;
+      const coords = position && position.coords;
+      const latitude = coords && coords.latitude;
+      const longitude = coords && coords.longitude;
+      const accuracy = coords && coords.accuracy;
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+          latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+        if (geoStatus) geoStatus.textContent = 'No se obtuvo una posición válida. Escribe la dirección.';
+        return;
+      }
+      pickedOrigin = { latitude, longitude, accuracy: Number.isFinite(accuracy) && accuracy >= 0 ? accuracy : null };
+      if (originField) originField.value = 'Mi ubicación actual (GPS)';
+      if (geoStatus) {
+        const precision = pickedOrigin.accuracy === null ? '' : ' (precisión estimada: ' + Math.round(pickedOrigin.accuracy) + ' m)';
+        geoStatus.textContent = 'Ubicación obtenida' + precision + '. Puedes corregir el origen escribiendo otra dirección.';
+      }
+      clearError();
+    }, () => {
+      locate.disabled = false;
+      if (geoStatus) geoStatus.textContent = 'No se pudo obtener GPS. Puedes escribir la dirección manualmente.';
+    }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
+  });
+
   function validateRoute(fields) {
     const service = String(fields.service || '');
     const origin = String(fields.origin || '').trim();
@@ -268,37 +413,59 @@
   async function verify(initial) {
     if (busy) return null;
     busy = true;
-    enabled = false;
-    render('Comprobando canal de WhatsApp...');
-    if (!config) config = await loadConfig(root.fetch.bind(root));
-    const number = await fetchCurrentSupport(root.fetch.bind(root), config);
+    liveNumber = null;
+    render('Comprobando contacto de soporte...');
+    // navigator.onLine es orientativo; si indica offline evitamos esperar el timeout.
+    const offline = root.navigator && root.navigator.onLine === false;
+    if (!offline && !config) config = await loadConfig(root.fetch.bind(root));
+    const info = offline ? { status: 'unreachable' } :
+      await fetchSupportState(root.fetch.bind(root), config);
     busy = false;
-    enabled = Boolean(number);
-    render(enabled ? 'WhatsApp disponible' :
-      'WhatsApp no disponible. Usa TukTuk completo.');
-    // Si no hay canal verificable, el cliente vuelve al servicio automatico.
-    // No se utiliza nunca un numero almacenado previamente.
-    if (!number && initial) root.location.replace('../?lite=unavailable');
-    return number;
+    if (info.status === 'active') {
+      liveNumber = info.number;
+      cachedNumber = info.number;
+      saveCachedSupport(root.localStorage, info.number, config.projectId);
+      render('Mensajería disponible. Elige WhatsApp o SMS.');
+    } else if (info.status === 'inactive') {
+      liveNumber = null;
+      cachedNumber = null;
+      clearCachedSupport(root.localStorage);
+      render('Contacto desactivado. Usa TukTuk completo.');
+    } else {
+      liveNumber = null;
+      cachedNumber = readCachedSupport(root.localStorage,
+        config ? config.projectId : PUBLIC_PROJECT_ID);
+      render(cachedNumber ?
+        'Sin internet: SMS con último contacto verificado (máximo 24 h).' :
+        'Contacto no disponible. Usa TukTuk completo.');
+    }
+    if (!liveNumber && !cachedNumber && initial) root.location.replace('../?lite=unavailable');
+    return liveNumber;
   }
-  consent.addEventListener('change', () => render(enabled ?
-    'WhatsApp habilitado. Confirma el envío en WhatsApp.' :
-    'WhatsApp no disponible. Usa TukTuk completo.'));
+  consent.addEventListener('change', () => render(liveNumber ?
+    'Mensajería disponible. Elige WhatsApp o SMS.' : cachedNumber ?
+      'SMS con último contacto verificado (máximo 24 h).' :
+      'Contacto no disponible. Usa TukTuk completo.'));
   async function openMessaging(channel) {
-    if (busy || !consent.checked || !enabled) return;
+    if (busy || !consent.checked ||
+        (channel === 'sms' ? !liveNumber && !cachedNumber : !liveNumber)) return;
     const fields = readForm();
     const issue = validateForm(fields);
     if (issue) { showError(issue); return; }
-    // Recheck the configured number immediately before EVERY external launch.
+    // Consultar siempre Admin si la red lo permite; desactivacion borra cache.
     const number = await verify(false);
-    if (!number) return;
+    const target = channel === 'sms' ? (number || cachedNumber) : number;
+    if (!target) {
+      showError('No hay contacto válido para este canal. Comprueba la conexión.');
+      return;
+    }
     try {
       externalPending = true;
       leftBrowser = false;
       rememberExternal(false);
       if (channel === 'sms') {
         const userAgent = root.navigator && root.navigator.userAgent;
-        root.location.assign(smsUrl(number, fields, userAgent));
+        root.location.assign(smsUrl(target, fields, userAgent));
       } else {
         root.location.assign(whatsappUrl(number, fields));
       }

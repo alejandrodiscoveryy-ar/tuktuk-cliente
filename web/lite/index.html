@@ -12,7 +12,7 @@
 [hidden]{display:none!important}
 body{margin:0;background:#07131a;color:#f3f8f7}
 main{max-width:480px;margin:0 auto;padding:20px 18px 32px}
-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:27px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:17px}
 h1{margin:0;color:#fff;font-size:29px;letter-spacing:-1.2px;line-height:1}
 h1 em{color:#e5a84e;font-style:normal}
 .pill{color:#9ce5ce;background:#15352f;padding:7px 11px;border-radius:30px;font-size:12px;font-weight:700}
@@ -35,7 +35,10 @@ button.primary{display:block;width:100%;margin-top:13px;border:0;border-radius:1
 button.primary:disabled{opacity:.46;cursor:not-allowed}
 button.sms-button{display:block;width:100%;margin-top:10px;min-height:48px;border-radius:13px;background:transparent;color:#a4efdb;border:1px solid #398a7b;padding:12px;font:inherit;font-weight:750;cursor:pointer}
 button.sms-button:disabled{opacity:.46;cursor:not-allowed}
-.thanks{background:#123b31;border:1px solid #288e71;border-radius:22px;padding:36px 22px;text-align:center}
+button.locate{display:block;width:100%;margin:-6px 0 12px;border:1px solid #365e59;border-radius:12px;background:#15352f;color:#9ce5ce;font:inherit;font-size:13px;font-weight:750;min-height:42px;cursor:pointer}
+button.locate:disabled{opacity:.55;cursor:wait}
+.geo-status{font-size:12px;line-height:1.4;color:#9ce5ce;margin:-4px 0 12px}
+.thanks{background:#123b31;border:1px solid #288e71;border-radius:22px;padding:25px 20px;text-align:center}
 .thanks-icon{height:64px;width:64px;border-radius:50%;background:#28d5a3;color:#053123;display:grid;place-items:center;margin:0 auto 20px;font-size:36px;font-weight:900}
 .thanks h2{font-size:25px;margin-bottom:16px}
 .thanks p{color:#e0fff2;font-size:16px;line-height:1.5}
@@ -76,6 +79,8 @@ footer a{color:#9ce5ce;text-decoration:underline;text-underline-offset:4px}
       <label class="field">¿Dónde te recogemos?
         <input name="origin" autocomplete="street-address" maxlength="240" placeholder="Calle, número o referencia" required>
       </label>
+      <button type="button" class="locate" id="lite-locate">📍 Usar mi ubicación actual</button>
+      <p class="geo-status" id="lite-geo-status" role="status" aria-live="polite" hidden></p>
       <label class="field">¿A dónde vas?
         <input name="destination" maxlength="240" placeholder="Dirección de destino" required>
       </label>
@@ -101,7 +106,7 @@ footer a{color:#9ce5ce;text-decoration:underline;text-underline-offset:4px}
       </label>
       <button class="primary" type="submit" id="lite-send" disabled>Enviar por WhatsApp</button>
       <button class="sms-button" type="button" id="lite-send-sms" disabled>Enviar por SMS</button>
-      <p class="hint">Confirma el envío en WhatsApp o SMS para completar la solicitud.</p>
+      <p class="hint">Confirma el envío en WhatsApp o SMS. El SMS puede generar cargos de tu operadora.</p>
     </section>
   </form>
   <section id="lite-thanks" class="thanks" role="status" aria-live="polite" hidden>
