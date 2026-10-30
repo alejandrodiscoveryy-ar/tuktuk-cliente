@@ -84,7 +84,7 @@ test('sin internet, el SMS acepta un contacto cacheado y WhatsApp no se habilita
   callbacks['lite-consent:change']();
   assert.equal(elements['lite-send'].disabled,true,'WhatsApp nunca con cache offline');
   assert.equal(elements['lite-send-sms'].disabled,false,'SMS habilitado con numero reciente');
-  assert.match(elements['lite-status'].textContent,/último contacto verificado/);
+  assert.equal(elements['lite-status'].textContent,'Servicio disponible');
   callbacks['lite-send-sms:click']();
   await new Promise(resolve=>setImmediate(resolve));
   assert.match(launched,/^sms:\+5355555555\?body=/);
@@ -116,7 +116,7 @@ test('interfaz GPS opcional sin mapa pesado y estado SMS cache',()=>{
   assert.match(html,/id="lite-geo-status"/);
   assert.match(js,/getCurrentPosition/);
   assert.match(js,/readCachedSupport\(root\.localStorage/);
-  assert.match(js,/SMS con último contacto verificado/);
+  assert.match(js,/Servicio disponible/);
   assert.match(js,/serviceWorker.register/);
   assert.match(sw,/tuktuk-lite-static-v1/);
   assert.match(sw,/relative === 'lite.js'/);
@@ -130,7 +130,7 @@ test('Lite muestra lema oficial y encabezado compacto', () => {
   assert.match(html, /margin-bottom:18px/);
   assert.match(html, /id="lite-locate"/);
   assert.match(html, /id="lite-send-sms"/);
-  assert.match(js, /Disponible por WhatsApp o SMS/);
+  assert.match(js, /status\.classList\.toggle\('is-ready', available\)/);
   assert.doesNotMatch(js, /Mensajería disponible\. Elige WhatsApp o SMS/);
 });
 

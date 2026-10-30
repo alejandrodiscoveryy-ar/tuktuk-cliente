@@ -425,7 +425,7 @@
       liveNumber = info.number;
       cachedNumber = info.number;
       saveCachedSupport(root.localStorage, info.number, config.projectId);
-      render('Disponible por WhatsApp o SMS.');
+      render('Servicio disponible');
     } else if (info.status === 'inactive') {
       liveNumber = null;
       cachedNumber = null;
@@ -436,15 +436,14 @@
       cachedNumber = readCachedSupport(root.localStorage,
         config ? config.projectId : PUBLIC_PROJECT_ID);
       render(cachedNumber ?
-        'Sin internet: SMS con último contacto verificado (máximo 24 h).' :
+        'Servicio disponible' :
         'Contacto no disponible. Usa TukTuk completo.');
     }
     if (!liveNumber && !cachedNumber && initial) root.location.replace('../?lite=unavailable');
     return liveNumber;
   }
-  consent.addEventListener('change', () => render(liveNumber ?
-    'Disponible por WhatsApp o SMS.' : cachedNumber ?
-      'SMS con último contacto verificado (máximo 24 h).' :
+  consent.addEventListener('change', () => render(
+    liveNumber || cachedNumber ? 'Servicio disponible' :
       'Contacto no disponible. Usa TukTuk completo.'));
   async function openMessaging(channel) {
     if (busy || !consent.checked ||
