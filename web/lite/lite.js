@@ -216,6 +216,7 @@
 
   const form = document.getElementById('lite-form');
   const status = document.getElementById('lite-status');
+  const stepIndicator = document.getElementById('lite-step-indicator');
   const submit = document.getElementById('lite-send');
   const consent = document.getElementById('lite-consent');
   const retry = document.getElementById('lite-retry');
@@ -394,6 +395,7 @@
     return null;
   }
   function changeStep(contact) {
+    if (stepIndicator) stepIndicator.textContent = contact ? 'Paso 2 de 2' : 'Paso 1 de 2';
     stepRoute.hidden = contact;
     stepContact.hidden = !contact;
     clearError();
