@@ -7,6 +7,8 @@ on:
       - 'lib/presentation/marketplace_customer_booking_flow.dart'
       - 'lib/presentation/customer_eltoque_banner.dart'
       - 'test/presentation/marketplace_low_data_network_budget_test.dart'
+      - 'test/presentation/marketplace_one_tap_premium_test.dart'
+      - 'test/presentation/marketplace_price_map_layout_test.dart'
       - 'lib/presentation/marketplace_vector_map.dart'
       - 'test/presentation/marketplace_tracking_mobile_ui_test.dart'
       - 'test/presentation/marketplace_map_route_glass_test.dart'
