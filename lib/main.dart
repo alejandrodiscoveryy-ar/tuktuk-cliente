@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'services/customer_arrival_sound_stub.dart'
     if (dart.library.html) 'services/customer_arrival_sound_web.dart'

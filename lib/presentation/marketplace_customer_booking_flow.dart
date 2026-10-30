@@ -1,5 +1,18 @@
 part of '../main.dart';
 
+@visibleForTesting
+String? marketplaceCustomerPublicSupportNumber(Object? data, String projectId) {
+  if (data is! Map || data['project_id'] != projectId) return null;
+  final support = data['support'];
+  if (support is! Map || support['enabled'] != true) return null;
+  final value = support['number'];
+  if (value is! String ||
+      !RegExp(r'^\+[1-9][0-9]{7,14}$').hasMatch(value)) {
+    return null;
+  }
+  return value;
+}
+
 // Solo el error exacto de sesiÃ³n inexistente permite intentar recuperarla.
 // Los errores de red, tarifas y operaciones distintas nunca renuevan sesiÃ³n.
 @visibleForTesting
@@ -775,10 +788,7 @@ class _MarketplaceCustomerBookingFlowState
                   Expanded(child: _customerMenuItem(
                     Icons.support_agent_rounded, 'Ayuda', () {
                       Navigator.of(dialogContext).pop();
-                      unawaited(_showCustomerMenuDetail(
-                        'Ayuda',
-                        'Selecciona el origen y el destino en el mapa para solicitar transporte. Si no encuentras una dirección, puedes marcar el punto directamente sobre el mapa.',
-                      ));
+                      unawaited(_openCustomerSupportWhatsApp());
                     },
                   )),
                 ],
@@ -787,6 +797,41 @@ class _MarketplaceCustomerBookingFlowState
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _openCustomerSupportWhatsApp() async {
+    // Mismo numero publico que TukTuk Lite, siempre gestionado desde Admin.
+    const projectId = 'dfb41cea-a812-46f2-b511-7a60bd3d78af';
+    try {
+      final data = await widget.service._client.rpc(
+        'get_public_whatsapp_settings',
+        params: {'target_project_id': projectId},
+      ).timeout(const Duration(seconds: 8));
+      final phone = marketplaceCustomerPublicSupportNumber(data, projectId);
+      if (!mounted) return;
+      if (phone == null) {
+        _customerSupportMessage('El soporte no esta disponible ahora. Intenta mas tarde.');
+        return;
+      }
+      final uri = Uri.https(
+        'wa.me',
+        '/${phone.substring(1)}',
+        {'text': 'Hola, necesito ayuda con TukTuk Cliente.'},
+      );
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened) {
+        _customerSupportMessage('No se pudo abrir WhatsApp. Comprueba tu conexion.');
+      }
+    } catch (_) {
+      _customerSupportMessage('No se pudo consultar el soporte. Revisa tu conexion.');
+    }
+  }
+
+  void _customerSupportMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
     );
   }
 
@@ -808,13 +853,28 @@ class _MarketplaceCustomerBookingFlowState
     );
   }
 
+  Widget _customerMenuGlyph(IconData icon, String title, bool comingSoon) {
+    final tint = comingSoon
+        ? TuktukTheme.mint.withValues(alpha: .82)
+        : TuktukTheme.mint;
+    if (title == 'Perfil' || title == 'Historial') {
+      return Icon(icon, color: tint, size: 28);
+    }
+    // Los otros cuatro iconos se pintan como vectores: no dependen
+    // de MaterialIcons.otf que puede quedar en cache en WebApp.
+    return CustomPaint(
+      size: const Size(28, 28),
+      painter: TuktukCustomerMenuGlyphPainter(title, tint),
+    );
+  }
+
   Widget _customerMenuItem(
     IconData icon,
     String title,
     VoidCallback? onTap, {
     bool comingSoon = false,
   }) => Material(
-        color: TuktukTheme.surface.withValues(alpha: comingSoon ? .36 : .78),
+        color: TuktukTheme.surface.withValues(alpha: comingSoon ? .55 : .78),
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
@@ -824,12 +884,7 @@ class _MarketplaceCustomerBookingFlowState
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon,
-                  color: comingSoon
-                      ? TuktukTheme.mint.withValues(alpha: .38)
-                      : TuktukTheme.mint,
-                  size: 26,
-                ),
+                _customerMenuGlyph(icon, title, comingSoon),
                 const SizedBox(height: 7),
                 FittedBox(
                   fit: BoxFit.scaleDown,
@@ -840,7 +895,7 @@ class _MarketplaceCustomerBookingFlowState
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
                       color: comingSoon
-                          ? Colors.white.withValues(alpha: .45)
+                          ? Colors.white.withValues(alpha: .68)
                           : Colors.white,
                     ),
                   ),
@@ -853,9 +908,14 @@ class _MarketplaceCustomerBookingFlowState
                           maxLines: 1,
                           style: TextStyle(
                             fontSize: 8,
-                            color: Colors.white.withValues(alpha: .45),
+                            color: Colors.white.withValues(alpha: .68),
                           ))
-                      : null,
+                      : title == 'Ayuda'
+                          ? const Text('WhatsApp',
+                              style: TextStyle(
+                                fontSize: 9, color: TuktukTheme.mint,
+                              ))
+                          : null,
                 ),
               ],
             ),
@@ -2803,4 +2863,73 @@ class _TuktukGeoActivationButtonState extends State<_TuktukGeoActivationButton>
       ),
     );
   }
+}
+// Iconos ligeros de cliente. No dependen de la fuente Material Icons ni
+// descargan SVG, paquetes o imagenes de terceros.
+@visibleForTesting
+class TuktukCustomerMenuGlyphPainter extends CustomPainter {
+  TuktukCustomerMenuGlyphPainter(this.kind, this.tint);
+  final String kind;
+  final Color tint;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.scale(size.width / 32, size.height / 32);
+    final pen = Paint()
+      ..color = tint
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final fill = Paint()..color = tint;
+    switch (kind) {
+      case 'Billetera':
+        canvas.drawRRect(
+          RRect.fromLTRBR(3, 8, 29, 26, const Radius.circular(4)), pen);
+        canvas.drawLine(const Offset(4, 13), const Offset(25, 13), pen);
+        canvas.drawRRect(
+          RRect.fromLTRBR(20, 16, 29, 23, const Radius.circular(2)), pen);
+        canvas.drawCircle(const Offset(23.5, 19.5), 1, fill);
+      case 'Referidos':
+        canvas.drawCircle(const Offset(12, 10), 4, pen);
+        canvas.drawCircle(const Offset(23, 12), 3, pen);
+        canvas.drawPath(ui.Path()
+          ..moveTo(3, 25)
+          ..quadraticBezierTo(3, 16, 12, 16)
+          ..quadraticBezierTo(21, 16, 21, 25), pen);
+        canvas.drawPath(ui.Path()
+          ..moveTo(23, 18)
+          ..quadraticBezierTo(29, 18, 29, 25), pen);
+      case 'Ajustes':
+        canvas.drawCircle(const Offset(16, 16), 9.0, pen);
+        canvas.drawCircle(const Offset(16, 16), 3.5, pen);
+        for (var index = 0; index < 8; index++) {
+          final angle = index * pi / 4;
+          canvas.drawLine(
+            Offset(16 + cos(angle) * 10, 16 + sin(angle) * 10),
+            Offset(16 + cos(angle) * 13, 16 + sin(angle) * 13),
+            pen,
+          );
+        }
+      case 'Ayuda':
+        canvas.drawPath(ui.Path()
+          ..moveTo(5, 18)
+          ..quadraticBezierTo(5, 5, 16, 5)
+          ..quadraticBezierTo(27, 5, 27, 18), pen);
+        canvas.drawRRect(
+          RRect.fromLTRBR(4, 16, 9, 24, const Radius.circular(2)), pen);
+        canvas.drawRRect(
+          RRect.fromLTRBR(23, 16, 28, 24, const Radius.circular(2)), pen);
+        canvas.drawPath(ui.Path()
+          ..moveTo(27, 24)
+          ..quadraticBezierTo(27, 28, 21, 28), pen);
+        canvas.drawCircle(const Offset(20, 28), 1.2, fill);
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant TuktukCustomerMenuGlyphPainter oldDelegate) =>
+      oldDelegate.kind != kind || oldDelegate.tint != tint;
 }
