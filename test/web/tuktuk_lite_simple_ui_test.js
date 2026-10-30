@@ -49,6 +49,7 @@ test('recorrido y contacto se muestran en secuencia y el número se revalida al 
   });
   const elements = {
     'lite-form': make('form'), 'lite-status': make('status'),
+    'lite-step-indicator': make('step-indicator'),
     'lite-send': make('send'), 'lite-consent': make('consent'),
     'lite-retry': make('retry', true), 'lite-next': make('next'),
     'lite-back': make('back'), 'lite-step-route': make('route'),
@@ -94,8 +95,10 @@ test('recorrido y contacto se muestran en secuencia y el número se revalida al 
   handlers['next:click']();
   assert.equal(elements['lite-step-route'].hidden, true);
   assert.equal(elements['lite-step-contact'].hidden, false);
+  assert.equal(elements['lite-step-indicator'].textContent, 'Paso 2 de 2');
   handlers['back:click']();
   assert.equal(elements['lite-step-route'].hidden, false);
+  assert.equal(elements['lite-step-indicator'].textContent, 'Paso 1 de 2');
   handlers['next:click']();
   fields.name = 'Ana Pérez';
   fields.phone = '+5350000000';
@@ -105,4 +108,10 @@ test('recorrido y contacto se muestran en secuencia y el número se revalida al 
   await handlers['form:submit']({ preventDefault() {} });
   assert.equal(supportReads, 2, 'consulta inicial y nueva consulta antes de enviar');
   assert.match(launched, /^https:\/\/wa\.me\/5355555555\?text=/);
+});
+
+test('Lite muestra paso y disponibilidad en una sola fila', () => {
+  assert.match(html, /<div class="step-header">\s*<p class="step-tag" id="lite-step-indicator">Paso 1 de 2<\/p>\s*<div class="status" id="lite-status"/);
+  assert.match(html, /header\{[^}]*margin-bottom:36px\}/);
+  assert.match(js, /stepIndicator\.textContent = contact \? 'Paso 2 de 2' : 'Paso 1 de 2'/);
 });

@@ -127,7 +127,7 @@ test('interfaz GPS opcional sin mapa pesado y estado SMS cache',()=>{
 test('Lite muestra lema oficial y encabezado compacto', () => {
   assert.match(html, /TU CIUDAD TE MUEVE/);
   assert.match(html, /brand-tagline/);
-  assert.match(html, /margin-bottom:18px/);
+  assert.match(html, /margin-bottom:36px/);
   assert.match(html, /id="lite-locate"/);
   assert.match(html, /id="lite-send-sms"/);
   assert.match(js, /status\.classList\.toggle\('is-ready', available\)/);
