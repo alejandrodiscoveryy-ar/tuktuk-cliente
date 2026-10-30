@@ -16,15 +16,25 @@ void main() {
     expect(code, contains('saveActiveJobId('));
   });
 
-  test('menú contiene únicamente accesos operativos', () {
+  test('menu 3x2 conserva accesos operativos y funciones proximas desactivadas', () {
     final code = File(
       'lib/presentation/marketplace_customer_booking_flow.dart',
     ).readAsStringSync();
-    expect(code, contains('Future<void> _openCustomerMenu()'));
-    expect(code, contains("'Perfil'"));
-    expect(code, contains("'Historial'"));
-    expect(code, isNot(contains("'Billetera'")));
-    expect(code, isNot(contains("'Referidos'")));
+    final start = code.indexOf('  Future<void> _openCustomerMenu() async {');
+    final finish = code.indexOf('  Future<void> _showCustomerMenuDetail(', start);
+    expect(start, greaterThanOrEqualTo(0));
+    expect(finish, greaterThan(start));
+    final menu = code.substring(start, finish);
+    for (final label in ['Perfil', 'Historial', 'Billetera', 'Referidos', 'Ajustes', 'Ayuda']) {
+      expect(menu, contains("'$label'"));
+    }
+    expect(menu, contains('widget.onEditCustomer?.call()'));
+    expect(menu, contains('unawaited(_openHistory())'));
+    expect(menu, contains("Icons.wallet_outlined, 'Billetera', null, comingSoon: true,"));
+    expect(menu, contains("Icons.card_giftcard_rounded, 'Referidos', null,"));
+    expect(RegExp(r'comingSoon:\s*true').allMatches(menu).length, 2);
+    expect(code, contains('onTap: comingSoon ? null : onTap'));
+    expect(code, contains("Text('Próximamente'"));
   });
 
   test('editar perfil conserva widget del mapa en el árbol', () {
