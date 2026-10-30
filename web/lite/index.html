@@ -12,18 +12,18 @@
 [hidden]{display:none!important}
 body{margin:0;background:#07131a;color:#f3f8f7}
 main{max-width:480px;margin:0 auto;padding:15px 18px 24px}
-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
+header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px}
 h1{margin:0;color:#fff;font-size:29px;letter-spacing:-1.2px;line-height:1}
 h1 em{color:#e5a84e;font-style:normal}
 .brand-tagline{margin:4px 0 0;font-size:10px;letter-spacing:.1em;font-weight:700;color:#a9bdc0}
 .pill{color:#9ce5ce;background:#15352f;padding:7px 11px;border-radius:30px;font-size:12px;font-weight:700}
 h2{font-size:24px;line-height:1.2;margin:0 0 6px;letter-spacing:-.5px}
 .intro{font-size:14px;color:#a9bdc0;line-height:1.4;margin:0 0 8px}
-.status{display:flex;gap:9px;align-items:center;flex-wrap:wrap;color:#bbcbca;font-size:12px;min-height:23px;margin-bottom:9px}
+.status{display:flex;gap:9px;align-items:center;justify-content:flex-end;flex-wrap:wrap;text-align:right;color:#bbcbca;font-size:12px;line-height:1.35;min-height:23px;margin-bottom:11px}
 .status::before{content:"";width:8px;height:8px;flex:none;background:#e5a84e;border-radius:50%}
 .status.is-ready::before{background:#2dd4a3}
 .status.is-unavailable::before{background:#fb7185}
-#lite-retry{border:0;background:none;color:#9ce5ce;text-decoration:underline;text-underline-offset:3px;font-size:12px;padding:0;margin:-7px 0 14px;cursor:pointer}
+#lite-retry{border:0;background:none;color:#9ce5ce;text-decoration:underline;text-underline-offset:3px;font-size:12px;padding:0;margin:0 0 10px auto;display:block;cursor:pointer}
 form{background:#10212a;border:1px solid #23414a;border-radius:20px;padding:17px 18px}
 .step-tag{margin:0 0 8px;color:#8da9aa;font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:800}
 h3{font-size:17px;letter-spacing:-.2px;margin:0 0 14px}
@@ -36,9 +36,11 @@ button.primary{display:block;width:100%;margin-top:13px;border:0;border-radius:1
 button.primary:disabled{opacity:.46;cursor:not-allowed}
 button.sms-button{display:block;width:100%;margin-top:10px;min-height:48px;border-radius:13px;background:transparent;color:#a4efdb;border:1px solid #398a7b;padding:12px;font:inherit;font-weight:750;cursor:pointer}
 button.sms-button:disabled{opacity:.46;cursor:not-allowed}
-button.locate{display:block;width:100%;margin:-6px 0 12px;border:1px solid #365e59;border-radius:12px;background:#15352f;color:#9ce5ce;font:inherit;font-size:13px;font-weight:750;min-height:42px;cursor:pointer}
+button.locate{display:block;width:100%;margin:0 0 9px;border:1px solid #365e59;border-radius:12px;background:#15352f;color:#9ce5ce;font:inherit;font-size:13px;font-weight:750;min-height:42px;cursor:pointer}
 button.locate:disabled{opacity:.55;cursor:wait}
-.geo-status{font-size:12px;line-height:1.4;color:#9ce5ce;margin:-4px 0 12px}
+.geo-status{font-size:12px;line-height:1.4;color:#9ce5ce;margin:0 0 10px}
+.pickup-title{margin:0 0 9px;color:#dce8e8;font-size:13px;font-weight:650}
+select:invalid{color:#8ca2a7}
 .thanks{background:#123b31;border:1px solid #288e71;border-radius:22px;padding:25px 20px;text-align:center}
 .thanks-icon{height:64px;width:64px;border-radius:50%;background:#28d5a3;color:#053123;display:grid;place-items:center;margin:0 auto 20px;font-size:36px;font-weight:900}
 .thanks h2{font-size:25px;margin-bottom:16px}
@@ -54,7 +56,7 @@ details label{margin-top:8px}
 .hint{font-size:12px;color:#99acad;line-height:1.45;margin:11px 0 0;text-align:center}
 footer{text-align:center;margin-top:20px;font-size:13px}
 footer a{color:#9ce5ce;text-decoration:underline;text-underline-offset:4px}
-@media(max-width:360px){main{padding:13px 12px 22px}form{padding:15px 14px}header{margin-bottom:10px}}
+@media(max-width:360px){main{padding:13px 12px 22px}form{padding:15px 14px}header{margin-bottom:17px}}
 </style>
 <script src="lite.js" defer></script>
 </head>
@@ -63,25 +65,26 @@ footer a{color:#9ce5ce;text-decoration:underline;text-underline-offset:4px}
   <header><div class="brand"><h1>TUK<em>TUK</em></h1><p class="brand-tagline">TU CIUDAD TE MUEVE</p></div><span class="pill">Modo ligero</span></header>
   <h2>¿A dónde vamos?</h2>
   <p class="intro" id="lite-intro">Solicita tu transporte en pocos pasos.</p>
-  <div class="status" id="lite-status" role="status" aria-live="polite">Comprobando WhatsApp...</div>
-  <button id="lite-retry" type="button" hidden>Reintentar</button>
   <form id="lite-form" novalidate>
+    <div class="status" id="lite-status" role="status" aria-live="polite">Comprobando WhatsApp...</div>
+    <button id="lite-retry" type="button" hidden>Reintentar</button>
     <p id="lite-feedback" class="feedback" role="alert" hidden></p>
     <section id="lite-step-route" aria-label="Datos del recorrido">
       <p class="step-tag">Paso 1 de 2</p>
       <h3>Tu recorrido</h3>
       <label class="field">Tipo de servicio
-        <select name="service" required>
+        <select name="service" required><option value="" selected disabled>Seleccione su servicio</option>
           <option value="Moto">Moto</option><option value="Auto">Auto</option>
           <option value="Bicitaxi">Bicitaxi</option><option value="Triciclo">Triciclo</option>
           <option value="Mensajería">Mensajería</option><option value="Carga">Carga</option>
         </select>
       </label>
-      <label class="field">¿Dónde te recogemos?
-        <input name="origin" autocomplete="street-address" maxlength="240" placeholder="Calle, número o referencia" required>
-      </label>
+      <p class="pickup-title">¿Dónde te recogemos?</p>
       <button type="button" class="locate" id="lite-locate">📍 Usar mi ubicación actual</button>
       <p class="geo-status" id="lite-geo-status" role="status" aria-live="polite" hidden></p>
+      <label class="field">O escribe la dirección de recogida
+        <input name="origin" autocomplete="street-address" maxlength="240" placeholder="Calle, número o referencia" required>
+      </label>
       <label class="field">¿A dónde vas?
         <input name="destination" maxlength="240" placeholder="Dirección de destino" required>
       </label>
