@@ -119,7 +119,13 @@
   const submit = document.getElementById('lite-send');
   const consent = document.getElementById('lite-consent');
   const retry = document.getElementById('lite-retry');
-  if (!form || !status || !submit || !consent || !retry) return;
+  const next = document.getElementById('lite-next');
+  const back = document.getElementById('lite-back');
+  const stepRoute = document.getElementById('lite-step-route');
+  const stepContact = document.getElementById('lite-step-contact');
+  const feedback = document.getElementById('lite-feedback');
+  if (!form || !status || !submit || !consent || !retry ||
+      !next || !back || !stepRoute || !stepContact || !feedback) return;
   const connection = root.navigator && (root.navigator.connection || root.navigator.mozConnection || root.navigator.webkitConnection);
   const params = new URLSearchParams(root.location.search);
   // Acceso directo con red claramente buena: se prioriza siempre la app completa.
@@ -134,43 +140,80 @@
   let config = null;
   function render(message) {
     status.textContent = message;
+    status.classList.toggle('is-ready', enabled);
+    status.classList.toggle('is-unavailable', !busy && !enabled);
+    retry.hidden = busy || enabled;
     submit.disabled = busy || !enabled || !consent.checked;
   }
   function readForm() { return Object.fromEntries(new FormData(form).entries()); }
+  function showError(message) {
+    feedback.textContent = message;
+    feedback.hidden = false;
+  }
+  function clearError() {
+    feedback.textContent = '';
+    feedback.hidden = true;
+  }
+  function validateRoute(fields) {
+    const service = String(fields.service || '');
+    const origin = String(fields.origin || '').trim();
+    const destination = String(fields.destination || '').trim();
+    if (!ALLOWED_SERVICES.has(service)) return 'Selecciona un servicio.';
+    if (origin.length < 4 || origin.length > 240) return 'Escribe dónde te recogemos.';
+    if (destination.length < 4 || destination.length > 240) return 'Escribe a dónde vas.';
+    return null;
+  }
+  function changeStep(contact) {
+    stepRoute.hidden = contact;
+    stepContact.hidden = !contact;
+    clearError();
+    if (typeof root.scrollTo === 'function') root.scrollTo(0, 0);
+    if (contact) {
+      const nameInput = form.elements.namedItem('name');
+      if (nameInput && typeof nameInput.focus === 'function') nameInput.focus();
+    }
+  }
+  next.addEventListener('click', () => {
+    const issue = validateRoute(readForm());
+    if (issue) { showError(issue); return; }
+    changeStep(true);
+  });
+  back.addEventListener('click', () => changeStep(false));
+  form.addEventListener('input', () => { if (!feedback.hidden) clearError(); });
   async function verify(initial) {
     if (busy) return null;
     busy = true;
     enabled = false;
-    render('Consultando el WhatsApp configurado en TukTuk Admin...');
+    render('Comprobando canal de WhatsApp...');
     if (!config) config = await loadConfig(root.fetch.bind(root));
     const number = await fetchCurrentSupport(root.fetch.bind(root), config);
     busy = false;
     enabled = Boolean(number);
-    render(enabled ? 'Canal WhatsApp habilitado. La solicitud necesita respuesta del operador.' :
-      'Atención WhatsApp no disponible. Usa TukTuk completo.');
+    render(enabled ? 'WhatsApp disponible' :
+      'WhatsApp no disponible. Usa TukTuk completo.');
     // Si no hay canal verificable, el cliente vuelve al servicio automatico.
     // No se utiliza nunca un numero almacenado previamente.
     if (!number && initial) root.location.replace('../?lite=unavailable');
     return number;
   }
   consent.addEventListener('change', () => render(enabled ?
-    'WhatsApp habilitado. Tu mensaje requiere confirmación de envío.' :
-    'Atención WhatsApp no disponible. Usa TukTuk completo.'));
+    'WhatsApp habilitado. Confirma el envío en WhatsApp.' :
+    'WhatsApp no disponible. Usa TukTuk completo.'));
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (busy || !consent.checked || !enabled) return;
     const fields = readForm();
     const issue = validateForm(fields);
-    if (issue) { render(issue); return; }
+    if (issue) { showError(issue); return; }
     // Consulta de numero en vivo JUSTO ANTES de la apertura de WhatsApp.
     const number = await verify(false);
     if (!number) return; // Formulario intacto; el usuario puede reintentar.
     try {
       root.location.assign(whatsappUrl(number, fields));
-      render('WhatsApp abrirá el mensaje. Pulsa Enviar dentro de WhatsApp.');
+      render('Se abrirá WhatsApp. Confirma el envío.');
     } catch (_) { render('No se pudo preparar el mensaje. Vuelve a intentarlo.'); }
   });
   retry.addEventListener('click', () => { void verify(false); });
-  render('Comprobando el canal WhatsApp...');
+  render('Comprobando WhatsApp...');
   void verify(true);
 })(typeof window !== 'undefined' ? window : globalThis);
