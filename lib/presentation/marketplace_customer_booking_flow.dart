@@ -163,9 +163,13 @@ class CustomerBookingFlowController extends ChangeNotifier {
     }
     final parameters = Map<String, dynamic>.from(pricing);
     for (final category in categoriesForService(currentService)) {
-      if (generation != _categoryQuoteRequestId || _priceComparisonKey != signature) return;
+      if (generation != _categoryQuoteRequestId || _priceComparisonKey != signature) {
+        return;
+      }
       if (category == selectedVehicleCategoryCode ||
-          _categoryQuoteCache.containsKey(category)) continue;
+          _categoryQuoteCache.containsKey(category)) {
+        continue;
+      }
       try {
         final quote = await mapService.reprice(
           origin: start,
@@ -173,7 +177,9 @@ class CustomerBookingFlowController extends ChangeNotifier {
           routeToken: snapshot.routeToken,
           pricing: <String, dynamic>{...parameters, 'vehicle_category_code': category},
         );
-        if (generation != _categoryQuoteRequestId || _priceComparisonKey != signature) return;
+        if (generation != _categoryQuoteRequestId || _priceComparisonKey != signature) {
+        return;
+      }
         final result = quote.prices[currentService];
         if (result is Map) {
           _categoryQuoteCache[category] = Map<String, dynamic>.from(result);
@@ -706,7 +712,7 @@ class _MarketplaceCustomerBookingFlowState
           side: const BorderSide(color: TuktukTheme.border),
         ),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 18, 16, 22),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -716,10 +722,7 @@ class _MarketplaceCustomerBookingFlowState
                     child: Text(
                       'Menú TukTuk',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 21,
-                        fontWeight: FontWeight.w900,
-                      ),
+                      style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900),
                     ),
                   ),
                   IconButton(
@@ -729,30 +732,55 @@ class _MarketplaceCustomerBookingFlowState
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               Row(
                 children: [
-                  Expanded(
-                    child: _customerMenuItem(
-                      Icons.person_outline_rounded,
-                      'Perfil',
-                      () {
-                        Navigator.of(dialogContext).pop();
-                        widget.onEditCustomer?.call();
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _customerMenuItem(
-                      Icons.history_rounded,
-                      'Historial',
-                      () {
-                        Navigator.of(dialogContext).pop();
-                        unawaited(_openHistory());
-                      },
-                    ),
-                  ),
+                  Expanded(child: _customerMenuItem(
+                    Icons.person_outline_rounded, 'Perfil', () {
+                      Navigator.of(dialogContext).pop();
+                      widget.onEditCustomer?.call();
+                    },
+                  )),
+                  const SizedBox(width: 8),
+                  Expanded(child: _customerMenuItem(
+                    Icons.history_rounded, 'Historial', () {
+                      Navigator.of(dialogContext).pop();
+                      unawaited(_openHistory());
+                    },
+                  )),
+                  const SizedBox(width: 8),
+                  Expanded(child: _customerMenuItem(
+                    Icons.wallet_outlined, 'Billetera', null, comingSoon: true,
+                  )),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(child: _customerMenuItem(
+                    Icons.card_giftcard_rounded, 'Referidos', null,
+                    comingSoon: true,
+                  )),
+                  const SizedBox(width: 8),
+                  Expanded(child: _customerMenuItem(
+                    Icons.settings_outlined, 'Ajustes', () {
+                      Navigator.of(dialogContext).pop();
+                      unawaited(_showCustomerMenuDetail(
+                        'Ajustes',
+                        'Para gestionar permisos de ubicación y notificaciones, utiliza los ajustes del navegador o del teléfono.',
+                      ));
+                    },
+                  )),
+                  const SizedBox(width: 8),
+                  Expanded(child: _customerMenuItem(
+                    Icons.support_agent_rounded, 'Ayuda', () {
+                      Navigator.of(dialogContext).pop();
+                      unawaited(_showCustomerMenuDetail(
+                        'Ayuda',
+                        'Selecciona el origen y el destino en el mapa para solicitar transporte. Si no encuentras una dirección, puedes marcar el punto directamente sobre el mapa.',
+                      ));
+                    },
+                  )),
                 ],
               ),
             ],
@@ -762,23 +790,72 @@ class _MarketplaceCustomerBookingFlowState
     );
   }
 
-  Widget _customerMenuItem(IconData icon, String title, VoidCallback onTap) =>
-      Material(
-        color: TuktukTheme.surface.withValues(alpha: .78),
-        borderRadius: BorderRadius.circular(18),
+  Future<void> _showCustomerMenuDetail(String title, String message) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: TuktukTheme.background,
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _customerMenuItem(
+    IconData icon,
+    String title,
+    VoidCallback? onTap, {
+    bool comingSoon = false,
+  }) => Material(
+        color: TuktukTheme.surface.withValues(alpha: comingSoon ? .36 : .78),
+        borderRadius: BorderRadius.circular(16),
         child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          onTap: comingSoon ? null : onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 6),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 2),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, color: TuktukTheme.mint, size: 29),
-                const SizedBox(height: 9),
-                Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+                Icon(icon,
+                  color: comingSoon
+                      ? TuktukTheme.mint.withValues(alpha: .38)
+                      : TuktukTheme.mint,
+                  size: 26,
+                ),
+                const SizedBox(height: 7),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: comingSoon
+                          ? Colors.white.withValues(alpha: .45)
+                          : Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                SizedBox(
+                  height: 13,
+                  child: comingSoon
+                      ? Text('Próximamente',
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 8,
+                            color: Colors.white.withValues(alpha: .45),
+                          ))
+                      : null,
                 ),
               ],
             ),
