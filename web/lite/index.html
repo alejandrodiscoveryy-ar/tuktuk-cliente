@@ -11,23 +11,23 @@
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{margin:0;background:#07131a;color:#f3f8f7}
-main{max-width:480px;margin:0 auto;padding:20px 18px 32px}
-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:27px}
+main{max-width:480px;margin:0 auto;padding:17px 18px 26px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:19px}
 h1{margin:0;color:#fff;font-size:29px;letter-spacing:-1.2px;line-height:1}
 h1 em{color:#e5a84e;font-style:normal}
 .pill{color:#9ce5ce;background:#15352f;padding:7px 11px;border-radius:30px;font-size:12px;font-weight:700}
-h2{font-size:25px;line-height:1.2;margin:0 0 8px;letter-spacing:-.5px}
-.intro{font-size:14px;color:#a9bdc0;line-height:1.45;margin:0 0 12px}
-.status{display:flex;gap:9px;align-items:center;flex-wrap:wrap;color:#bbcbca;font-size:12px;min-height:25px;margin-bottom:16px}
+h2{font-size:24px;line-height:1.2;margin:0 0 7px;letter-spacing:-.4px}
+.intro{font-size:14px;color:#a9bdc0;line-height:1.4;margin:0 0 9px}
+.status{display:flex;gap:9px;align-items:center;flex-wrap:wrap;color:#bbcbca;font-size:12px;min-height:23px;margin-bottom:12px}
 .status::before{content:"";width:8px;height:8px;flex:none;background:#e5a84e;border-radius:50%}
 .status.is-ready::before{background:#2dd4a3}
 .status.is-unavailable::before{background:#fb7185}
 #lite-retry{border:0;background:none;color:#9ce5ce;text-decoration:underline;text-underline-offset:3px;font-size:12px;padding:0;margin:-7px 0 14px;cursor:pointer}
-form{background:#10212a;border:1px solid #23414a;border-radius:20px;padding:20px 18px}
+form{background:#10212a;border:1px solid #23414a;border-radius:20px;padding:17px 18px}
 .step-tag{margin:0 0 8px;color:#8da9aa;font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:800}
-h3{font-size:17px;letter-spacing:-.2px;margin:0 0 18px}
-label.field{display:block;margin-bottom:15px;color:#dce8e8;font-size:13px;font-weight:650}
-input,select,textarea{display:block;width:100%;margin-top:7px;background:#08161d;color:#f8ffff;border:1px solid #344f59;border-radius:12px;padding:12px 13px;font:inherit;font-size:16px;min-height:49px}
+h3{font-size:17px;letter-spacing:-.2px;margin:0 0 15px}
+label.field{display:block;margin-bottom:13px;color:#dce8e8;font-size:13px;font-weight:600}
+input,select,textarea{display:block;width:100%;margin-top:6px;background:#08161d;color:#f8ffff;border:1px solid #344f59;border-radius:12px;padding:11px 13px;font:inherit;font-size:16px;min-height:48px}
 textarea{min-height:76px;resize:vertical}
 input::placeholder,textarea::placeholder{color:#8ca2a7;opacity:1}
 input:focus,select:focus,textarea:focus{outline:2px solid #2dd4a3;outline-offset:1px}
@@ -35,12 +35,12 @@ button.primary{display:block;width:100%;margin-top:13px;border:0;border-radius:1
 button.primary:disabled{opacity:.46;cursor:not-allowed}
 button.sms-button{display:block;width:100%;margin-top:10px;min-height:48px;border-radius:13px;background:transparent;color:#a4efdb;border:1px solid #398a7b;padding:12px;font:inherit;font-weight:750;cursor:pointer}
 button.sms-button:disabled{opacity:.46;cursor:not-allowed}
-.thanks{background:#123b31;border:1px solid #288e71;border-radius:22px;padding:36px 22px;text-align:center}
-.thanks-icon{height:64px;width:64px;border-radius:50%;background:#28d5a3;color:#053123;display:grid;place-items:center;margin:0 auto 20px;font-size:36px;font-weight:900}
-.thanks h2{font-size:25px;margin-bottom:16px}
-.thanks p{color:#e0fff2;font-size:16px;line-height:1.5}
-.thanks .thanks-note{font-size:12px;color:#acdccb;margin-top:14px}
-.thanks button.primary{margin-top:26px}
+.thanks{background:#123b31;border:1px solid #288e71;border-radius:22px;padding:24px 20px;text-align:center}
+.thanks-icon{height:54px;width:54px;border-radius:50%;background:#28d5a3;color:#053123;display:grid;place-items:center;margin:0 auto 15px;font-size:31px;font-weight:900}
+.thanks h2{font-size:23px;margin-bottom:11px}
+.thanks p{color:#e0fff2;font-size:15px;line-height:1.45;margin:10px 0}
+.thanks .thanks-note{font-size:12px;color:#acdccb;margin-top:9px}
+.thanks button.primary{margin-top:19px}
 .back{border:0;background:none;color:#9ce5ce;padding:0;margin:0 0 15px;font:inherit;font-size:13px;cursor:pointer}
 details{margin:3px 0 15px}summary{font-size:13px;color:#a4ddcb;padding:6px 0;cursor:pointer}
 details label{margin-top:8px}
@@ -50,14 +50,14 @@ details label{margin-top:8px}
 .hint{font-size:12px;color:#99acad;line-height:1.45;margin:11px 0 0;text-align:center}
 footer{text-align:center;margin-top:20px;font-size:13px}
 footer a{color:#9ce5ce;text-decoration:underline;text-underline-offset:4px}
-@media(max-width:360px){main{padding:17px 12px 26px}form{padding:16px 14px}header{margin-bottom:22px}}
+@media(max-width:360px){main{padding:14px 12px 22px}form{padding:15px 14px}header{margin-bottom:16px}.thanks{padding:22px 15px}.thanks h2{font-size:21px}}
 </style>
 <script src="lite.js" defer></script>
 </head>
 <body>
 <main>
   <header><h1>TUK<em>TUK</em></h1><span class="pill">Modo ligero</span></header>
-  <h2>¿A dónde vamos?</h2>
+  <h2 id="lite-heading">¿A dónde vamos?</h2>
   <p class="intro" id="lite-intro">Solicita tu transporte en pocos pasos.</p>
   <div class="status" id="lite-status" role="status" aria-live="polite">Comprobando WhatsApp...</div>
   <button id="lite-retry" type="button" hidden>Reintentar</button>

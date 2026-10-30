@@ -173,6 +173,8 @@
     try { root.sessionStorage?.removeItem(RETURN_KEY); } catch (_) {}
   }
   function showThanks() {
+    const title = document.getElementById('lite-heading');
+    if (title) title.textContent = String.fromCharCode(161) + 'Hasta pronto!';
     externalPending = false;
     leftBrowser = false;
     clearExternal();
@@ -208,6 +210,8 @@
     });
   }
   another.addEventListener('click', () => {
+    const title = document.getElementById('lite-heading');
+    if (title) title.textContent = String.fromCharCode(191) + 'A d' + String.fromCharCode(243) + 'nde vamos?';
     clearExternal();
     externalPending = false;
     leftBrowser = false;
@@ -274,7 +278,7 @@
     const number = await fetchCurrentSupport(root.fetch.bind(root), config);
     busy = false;
     enabled = Boolean(number);
-    render(enabled ? 'WhatsApp disponible' :
+    render(enabled ? 'Mensajeria disponible' :
       'WhatsApp no disponible. Usa TukTuk completo.');
     // Si no hay canal verificable, el cliente vuelve al servicio automatico.
     // No se utiliza nunca un numero almacenado previamente.
@@ -282,7 +286,7 @@
     return number;
   }
   consent.addEventListener('change', () => render(enabled ?
-    'WhatsApp habilitado. Confirma el envío en WhatsApp.' :
+    'Mensajeria disponible. Elige WhatsApp o SMS.' :
     'WhatsApp no disponible. Usa TukTuk completo.'));
   async function openMessaging(channel) {
     if (busy || !consent.checked || !enabled) return;
