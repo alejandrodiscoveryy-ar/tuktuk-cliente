@@ -37,18 +37,28 @@ self.addEventListener('activate', (event) => {
   })());
 });
 
+// Prefer a fresh response. After three seconds, a previously cached PUBLIC
+// shell is better than waiting indefinitely on a congested connection.
+// CRITICAL: Never time out a first visit with no cached copy.
 async function tuktukNetworkFirst(request, fallback) {
   const cache = await caches.open(TUKTUK_CACHE_NAME);
+  const cacheKey = fallback || request;
+  const cached = await cache.match(cacheKey);
+  const controller = cached ? new AbortController() : null;
+  const timeoutId = controller ? setTimeout(() => controller.abort(), 3000) : null;
   try {
-    const response = await fetch(request);
+    const response = controller
+      ? await fetch(request, { signal: controller.signal })
+      : await fetch(request);
     if (response.ok && response.type === 'basic') {
-      await cache.put(fallback || request, response.clone());
+      await cache.put(cacheKey, response.clone());
     }
     return response;
   } catch (error) {
-    const cached = await cache.match(fallback || request);
     if (cached) return cached;
     throw error;
+  } finally {
+    if (timeoutId !== null) clearTimeout(timeoutId);
   }
 }
 async function tuktukCacheFirst(request) {

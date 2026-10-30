@@ -94,6 +94,7 @@ class CustomerBookingFlowController extends ChangeNotifier {
   Map<String, List<String>> publishedCategoriesByService = const {};
   List<String> publishedServices = const ['passenger', 'courier', 'cargo'];
   bool publicationReady = false;
+  bool _loadingPublishedModalities = false;
   String cargoVehicleCategoryCode = 'light_car';
   String courierVehicleCategoryCode = 'motorcycle';
 
@@ -185,13 +186,16 @@ class CustomerBookingFlowController extends ChangeNotifier {
   }
 
   Future<void> loadPublishedModalities() async {
+    // Consulta solo de lectura; una sola llamada activa evita rafagas.
+    if (_loadingPublishedModalities) return;
+    _loadingPublishedModalities = true;
     publicationReady = false;
     notifyListeners();
     try {
       final response = await Supabase.instance.client.rpc(
         'list_marketplace_published_modalities',
         params: {'target_project_slug': 'tuktuk-control'},
-      );
+      ).timeout(const Duration(seconds: 18));
       if (response is! List) throw StateError('MODALITY_CATALOG_INVALID');
       final pairs = response.whereType<Map>().toList();
       final categoriesByService = <String, List<String>>{
@@ -251,6 +255,8 @@ class CustomerBookingFlowController extends ChangeNotifier {
       publishedServices = const [];
       error = 'No podemos comprobar las modalidades disponibles. Reintenta.';
       notifyListeners();
+    } finally {
+      _loadingPublishedModalities = false;
     }
   }
 

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#07131a">
+<meta name="robots" content="noindex,nofollow">
+<title>TukTuk Cliente Lite</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+*{box-sizing:border-box}body{margin:0;background:#07131a;color:#f3f8f7}
+main{max-width:520px;margin:0 auto;padding:20px 16px 36px}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:20px}
+h1{margin:0;font-size:27px;letter-spacing:-1px;color:#fff}h1 em{color:#e5a84e;font-style:normal}
+.pill{background:#17392f;color:#8df0cb;border-radius:100px;padding:6px 10px;font-size:12px;font-weight:700}
+p{line-height:1.5;color:#c9d2d5}h2{font-size:19px;margin:0 0 14px}
+form{padding:18px;background:#101e27;border:1px solid #27434c;border-radius:18px}
+label.field{display:block;margin-bottom:14px;color:#e1ebeb;font-size:14px;font-weight:600}
+input,select,textarea{display:block;margin-top:6px;padding:13px;width:100%;border:1px solid #37505a;border-radius:11px;background:#07131a;color:white;font:inherit;font-size:16px}
+textarea{resize:vertical;min-height:74px}
+input:focus,select:focus,textarea:focus{outline:2px solid #2dd4a3;outline-offset:1px}
+.consent{display:flex;gap:10px;align-items:flex-start;margin:8px 0 16px;font-size:13px;line-height:1.45}
+.consent input{display:inline;width:auto;margin:2px 0 0;accent-color:#2dd4a3}
+button,.full{display:inline-flex;justify-content:center;align-items:center;text-align:center;min-height:47px;border-radius:12px;padding:12px 16px;font-weight:800;font:inherit;text-decoration:none;cursor:pointer}
+button.primary{width:100%;background:#2dd4a3;color:#06221a;border:0;font-weight:800}
+button.primary:disabled{opacity:.45;cursor:not-allowed}
+.secondary{background:transparent;border:1px solid #53656b;color:#f3f8f7}
+.full{border:1px solid #53656b;color:#f3f8f7}
+.actions{display:flex;gap:10px;margin:14px 0;flex-wrap:wrap}.actions>*{flex:1}
+.status{background:#152b30;border-left:3px solid #e5a84e;padding:12px 14px;border-radius:10px;margin:12px 0;font-size:14px}
+.small{font-size:12px;color:#a9b7b8}
+</style>
+<script src="lite.js" defer></script>
+</head>
+<body>
+<main>
+<header><h1>TUK<em>TUK</em></h1><span class="pill">Cliente Lite</span></header>
+<h2>Solicita tu transporte por WhatsApp</h2>
+<p>Alternativa para conexiones lentas. Usa el WhatsApp que TukTuk Admin ya tiene configurado para soporte y pagos. El envío no crea una carrera automáticamente; espera la respuesta del operador.</p>
+<div id="lite-status" class="status" role="status" aria-live="polite">Comprobando disponibilidad...</div>
+<div class="actions"><button type="button" class="secondary" id="lite-retry">Comprobar operador</button><a class="full" id="lite-full" href="../?mode=full">Usar aplicación completa</a></div>
+<form id="lite-form" novalidate>
+<label class="field">Tu nombre<input name="name" autocomplete="name" maxlength="100" required></label>
+<label class="field">Teléfono de contacto<input name="phone" type="tel" autocomplete="tel" inputmode="tel" maxlength="22" required></label>
+<label class="field">Tipo de servicio<select name="service" required><option value="Moto">Moto</option><option value="Auto">Auto</option><option value="Bicitaxi">Bicitaxi</option><option value="Triciclo">Triciclo</option><option value="Mensajería">Mensajería</option><option value="Carga">Carga</option></select></label>
+<label class="field">¿Dónde te recogemos?<input name="origin" maxlength="240" required placeholder="Calle, número y referencia"></label>
+<label class="field">¿A dónde vas?<input name="destination" maxlength="240" required placeholder="Dirección de destino"></label>
+<label class="field">Indicaciones adicionales (opcional)<textarea name="notes" maxlength="500"></textarea></label>
+<label class="consent"><input id="lite-consent" type="checkbox" required><span>Autorizo compartir mi nombre, contacto y trayecto con el operador de TukTuk y con el conductor que acepte la carrera.</span></label>
+<button class="primary" type="submit" id="lite-send" disabled>Continuar a WhatsApp</button>
+</form>
+<p class="small">WhatsApp necesita conexión a Internet. Debes confirmar el envío dentro de WhatsApp. La atención puede estar fuera de horario aunque el número esté habilitado; confirma la disponibilidad con el operador. No hay precio ni viaje confirmado hasta su respuesta. Nunca se realiza una reserva automática desde esta pantalla.</p>
+</main>
+</body>
+</html>

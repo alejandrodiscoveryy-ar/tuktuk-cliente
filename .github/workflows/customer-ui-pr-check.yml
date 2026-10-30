@@ -5,6 +5,8 @@ on:
     paths:
       - 'lib/presentation/marketplace_customer_tracking.dart'
       - 'lib/presentation/marketplace_customer_booking_flow.dart'
+      - 'lib/presentation/customer_eltoque_banner.dart'
+      - 'test/presentation/marketplace_low_data_network_budget_test.dart'
       - 'lib/presentation/marketplace_vector_map.dart'
       - 'test/presentation/marketplace_tracking_mobile_ui_test.dart'
       - 'test/presentation/marketplace_map_route_glass_test.dart'
@@ -46,6 +48,10 @@ jobs:
           node --check web/customer-cache-sw.js
           node --check web/firebase-messaging-sw.js
           node --test test/web/tuktuk_startup_test.js
+          node --check web/lite/lite.js
+          node --test test/web/tuktuk_lite_contract_test.js
+          node --test test/web/tuktuk_unified_entry_test.js
+          node --test test/web/tuktuk_cache_network_test.js
       - name: Build web release smoke
         shell: bash
         run: |

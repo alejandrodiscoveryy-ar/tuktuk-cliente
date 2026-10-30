@@ -42,7 +42,9 @@ function setup() {
 test('HTML dibuja un fondo oscuro y marca el inicio antes de bootstrap', () => {
   assert.match(html, /\.tuktuk-startup-icon \{ width: clamp\(154px, 44vw, 178px\); height: clamp\(154px, 44vw, 178px\); object-fit: contain; \}/);
   assert.match(html, /@media \(max-height: 640px\)/);
-  assert.match(html, /<link rel="preload" href="main\.dart\.js" as="script" fetchpriority="high">/);
+  assert.match(html, /TUKTUK_UNIFIED_ENTRY_BEGIN/);
+  assert.match(html, /link\.rel = 'preload'/);
+  assert.match(html, /link\.href = 'main\.dart\.js'/);
   assert.match(html, /<script>\{\{flutter_bootstrap_js\}\}<\/script>/);
   assert.doesNotMatch(html, /<script src="flutter_bootstrap\.js" async><\/script>/);
   assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1">/);
@@ -95,7 +97,12 @@ test('Firebase se inicializa despues del primer fotograma sin perder las alertas
   assert.ok(start >= 0 && end > start);
   const entrypoint = main.slice(start, end);
   assert.doesNotMatch(entrypoint, /await Firebase\.initializeApp/);
-  assert.match(entrypoint, /await MarketplaceMapService\.loadPublicConfiguration/);
+  const beforeRunApp = entrypoint.slice(0, entrypoint.indexOf('runApp(MarketplaceCustomerApp'));
+  assert.doesNotMatch(beforeRunApp, /await MarketplaceMapService\.loadPublicConfiguration/);
+  assert.match(entrypoint, /_loadPublicMapConfigurationAfterFirstFrame/);
+  assert.match(main, /await MarketplaceMapService\.loadPublicConfiguration\(client\)/);
+  const mapService = fs.readFileSync('lib/data/marketplace_map_service.dart', 'utf8');
+  assert.match(mapService, /\.timeout\(const Duration\(seconds: 8\)\)/);
   assert.match(entrypoint, /addPostFrameCallback/);
   assert.match(entrypoint, /runApp\(MarketplaceCustomerApp/);
   assert.match(main, /customerFirebaseReady = ready\.future/);

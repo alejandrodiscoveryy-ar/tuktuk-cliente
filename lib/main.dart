@@ -66,23 +66,37 @@ Future<void> main() async {
   await Supabase.initialize(
       url: _supabaseUrl, publishableKey: _supabasePublishableKey);
 
-  // El estilo y token de Mapbox siguen listos antes de dibujar el mapa.
-  await MarketplaceMapService.loadPublicConfiguration(
-    Supabase.instance.client,
-  );
-
+  final client = Supabase.instance.client;
+  // El token publico de compilacion permite mostrar el mapa de inmediato.
   if (MarketplaceMapService.publicToken.startsWith('pk.')) {
     mbx.MapboxOptions.setAccessToken(MarketplaceMapService.publicToken);
   }
   if (kIsWeb) {
     final ready = Completer<bool>();
     customerFirebaseReady = ready.future;
-    // Firebase no debe retener la primera pantalla por una red lenta.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_initializeCustomerFirebaseAfterFirstFrame(ready));
+      unawaited(_loadPublicMapConfigurationAfterFirstFrame(client));
+    });
+  } else {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_loadPublicMapConfigurationAfterFirstFrame(client));
     });
   }
-  runApp(MarketplaceCustomerApp(client: Supabase.instance.client));
+  // Ni mapas remotos ni Firebase bloquean la primera pantalla utilizable.
+  runApp(MarketplaceCustomerApp(client: client));
+}
+
+Future<void> _loadPublicMapConfigurationAfterFirstFrame(
+    SupabaseClient client) async {
+  await MarketplaceMapService.loadPublicConfiguration(client);
+  if (MarketplaceMapService.publicToken.startsWith('pk.')) {
+    try {
+      mbx.MapboxOptions.setAccessToken(MarketplaceMapService.publicToken);
+    } catch (_) {
+      // El mapa remoto es opcional; nunca bloquear el transporte.
+    }
+  }
 }
 
 double _marketNumber(Object? value) =>

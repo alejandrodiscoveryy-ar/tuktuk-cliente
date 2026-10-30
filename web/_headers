@@ -26,3 +26,10 @@
 
 /cliente/tuk/icons/*
   Cache-Control: public, max-age=86400, s-maxage=604800
+
+# Lite: resolucion del contacto siempre fresca y sin cache publica de configuracion.
+/cliente/tuk/lite/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+/cliente/tuk/lite/config.json
+  Cache-Control: no-store
