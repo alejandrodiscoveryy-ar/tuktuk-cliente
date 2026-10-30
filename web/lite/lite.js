@@ -52,6 +52,27 @@
     return 'https://wa.me/' + phone.slice(1) + '?text=' + encodeURIComponent(messageFor(fields));
   }
 
+  // SMS uses the same dynamic support number. The line must be able to receive SMS.
+  function smsMessageFor(fields) {
+    return [
+      'TukTuk - Solicitud',
+      'Servicio: ' + String(fields.service).trim(),
+      'Origen: ' + String(fields.origin).trim(),
+      'Destino: ' + String(fields.destination).trim(),
+      'Nombre: ' + String(fields.name).trim(),
+      'Tel: ' + String(fields.phone).trim(),
+      String(fields.notes || '').trim() ? 'Nota: ' + String(fields.notes).trim() : '',
+      'Pendiente de respuesta'
+    ].filter(Boolean).join('\n');
+  }
+  function smsUrl(phone, fields, userAgent) {
+    if (!E164.test(phone)) throw new Error('INVALID_SUPPORT_NUMBER');
+    const issue = validateForm(fields);
+    if (issue) throw new Error(issue);
+    const separator = /iPad|iPhone|iPod/i.test(String(userAgent || '')) ? '&' : '?';
+    return 'sms:' + phone + separator + 'body=' + encodeURIComponent(smsMessageFor(fields));
+  }
+
   function parseConfig(cfg) {
     if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) return null;
     if (!UUID.test(cfg.projectId) || typeof cfg.supabasePublishableKey !== 'string') return null;
@@ -109,7 +130,7 @@
     return currentSupportNumber(data, config.projectId);
   }
 
-  const core = { slowNetwork, validateForm, messageFor, whatsappUrl, parseConfig,
+  const core = { slowNetwork, validateForm, messageFor, whatsappUrl, smsMessageFor, smsUrl, parseConfig,
     currentSupportNumber, requestJson, loadConfig, fetchCurrentSupport };
   if (typeof module === 'object' && module.exports) module.exports = core;
   if (typeof document === 'undefined') return;
@@ -124,8 +145,12 @@
   const stepRoute = document.getElementById('lite-step-route');
   const stepContact = document.getElementById('lite-step-contact');
   const feedback = document.getElementById('lite-feedback');
-  if (!form || !status || !submit || !consent || !retry ||
-      !next || !back || !stepRoute || !stepContact || !feedback) return;
+  const smsButton = document.getElementById('lite-send-sms');
+  const thanks = document.getElementById('lite-thanks');
+  const another = document.getElementById('lite-another');
+  const intro = document.getElementById('lite-intro');
+  if (!form || !status || !submit || !consent || !retry || !smsButton ||
+      !next || !back || !stepRoute || !stepContact || !feedback || !thanks || !another || !intro) return;
   const connection = root.navigator && (root.navigator.connection || root.navigator.mozConnection || root.navigator.webkitConnection);
   const params = new URLSearchParams(root.location.search);
   // Acceso directo con red claramente buena: se prioriza siempre la app completa.
@@ -138,12 +163,72 @@
   let busy = false;
   let enabled = false;
   let config = null;
+  let externalPending = false;
+  let leftBrowser = false;
+  const RETURN_KEY = 'tuktuk_lite_message_return_v1';
+  function rememberExternal(left) {
+    try { root.sessionStorage?.setItem(RETURN_KEY, JSON.stringify({ at: Date.now(), left })); } catch (_) {}
+  }
+  function clearExternal() {
+    try { root.sessionStorage?.removeItem(RETURN_KEY); } catch (_) {}
+  }
+  function showThanks() {
+    externalPending = false;
+    leftBrowser = false;
+    clearExternal();
+    form.hidden = true;
+    status.hidden = true;
+    retry.hidden = true;
+    intro.hidden = true;
+    thanks.hidden = false;
+    if (typeof root.scrollTo === 'function') root.scrollTo(0, 0);
+  }
+  function markLeaving() {
+    if (!externalPending) return;
+    leftBrowser = true;
+    rememberExternal(true);
+  }
+  function handleReturn() {
+    if (externalPending && leftBrowser) { showThanks(); return; }
+    try {
+      const state = JSON.parse(root.sessionStorage?.getItem(RETURN_KEY) || 'null');
+      if (state && state.left === true && Date.now() - state.at < 600000) showThanks();
+    } catch (_) {}
+  }
+  // External apps do not disclose whether the message was actually sent.
+  // The thank-you screen is only shown on return from another app.
+  if (typeof root.addEventListener === 'function') {
+    root.addEventListener('pagehide', markLeaving);
+    root.addEventListener('pageshow', handleReturn);
+  }
+  if (typeof document.addEventListener === 'function') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') markLeaving();
+      if (document.visibilityState === 'visible') handleReturn();
+    });
+  }
+  another.addEventListener('click', () => {
+    clearExternal();
+    externalPending = false;
+    leftBrowser = false;
+    if (typeof form.reset === 'function') form.reset();
+    consent.checked = false;
+    thanks.hidden = true;
+    form.hidden = false;
+    status.hidden = false;
+    intro.hidden = false;
+    changeStep(false);
+    enabled = false;
+    render('Comprobando contacto...');
+    void verify(false);
+  });
   function render(message) {
     status.textContent = message;
     status.classList.toggle('is-ready', enabled);
     status.classList.toggle('is-unavailable', !busy && !enabled);
     retry.hidden = busy || enabled;
     submit.disabled = busy || !enabled || !consent.checked;
+    smsButton.disabled = busy || !enabled || !consent.checked;
   }
   function readForm() { return Object.fromEntries(new FormData(form).entries()); }
   function showError(message) {
@@ -199,20 +284,36 @@
   consent.addEventListener('change', () => render(enabled ?
     'WhatsApp habilitado. Confirma el envío en WhatsApp.' :
     'WhatsApp no disponible. Usa TukTuk completo.'));
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
+  async function openMessaging(channel) {
     if (busy || !consent.checked || !enabled) return;
     const fields = readForm();
     const issue = validateForm(fields);
     if (issue) { showError(issue); return; }
-    // Consulta de numero en vivo JUSTO ANTES de la apertura de WhatsApp.
+    // Recheck the configured number immediately before EVERY external launch.
     const number = await verify(false);
-    if (!number) return; // Formulario intacto; el usuario puede reintentar.
+    if (!number) return;
     try {
-      root.location.assign(whatsappUrl(number, fields));
-      render('Se abrirá WhatsApp. Confirma el envío.');
-    } catch (_) { render('No se pudo preparar el mensaje. Vuelve a intentarlo.'); }
+      externalPending = true;
+      leftBrowser = false;
+      rememberExternal(false);
+      if (channel === 'sms') {
+        const userAgent = root.navigator && root.navigator.userAgent;
+        root.location.assign(smsUrl(number, fields, userAgent));
+      } else {
+        root.location.assign(whatsappUrl(number, fields));
+      }
+      render('Confirma el envío en tu aplicación de mensajes.');
+    } catch (_) {
+      externalPending = false;
+      clearExternal();
+      showError('No se pudo abrir la aplicación de mensajes. Intenta de nuevo.');
+    }
+  }
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    await openMessaging('whatsapp');
   });
+  smsButton.addEventListener('click', () => { void openMessaging('sms'); });
   retry.addEventListener('click', () => { void verify(false); });
   render('Comprobando WhatsApp...');
   void verify(true);

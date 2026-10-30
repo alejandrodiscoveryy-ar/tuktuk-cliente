@@ -53,7 +53,9 @@ test('recorrido y contacto se muestran en secuencia y el número se revalida al 
     'lite-retry': make('retry', true), 'lite-next': make('next'),
     'lite-back': make('back'), 'lite-step-route': make('route'),
     'lite-step-contact': make('contact', true),
-    'lite-feedback': make('feedback', true)
+    'lite-feedback': make('feedback', true),
+    'lite-send-sms': make('sms'), 'lite-thanks': make('thanks', true),
+    'lite-another': make('another'), 'lite-intro': make('intro')
   };
   const fields = { service: 'Moto', origin: '', destination: '', name: '', phone: '', notes: '' };
   const projectId = 'dfb41cea-a812-46f2-b511-7a60bd3d78af';
