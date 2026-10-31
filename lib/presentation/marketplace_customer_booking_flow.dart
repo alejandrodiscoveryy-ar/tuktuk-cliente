@@ -955,7 +955,15 @@ class _MarketplaceCustomerBookingFlowState
     if (query.length < 3) return;
     _searchDebounce = Timer(const Duration(milliseconds: 550), () async {
       try {
-        final found = await flow.mapService.search(query);
+        final center = _mapCenter.value;
+        final near = flow.origin ?? (center == null
+            ? null
+            : MarketplaceMapPoint(
+                label: 'Centro del mapa',
+                lat: center.latitude,
+                lon: center.longitude,
+              ));
+        final found = await flow.mapService.search(query, proximity: near);
         if (!mounted ||
             _selectingOrigin == null ||
             _placeSearch.text.trim() != query) {
@@ -1656,6 +1664,13 @@ class _MarketplaceCustomerBookingFlowState
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    subtitle: Text([
+                      if (point.category != null) point.category!,
+                      if (point.distanceKm != null)
+                        '${point.distanceKm!.toStringAsFixed(1)} km',
+                      if (point.source == 'openstreetmap')
+                        '© OpenStreetMap contributors',
+                    ].join(' · '), maxLines: 2),
                     onTap: () {
                       final origin = _selectingOrigin;
                       if (origin != null) _commitPlace(point, origin);

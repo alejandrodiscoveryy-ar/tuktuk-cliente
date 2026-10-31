@@ -1,12 +1,21 @@
 part of '../main.dart';
 
 class MarketplaceMapPoint {
-  const MarketplaceMapPoint(
-      {required this.label, required this.lat, required this.lon});
+  const MarketplaceMapPoint({
+    required this.label,
+    required this.lat,
+    required this.lon,
+    this.category,
+    this.distanceKm,
+    this.source,
+  });
 
   final String label;
   final double lat;
   final double lon;
+  final String? category;
+  final double? distanceKm;
+  final String? source;
 
   LatLng get latLng => LatLng(lat, lon);
   Map<String, dynamic> toMap() => {'lat': lat, 'lon': lon};
@@ -15,6 +24,11 @@ class MarketplaceMapPoint {
         label: value['label']?.toString() ?? 'Ubicación seleccionada',
         lat: (value['lat'] as num).toDouble(),
         lon: (value['lon'] as num).toDouble(),
+        category: value['category']?.toString(),
+        source: value['source']?.toString(),
+        distanceKm: value['distance_km'] is num
+            ? (value['distance_km'] as num).toDouble()
+            : null,
       );
 }
 
@@ -147,8 +161,14 @@ class MarketplaceMapService {
     return body['data'];
   }
 
-  Future<List<MarketplaceMapPoint>> search(String query) async {
-    final data = await _invoke('geocode', {'query': query});
+  Future<List<MarketplaceMapPoint>> search(
+    String query, {
+    MarketplaceMapPoint? proximity,
+  }) async {
+    final data = await _invoke('geocode', {
+      'query': query,
+      if (proximity != null) 'proximity': proximity.toMap(),
+    });
     return (data as List)
         .map((item) => MarketplaceMapPoint.fromMap(item as Map))
         .toList(growable: false);
