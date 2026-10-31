@@ -66,7 +66,10 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
     }
     debounce = Timer(const Duration(milliseconds: 700), () async {
       try {
-        final found = await widget.service.search(value.trim());
+        final found = await widget.service.search(
+          value.trim(),
+          proximity: selected ?? widget.origin,
+        );
         if (mounted && searchController.text.trim() == value.trim()) {
           setState(() {
             results = found;
@@ -314,6 +317,14 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
                           itemBuilder: (context, index) => ListTile(
                             dense: true,
                             title: Text(results[index].label),
+                            subtitle: Text([
+                              if (results[index].category != null)
+                                results[index].category!,
+                              if (results[index].distanceKm != null)
+                                '${results[index].distanceKm!.toStringAsFixed(1)} km',
+                              if (results[index].source == 'openstreetmap')
+                                '© OpenStreetMap contributors',
+                            ].join(' · '), maxLines: 2),
                             trailing: const Icon(Icons.chevron_right_rounded),
                             onTap: () => _chooseSearchResult(results[index]),
                           ),
@@ -551,6 +562,14 @@ class _MarketplaceLocationPickerState extends State<MarketplaceLocationPicker> {
                               itemBuilder: (context, index) => ListTile(
                                 dense: true,
                                 title: Text(results[index].label),
+                                subtitle: Text([
+                                  if (results[index].category != null)
+                                    results[index].category!,
+                                  if (results[index].distanceKm != null)
+                                    '${results[index].distanceKm!.toStringAsFixed(1)} km',
+                                  if (results[index].source == 'openstreetmap')
+                                    '© OpenStreetMap contributors',
+                                ].join(' · '), maxLines: 2),
                                 trailing: const Icon(
                                   Icons.chevron_right_rounded,
                                 ),
