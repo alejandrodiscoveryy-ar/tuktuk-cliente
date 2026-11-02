@@ -140,5 +140,17 @@ void main() {
     expect(source, contains('_showPickupGpsMessage('));
     expect(source, contains('showRestoreGps: true'));
     expect(source, contains('restoringGps: _locatingPickup'));
+    // El boton GPS original esta a la izquierda, antes de la direccion.
+    // No debe existir un segundo boton junto al lapiz de editar.
+    final pickupRow = source
+        .split('Widget _floatingLocationRow({')
+        .last
+        .split('Widget _floatingBookingPanel()')
+        .first;
+    expect(RegExp(r'if \(showRestoreGps\)').allMatches(pickupRow).length, 1);
+    expect(pickupRow.indexOf("tooltip: 'Volver a mi ubicación'"),
+        lessThan(pickupRow.indexOf('const SizedBox(width: 10)')));
+    expect(pickupRow, contains('onPressed: onRestoreGps'));
+    expect(pickupRow, contains('Icons.edit_location_alt_outlined'));
   });
 }
