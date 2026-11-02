@@ -127,4 +127,18 @@ void main() {
     expect(source, contains('flow.setPickupForQuote(point)'));
     expect(source, contains('tooltip: \'Cambiar recogida\''));
   });
+  test('recuperar GPS de recogida muestra control y protege selecciones nuevas', () {
+    final source =
+        File('lib/presentation/marketplace_customer_booking_flow.dart')
+            .readAsStringSync();
+    expect(source, contains("tooltip: 'Volver a mi ubicación'"));
+    expect(source, contains('Future<void> _restoreGpsPickup() async'));
+    expect(source, contains('_commitPlace(point, true)'));
+    expect(source, contains('revision != _pickupLocationRevision'));
+    expect(source, contains('pickupRevisionAtTap != _pickupLocationRevision'));
+    expect(source, contains('accuracy: LocationAccuracy.high'));
+    expect(source, contains('_showPickupGpsMessage('));
+    expect(source, contains('showRestoreGps: true'));
+    expect(source, contains('restoringGps: _locatingPickup'));
+  });
 }

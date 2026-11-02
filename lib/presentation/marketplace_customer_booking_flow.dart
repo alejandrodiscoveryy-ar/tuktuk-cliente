@@ -582,6 +582,8 @@ class _MarketplaceCustomerBookingFlowState
   Timer? pricingDebounce;
   bool _publishing = false;
   bool _tryingAutoPickup = false;
+  bool _locatingPickup = false;
+  int _pickupLocationRevision = 0;
   bool _bookingResetRequested = false;
   final ValueNotifier<LatLng?> _mapCenter = ValueNotifier<LatLng?>(null);
   final ValueNotifier<double> _mapPanelInset = ValueNotifier<double>(0);
@@ -741,6 +743,7 @@ class _MarketplaceCustomerBookingFlowState
 
   void _returnToStart() {
     if (_publishing) return;
+    _pickupLocationRevision++;
     _bookingResetRequested = true;
     pricingDebounce?.cancel();
     _searchDebounce?.cancel();
@@ -974,6 +977,7 @@ class _MarketplaceCustomerBookingFlowState
       );
   Future<void> _selectPoint({required bool origin}) async {
     if (!origin && flow.origin == null) return;
+    if (origin) _pickupLocationRevision++;
     _searchDebounce?.cancel();
     _placeSearch.clear();
     setState(() {
@@ -1039,6 +1043,7 @@ class _MarketplaceCustomerBookingFlowState
 
   void _commitPlace(MarketplaceMapPoint point, bool origin) {
     if (origin) {
+      _pickupLocationRevision++;
       flow.setPickupForQuote(point);
     } else {
       flow.setDestination(point);
@@ -1053,6 +1058,7 @@ class _MarketplaceCustomerBookingFlowState
     // El modo explicito de edicion de recogida mantiene prioridad.
     final selectingOrigin = _selectingOrigin ?? (flow.origin == null ? null : false);
     if (selectingOrigin == null || _resolvingMapPoint) return;
+    final pickupRevisionAtTap = _pickupLocationRevision;
     setState(() => _resolvingMapPoint = true);
     var point = MarketplaceMapPoint(
       label: 'Punto marcado en el mapa',
@@ -1067,6 +1073,7 @@ class _MarketplaceCustomerBookingFlowState
       if (mounted) setState(() => _resolvingMapPoint = false);
     }
     if (!mounted || (_selectingOrigin ?? (flow.origin == null ? null : false)) != selectingOrigin) return;
+    if (selectingOrigin && pickupRevisionAtTap != _pickupLocationRevision) return;
     _commitPlace(point, selectingOrigin);
   }
 
@@ -1098,8 +1105,63 @@ class _MarketplaceCustomerBookingFlowState
   } // Se intenta una sola vez al abrir. Si GPS o permisos fallan, la entrada
 
   // manual sigue disponible. Nunca sustituye una recogida elegida por el usuario.
+  // Recupera la recogida con un toque. Mantiene el destino y nunca publica.
+  // Un cambio posterior de origen invalida la peticion GPS anterior.
+  Future<void> _restoreGpsPickup() async {
+    if (_locatingPickup || _publishing) return;
+    final revision = ++_pickupLocationRevision;
+    setState(() => _locatingPickup = true);
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        _showPickupGpsMessage('Activa la ubicación del teléfono para volver a tu posición.');
+        return;
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        _showPickupGpsMessage('Permite el acceso a la ubicación para recuperar tu recogida.');
+        return;
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 12),
+        ),
+      );
+      if (!mounted || revision != _pickupLocationRevision || _publishing) return;
+      var point = MarketplaceMapPoint(
+        label: 'Mi ubicación actual',
+        lat: position.latitude,
+        lon: position.longitude,
+      );
+      try {
+        point = await flow.mapService.reverse(point);
+      } catch (_) {
+        // El nombre de la calle es opcional; conservamos las coordenadas GPS.
+      }
+      if (!mounted || revision != _pickupLocationRevision || _publishing) return;
+      _commitPlace(point, true);
+    } catch (_) {
+      if (mounted && revision == _pickupLocationRevision) {
+        _showPickupGpsMessage('No pudimos obtener tu ubicación. Puedes elegir la recogida en el mapa.');
+      }
+    } finally {
+      if (mounted) setState(() => _locatingPickup = false);
+    }
+  }
+
+  void _showPickupGpsMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
   Future<void> _autoLocatePickup() async {
-    if (_tryingAutoPickup || flow.origin != null) return;
+    if (_tryingAutoPickup || _locatingPickup || flow.origin != null) return;
+    final revision = _pickupLocationRevision;
     _tryingAutoPickup = true;
     try {
       if (!await Geolocator.isLocationServiceEnabled()) return;
@@ -1116,7 +1178,8 @@ class _MarketplaceCustomerBookingFlowState
           timeLimit: Duration(seconds: 12),
         ),
       );
-      if (!mounted || flow.origin != null || _bookingResetRequested) return;
+      if (!mounted || flow.origin != null || _bookingResetRequested ||
+          _locatingPickup || revision != _pickupLocationRevision) return;
       var point = MarketplaceMapPoint(
         label: 'Mi ubicación actual',
         lat: position.latitude,
@@ -1127,7 +1190,8 @@ class _MarketplaceCustomerBookingFlowState
       } catch (_) {
         // Conservamos coordenadas validas si la direccion no se resuelve.
       }
-      if (mounted && flow.origin == null && !_bookingResetRequested) {
+      if (mounted && flow.origin == null && !_bookingResetRequested &&
+          !_locatingPickup && revision == _pickupLocationRevision) {
         flow.setPickupForQuote(point);
         _mapCenter.value = point.latLng;
       }
@@ -1412,6 +1476,11 @@ class _MarketplaceCustomerBookingFlowState
                       'Detectando ubicación o toca para elegir',
                   onTap: () => _selectPoint(origin: true),
                   tooltip: 'Cambiar recogida',
+                  showRestoreGps: true,
+                  restoringGps: _locatingPickup,
+                  onRestoreGps: _locatingPickup || _publishing
+                      ? null
+                      : () => unawaited(_restoreGpsPickup()),
                 ),
                 if (flow.destination != null || _selectingOrigin == false) ...[
                   const Divider(color: TuktukTheme.border, height: 1),
@@ -1439,6 +1508,9 @@ class _MarketplaceCustomerBookingFlowState
     required String value,
     required VoidCallback? onTap,
     required String tooltip,
+    bool showRestoreGps = false,
+    bool restoringGps = false,
+    VoidCallback? onRestoreGps,
   }) =>
       InkWell(
         onTap: onTap,
@@ -1472,6 +1544,21 @@ class _MarketplaceCustomerBookingFlowState
                   ],
                 ),
               ),
+              if (showRestoreGps)
+                IconButton(
+                  tooltip: 'Volver a mi ubicación',
+                  onPressed: onRestoreGps,
+                  color: TuktukTheme.mint,
+                  iconSize: 23,
+                  visualDensity: VisualDensity.compact,
+                  icon: restoringGps
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.gps_fixed_rounded),
+                ),
               Tooltip(
                 message: tooltip,
                 child: Icon(
