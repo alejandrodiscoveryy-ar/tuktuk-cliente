@@ -485,9 +485,56 @@ class _MarketplaceCustomerTrackingScreenState
     } catch (error) {
       if (!mounted) return;
       final value = error.toString();
+      // Si se asigno conductor tras el ultimo getJob, el servidor bloquea
+      // el motivo automatico. Pedir el motivo real y reintentar solo una vez.
+      if (value.contains('CUSTOMER_CANCELLATION_REASON_REQUIRED_AFTER_ASSIGNMENT') &&
+          reason == 'Cancelación antes de asignar conductor') {
+        try {
+          final assignedNow = await widget.service.getJob(
+            sessionId: widget.session.sessionId,
+            sessionToken: widget.session.token,
+            jobId: latest.id,
+          );
+          if (!mounted) return;
+          setState(() => _job = assignedNow);
+          if (!assignedNow.customerCanCancel) {
+            setState(() => _error =
+                'El viaje ya comenzó. Contacta con soporte para cancelar.');
+            return;
+          }
+          final chosenReason = await _askCancellationReason();
+          if (!mounted || chosenReason == null || chosenReason.trim().isEmpty) {
+            return;
+          }
+          _cancelPayloadSignature = jsonEncode({
+            'job_id': assignedNow.id,
+            'reason': chosenReason,
+          });
+          _cancelIdempotencyKey = _marketplaceUuid();
+          await widget.service.cancelJob(
+            sessionId: widget.session.sessionId,
+            sessionToken: widget.session.token,
+            jobId: assignedNow.id,
+            reason: chosenReason,
+            idempotencyKey: _cancelIdempotencyKey!,
+          );
+          await _refresh();
+          return;
+        } catch (retryError) {
+          if (!mounted) return;
+          setState(() {
+            _error = retryError.toString().contains(
+                    'CUSTOMER_CANCELLATION_REQUIRES_SUPPORT')
+                ? 'El viaje ya comenzó. Contacta con soporte para cancelar.'
+                : 'No pudimos cancelar la solicitud. Inténtalo otra vez.';
+          });
+          await _refresh();
+          return;
+        }
+      }
       setState(() {
         _error = value.contains('CUSTOMER_CANCELLATION_REQUIRES_SUPPORT')
-            ? 'El viaje ya avanzó. Contacta con soporte para cancelar.'
+            ? 'El viaje ya comenzó. Contacta con soporte para cancelar.'
             : 'No pudimos cancelar la solicitud. Inténtalo otra vez.';
       });
       await _refresh();

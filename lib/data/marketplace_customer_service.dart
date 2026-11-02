@@ -147,6 +147,8 @@ class MarketplaceCustomerJob {
         'requested',
         'published',
         'accepted',
+        'en_route',
+        'pickup',
       }.contains(status);
 
   // Accepted significa asignacion, incluso si aun no carga la ficha.

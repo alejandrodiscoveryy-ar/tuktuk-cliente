@@ -263,5 +263,17 @@ void main() {
     expect(pending.customerCancellationRequiresReason, isFalse);
     expect(accepted.customerCancellationRequiresReason, isTrue);
     expect(assigned.customerCancellationRequiresReason, isTrue);
+    for (final status in ['en_route', 'pickup']) {
+      final beforeStart = MarketplaceCustomerJob.fromMap({
+        ...base,
+        'status': status,
+      });
+      expect(beforeStart.customerCanCancel, isTrue);
+    }
+    final underway = MarketplaceCustomerJob.fromMap({
+      ...base,
+      'status': 'in_progress',
+    });
+    expect(underway.customerCanCancel, isFalse);
   });
 }
