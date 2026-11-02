@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Permisos basicos para red y ubicacion activa; nunca ubicacion en segundo plano. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <application
-        android:label="tuktuk_cliente"
+        android:label="TUKTUK Cliente"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
