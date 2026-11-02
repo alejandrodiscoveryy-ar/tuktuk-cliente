@@ -4,6 +4,19 @@ import 'package:tuktuk_cliente/main.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  test('Android proof is sent to App Check field, never Turnstile', () async {
+    Map<String, Object?>? sent;
+    await customerRateRegisterDevice(
+      token: 'synthetic-token',
+      secret: 'synthetic-secret',
+      needsProof: true,
+      proofKey: 'app_check_token',
+      challenge: () async => 'synthetic-appcheck-proof',
+      invoke: (body) async { sent = body; return {'ok': true}; },
+    );
+    expect(sent?['app_check_token'], 'synthetic-appcheck-proof');
+    expect(sent?.containsKey('turnstile_token'), false);
+  });
   test('renewal sends possession secret without a challenge', () async {
     var challenges = 0;
     Map<String, Object?>? sent;

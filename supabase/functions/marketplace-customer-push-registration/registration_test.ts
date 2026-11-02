@@ -86,6 +86,18 @@ Deno.test("registration: dispatch rejected even with dispatch secret header", as
   equal((await handleRegistration(request({ action: "dispatch" }, { "x-tuktuk-dispatch-secret": "synthetic" }), db, () => Promise.resolve("valid"))).status, 400);
   equal(db.calls.length, 0);
 });
+Deno.test("registration: Android App Check attestation is mandatory for a first install", async () => {
+  const db = new FakeAdmin();
+  const proof = "header.payload.signature".repeat(15);
+  let mobileChecks = 0;
+  const androidVerify = async () => { mobileChecks++; return "valid" as ProofVerdict; };
+  equal((await handleRegistration(request({ app_check_token: proof }), db, async () => "invalid", androidVerify)).status, 200);
+  equal(mobileChecks, 1);
+  equal(db.tables[TABLE].length, 1);
+  const second = new FakeAdmin();
+  equal((await handleRegistration(request({ app_check_token: proof }), second, async () => "valid" )).status, 403);
+  equal((await handleRegistration(request({ app_check_token: proof, turnstile_token: "forged-valid-web" }), new FakeAdmin(), async () => "valid", androidVerify)).status, 400);
+});
 Deno.test("registration: input bounds and HTTP/CORS handling", async () => {
   const db = new FakeAdmin(), verify = () => Promise.resolve("valid" as ProofVerdict);
   for (const values of [{ token: "short" }, { device_secret: "x".repeat(64) }]) equal((await handleRegistration(request(values), db, verify)).status, 400);

@@ -8,6 +8,7 @@ import 'services/customer_arrival_sound_stub.dart'
     as customer_arrival_sound;
 import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'services/customer_rate_firebase_options.dart';
 import 'services/customer_rate_turnstile_stub.dart'
@@ -44,6 +45,7 @@ const _supabasePublishableKey =
     String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
 
 Future<bool> customerFirebaseReady = Future<bool>.value(false);
+final GlobalKey<ScaffoldMessengerState> customerPushMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 @pragma('vm:entry-point')
 Future<void> _customerAndroidBackgroundMessage(RemoteMessage message) async {
@@ -66,7 +68,19 @@ Future<void> _initializeCustomerFirebaseAfterFirstFrame(
         return;
       }
       await Firebase.initializeApp(options: options);
+      await FirebaseAppCheck.instance.activate(
+        androidProvider: AndroidProvider.playIntegrity,
+      );
       FirebaseMessaging.onBackgroundMessage(_customerAndroidBackgroundMessage);
+      // Only a public exchange-rate update is permitted to appear as an in-app
+      // notification. Never process ride changes or instructions from push data.
+      FirebaseMessaging.onMessage.listen((message) {
+        if (message.data['kind'] != 'customer_exchange_rate_update') return;
+        final body = message.notification?.body ?? 'Hay una nueva tasa disponible.';
+        customerPushMessengerKey.currentState?.showSnackBar(
+          SnackBar(content: Text(body.length > 180 ? body.substring(0, 180) : body)),
+        );
+      });
       // La suscripcion FCM necesita permiso explicito y un registro seguro
       // de dispositivo en servidor; nunca reutilizar el Turnstile de Web.
     } else {

@@ -29,7 +29,9 @@ void main() {
     expect(opts, contains('FIREBASE_ANDROID_APP_ID'));
     expect(main, contains('_customerAndroidBackgroundMessage'));
     expect(main, contains('FirebaseMessaging.onBackgroundMessage('));
-    expect(subscriptions, contains('if (!kIsWeb) return false;'));
+    expect(main, contains('FirebaseAppCheck.instance.activate('));
+    expect(subscriptions, contains('defaultTargetPlatform != TargetPlatform.android'));
+    expect(subscriptions, contains("proofKey: kIsWeb ? 'turnstile_token' : 'app_check_token'"));
     expect(subscriptions, contains('customerRateTurnstileProof('));
   });
 }

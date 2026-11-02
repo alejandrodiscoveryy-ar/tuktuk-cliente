@@ -11,6 +11,7 @@ class MarketplaceCustomerApp extends StatelessWidget {
       valueListenable: MarketplaceMapService.publicVisualRevision,
       builder: (context, revision, child) => MaterialApp(
         debugShowCheckedModeBanner: false,
+        scaffoldMessengerKey: customerPushMessengerKey,
         title: 'TUKTUK',
         theme: buildAppTheme(Brightness.dark),
         darkTheme: buildAppTheme(Brightness.dark),
