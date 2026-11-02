@@ -70,7 +70,8 @@ void main() {
     final tracking = File(
       'lib/presentation/marketplace_customer_tracking.dart',
     ).readAsStringSync();
-    expect(tracking, contains('Color(0x52050B10)'));
+    expect(tracking, contains('Color(0x1208141B)'));
+    expect(tracking, isNot(contains('Color(0x52050B10)')));
     expect(source, contains('Solicitar transporte'));
     expect(source, isNot(contains('Color(0x5208141B)')));
     final html = File('web/index.html').readAsStringSync();
