@@ -62,15 +62,19 @@ void main() {
     final source = File(
       'lib/presentation/marketplace_customer_booking_flow.dart',
     ).readAsStringSync();
-    expect(source, contains('Color(0xEA0F2831)'));
+    expect(source, contains('Color(0xD80F2831)'));
     expect(source, contains('TuktukTheme.background.withValues(alpha: .80)'));
     expect(source, contains('TuktukTheme.background.withValues(alpha: .77)'));
     expect(source, contains('Widget _floatingQuoteOptions()'));
-    expect(source, contains('Color(0x5208141B)'));
+    expect(source, contains('Color(0x1208141B')));
     final tracking = File(
       'lib/presentation/marketplace_customer_tracking.dart',
     ).readAsStringSync();
     expect(tracking, contains('Color(0x52050B10)'));
     expect(source, contains('Solicitar transporte'));
+    expect(source, isNot(contains('Color(0x5208141B)')));
+    final html = File('web/index.html').readAsStringSync();
+    expect(html, contains('.mapboxgl-canvas'));
+    expect(html, contains('brightness(1.30) contrast(0.98)'));
   });
 }

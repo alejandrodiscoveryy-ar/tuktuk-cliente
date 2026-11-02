@@ -1352,7 +1352,7 @@ class _MarketplaceCustomerBookingFlowState
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.center,
-                    colors: [Color(0x5208141B), Color(0x0008141B)],
+                    colors: [Color(0x1208141B), Color(0x0008141B)],
                   ),
                 ),
               ),
@@ -1505,7 +1505,7 @@ class _MarketplaceCustomerBookingFlowState
                         gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xEA0F2831), Color(0xF0081720)],
+              colors: [Color(0xD80F2831), Color(0xDC081720)],
             ),
             border: Border.all(color: TuktukTheme.border),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(27)),
