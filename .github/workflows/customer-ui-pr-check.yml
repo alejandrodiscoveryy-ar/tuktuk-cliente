@@ -15,6 +15,9 @@ on:
       - '.github/workflows/customer-ui-pr-check.yml'
       - 'android/**'
       - 'pubspec.yaml'
+      - 'lib/main.dart'
+      - 'lib/services/customer_rate_firebase_options.dart'
+      - 'test/domain/marketplace_android_play_readiness_test.dart'
       - 'README.md'
       - 'test/domain/marketplace_android_release_identity_test.dart'
       - 'web/**'
@@ -74,3 +77,36 @@ jobs:
           du -h build/web/main.dart.js
           # El HTML compilado debe contener el bootstrap real, no el placeholder.
           node -e 'const fs=require("node:fs");const h=fs.readFileSync("build/web/index.html","utf8");if(h.includes("{{flutter_bootstrap_js}}")||!h.includes("_flutter.loader.load(")){process.exit(1)}'
+
+  android-debug-build:
+    # Verifica compilacion nativa real sin usar claves privadas de publicacion.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - name: Setup Java 17
+        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Setup Flutter 3.44.4
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.44.4'
+          channel: stable
+          cache: true
+      - name: Provision licensed TUKTUK arrival horn
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assets/sounds
+          curl -fsSL --retry 3 --connect-timeout 20 'https://assets.mixkit.co/active_storage/sfx/719/719.wav' -o 'assets/sounds/tuktuk-car-double-horn.wav'
+          echo '15c3836597e2b820a9543a1fa671d4b2691bca46ef98f7d4ca767936b5109ed0  assets/sounds/tuktuk-car-double-horn.wav' | sha256sum --check
+      - name: Dependencies
+        run: flutter pub get
+      - name: Build Android debug ARM64
+        run: |
+          set -euo pipefail
+          flutter build apk --debug --target-platform android-arm64
+          test -s build/app/outputs/flutter-apk/app-debug.apk
