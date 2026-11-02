@@ -214,4 +214,54 @@ void main() {
       expect(map.createCalls, 1);
     },
   );
+  test('volver al inicio limpia el borrador y renueva idempotencia', () async {
+    flow.setOrigin(origin);
+    flow.setDestination(destination);
+    await waitForVerifiedRoute(flow);
+    final oldIdempotency = flow.idempotencyKey;
+    final oldPublishIdempotency = flow.publishIdempotencyKey;
+    flow.stopCount = 2;
+    flow.urgent = true;
+    flow.note = 'Con equipaje';
+    flow.scheduledFor = DateTime.utc(2027);
+
+    flow.resetToStart();
+
+    expect(flow.step, MarketplaceBookingStep.quote);
+    expect(flow.origin, isNull);
+    expect(flow.destination, isNull);
+    expect(flow.route, isNull);
+    expect(flow.stopCount, 0);
+    expect(flow.urgent, isFalse);
+    expect(flow.note, isEmpty);
+    expect(flow.scheduledFor, isNull);
+    expect(flow.idempotencyKey, isNot(oldIdempotency));
+    expect(flow.publishIdempotencyKey, isNot(oldPublishIdempotency));
+    expect(map.createCalls, 0);
+  });
+
+  test('cancelacion exige motivo cuando hay conductor asignado', () {
+    const base = {
+      'job_id': 'job',
+      'final_price': 500,
+      'currency': 'CUP',
+    };
+    final pending = MarketplaceCustomerJob.fromMap({
+      ...base,
+      'status': 'published',
+    });
+    final accepted = MarketplaceCustomerJob.fromMap({
+      ...base,
+      'status': 'accepted',
+    });
+    final assigned = MarketplaceCustomerJob.fromMap({
+      ...base,
+      'status': 'published',
+      'driver_display_name': 'Conductor',
+    });
+    expect(pending.customerCanCancel, isTrue);
+    expect(pending.customerCancellationRequiresReason, isFalse);
+    expect(accepted.customerCancellationRequiresReason, isTrue);
+    expect(assigned.customerCancellationRequiresReason, isTrue);
+  });
 }

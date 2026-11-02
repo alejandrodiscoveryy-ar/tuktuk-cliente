@@ -149,6 +149,10 @@ class MarketplaceCustomerJob {
         'accepted',
       }.contains(status);
 
+  // Accepted significa asignacion, incluso si aun no carga la ficha.
+  bool get customerCancellationRequiresReason =>
+      status == 'accepted' || hasAssignedDriver;
+
   bool get isTerminal => const {
         'settled',
         'cancelled_by_customer',

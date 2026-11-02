@@ -322,6 +322,31 @@ class CustomerBookingFlowController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void resetToStart() {
+    // Abandonar un borrador no crea ni cancela ninguna carrera real.
+    _pricingRevision++;
+    _categoryQuoteRequestId++;
+    _categoryQuoteCache.clear();
+    _categoryQuoteSignature = null;
+    origin = null;
+    destination = null;
+    route = null;
+    scheduledFor = null;
+    passengerCount = 1;
+    stopCount = 0;
+    urgent = false;
+    loadHelp = false;
+    unloadHelp = false;
+    cargoWeightKg = null;
+    cargoVolumeM3 = null;
+    note = '';
+    error = null;
+    idempotencyKey = _marketplaceUuid();
+    publishIdempotencyKey = _marketplaceUuid();
+    step = MarketplaceBookingStep.quote;
+    notifyListeners();
+  }
+
   void replaceSession(MarketplaceCustomerSessionSnapshot value) {
     session = value;
     notifyListeners();
@@ -557,6 +582,7 @@ class _MarketplaceCustomerBookingFlowState
   Timer? pricingDebounce;
   bool _publishing = false;
   bool _tryingAutoPickup = false;
+  bool _bookingResetRequested = false;
   final ValueNotifier<LatLng?> _mapCenter = ValueNotifier<LatLng?>(null);
   final ValueNotifier<double> _mapPanelInset = ValueNotifier<double>(0);
   String? _mapPanelLayoutKey;
@@ -689,6 +715,12 @@ class _MarketplaceCustomerBookingFlowState
           children: [
             const _TuktukBrandLockup(width: 126),
             const Spacer(),
+            if (flow.origin != null || flow.destination != null || _selectingOrigin != null)
+              IconButton(
+                tooltip: 'Volver al inicio',
+                onPressed: _publishing ? null : _returnToStart,
+                icon: const Icon(Icons.home_outlined, size: 25),
+              ),
             IconButton(
               tooltip: 'Abrir menú',
               onPressed: _openCustomerMenu,
@@ -706,6 +738,24 @@ class _MarketplaceCustomerBookingFlowState
           ],
         ),
       );
+
+  void _returnToStart() {
+    if (_publishing) return;
+    _bookingResetRequested = true;
+    pricingDebounce?.cancel();
+    _searchDebounce?.cancel();
+    _placeSearch.clear();
+    noteController.clear();
+    weightController.clear();
+    volumeController.clear();
+    _selectingOrigin = null;
+    _placeResults = const <MarketplaceMapPoint>[];
+    _placeMessage = null;
+    _searchingPlaces = false;
+    _mapPanelLayoutKey = null;
+    flow.resetToStart();
+    _mapCenter.value = const LatLng(23.1136, -82.3666);
+  }
 
   Future<void> _openCustomerMenu() async {
     await showDialog<void>(
@@ -1066,7 +1116,7 @@ class _MarketplaceCustomerBookingFlowState
           timeLimit: Duration(seconds: 12),
         ),
       );
-      if (!mounted || flow.origin != null) return;
+      if (!mounted || flow.origin != null || _bookingResetRequested) return;
       var point = MarketplaceMapPoint(
         label: 'Mi ubicación actual',
         lat: position.latitude,
@@ -1077,7 +1127,7 @@ class _MarketplaceCustomerBookingFlowState
       } catch (_) {
         // Conservamos coordenadas validas si la direccion no se resuelve.
       }
-      if (mounted && flow.origin == null) {
+      if (mounted && flow.origin == null && !_bookingResetRequested) {
         flow.setPickupForQuote(point);
         _mapCenter.value = point.latLng;
       }
@@ -1536,6 +1586,11 @@ class _MarketplaceCustomerBookingFlowState
           TuktukPrimaryButton(
             onPressed: enabled ? _submit : null,
             label: _publishing ? 'Publicando...' : 'Solicitar transporte',
+          ),
+          TextButton.icon(
+            onPressed: _publishing ? null : _returnToStart,
+            icon: const Icon(Icons.arrow_back_rounded, size: 18),
+            label: const Text('Volver al inicio'),
           ),
         ],
       ),
