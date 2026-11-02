@@ -13,6 +13,10 @@ on:
       - 'test/presentation/marketplace_tracking_mobile_ui_test.dart'
       - 'test/presentation/marketplace_map_route_glass_test.dart'
       - '.github/workflows/customer-ui-pr-check.yml'
+      - 'android/**'
+      - 'pubspec.yaml'
+      - 'README.md'
+      - 'test/domain/marketplace_android_release_identity_test.dart'
       - 'web/**'
       - 'test/web/**'
 

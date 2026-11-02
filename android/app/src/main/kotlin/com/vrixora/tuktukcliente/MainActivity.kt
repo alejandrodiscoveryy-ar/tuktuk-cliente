@@ -1,4 +1,4 @@
-package com.vrixora.provisional.tuktuk_cliente
+package com.vrixora.tuktukcliente
 
 import io.flutter.embedding.android.FlutterActivity
 

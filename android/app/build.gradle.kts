@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.vrixora.provisional.tuktuk_cliente"
+    namespace = "com.vrixora.tuktukcliente"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -15,8 +15,8 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.vrixora.provisional.tuktuk_cliente"
+        // Identidad definitiva TUKTUK Cliente. No cambiar tras registrar en Google Play.
+        applicationId = "com.vrixora.tuktukcliente"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
