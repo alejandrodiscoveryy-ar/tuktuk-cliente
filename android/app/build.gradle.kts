@@ -1,12 +1,31 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Credenciales locales privadas. android/key.properties siempre se excluye de Git.
+val uploadProperties = Properties()
+val uploadPropertiesPath = rootProject.file("key.properties")
+if (uploadPropertiesPath.isFile) {
+    FileInputStream(uploadPropertiesPath).use { uploadProperties.load(it) }
+}
+val uploadSigningReady = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+    .all { !uploadProperties.getProperty(it).isNullOrBlank() }
+val releaseBuildRequested = gradle.startParameter.taskNames.any {
+    it.contains("Release", ignoreCase = true) || it.contains("bundle", ignoreCase = true)
+}
+if (releaseBuildRequested && !uploadSigningReady) {
+    throw GradleException("TUKTUK Cliente: falta android/key.properties para firmar el build release. Nunca usar firma debug.")
+}
+
 android {
     namespace = "com.vrixora.tuktukcliente"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -20,16 +39,25 @@ android {
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            if (uploadSigningReady) {
+                keyAlias = uploadProperties.getProperty("keyAlias")
+                keyPassword = uploadProperties.getProperty("keyPassword")
+                storeFile = file(uploadProperties.getProperty("storeFile"))
+                storePassword = uploadProperties.getProperty("storePassword")
+            }
+        }
+    }
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Sin fallback: Play exige firma de carga privada, NUNCA debug.
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

@@ -1,7 +1,7 @@
 name: tuktuk_cliente
 description: WebApp y futura aplicación móvil para clientes de TUKTUK.
 publish_to: none
-version: 0.1.0+1
+version: 1.0.0+1
 environment:
   sdk: ^3.4.0
 dependencies:

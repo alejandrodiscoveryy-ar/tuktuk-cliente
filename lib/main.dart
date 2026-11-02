@@ -45,13 +45,37 @@ const _supabasePublishableKey =
 
 Future<bool> customerFirebaseReady = Future<bool>.value(false);
 
+@pragma('vm:entry-point')
+Future<void> _customerAndroidBackgroundMessage(RemoteMessage message) async {
+  // El sistema Android presenta las notificaciones con payload de notificacion.
+  // No aceptar ordenes ni cambiar el estado de una carrera desde un push.
+  final options = customerRateFirebaseAndroidOptionsOrNull;
+  if (options == null) return;
+  await Firebase.initializeApp(options: options);
+}
+
 Future<void> _initializeCustomerFirebaseAfterFirstFrame(
     Completer<bool> ready) async {
   try {
-    await Firebase.initializeApp(options: customerRateFirebaseWebOptions);
+    if (kIsWeb) {
+      await Firebase.initializeApp(options: customerRateFirebaseWebOptions);
+    } else if (defaultTargetPlatform == TargetPlatform.android) {
+      final options = customerRateFirebaseAndroidOptionsOrNull;
+      if (options == null) {
+        ready.complete(false);
+        return;
+      }
+      await Firebase.initializeApp(options: options);
+      FirebaseMessaging.onBackgroundMessage(_customerAndroidBackgroundMessage);
+      // La suscripcion FCM necesita permiso explicito y un registro seguro
+      // de dispositivo en servidor; nunca reutilizar el Turnstile de Web.
+    } else {
+      ready.complete(false);
+      return;
+    }
     ready.complete(true);
   } catch (_) {
-    // Las alertas son opcionales y nunca bloquean el transporte.
+    // Una falla de Firebase no bloquea las solicitudes de transporte.
     ready.complete(false);
   }
 }
@@ -80,7 +104,10 @@ Future<void> main() async {
       unawaited(_loadPublicMapConfigurationAfterFirstFrame(client));
     });
   } else {
+    final ready = Completer<bool>();
+    customerFirebaseReady = ready.future;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_initializeCustomerFirebaseAfterFirstFrame(ready));
       unawaited(_loadPublicMapConfigurationAfterFirstFrame(client));
     });
   }
