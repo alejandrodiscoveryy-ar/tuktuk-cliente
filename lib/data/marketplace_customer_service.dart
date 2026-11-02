@@ -147,7 +147,14 @@ class MarketplaceCustomerJob {
         'requested',
         'published',
         'accepted',
+        'en_route',
+        'pickup',
       }.contains(status);
+
+  // El estado acredita asignacion aun cuando falte cargar la ficha.
+  bool get customerCancellationRequiresReason =>
+      const {'accepted', 'en_route', 'pickup'}.contains(status) ||
+      hasAssignedDriver;
 
   bool get isTerminal => const {
         'settled',

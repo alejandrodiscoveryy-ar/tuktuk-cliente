@@ -287,42 +287,101 @@ class _MarketplaceCustomerTrackingScreenState
         _ => 'El estado se actualizará automáticamente.',
       };
 
+  Future<bool> _confirmCancellationWithoutDriver() async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Cancelar solicitud'),
+            content: const Text(
+              'Todavía no hay conductor asignado. ¿Quieres cancelar la solicitud?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Continuar esperando'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Sí, cancelar'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
   Future<String?> _askCancellationReason() async {
-    final controller = TextEditingController();
+    const reasons = <String>[
+      'Ya no necesito el transporte',
+      'El conductor está demorando demasiado',
+      'No puedo comunicarme con el conductor',
+      'El conductor me pidió cancelar',
+      'Otro motivo',
+    ];
+    final otherController = TextEditingController();
+    String? selected;
 
     final result = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Cancelar solicitud'),
-        content: TextField(
-          controller: controller,
-          maxLength: 240,
-          minLines: 2,
-          maxLines: 4,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Motivo',
-            hintText: 'Indica brevemente el motivo',
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, update) => AlertDialog(
+          title: const Text('¿Por qué deseas cancelar?'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Ya tienes un conductor asignado. Selecciona el motivo.'),
+                const SizedBox(height: 8),
+                for (final reason in reasons)
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      selected == reason
+                          ? Icons.radio_button_checked_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      color: selected == reason ? TuktukTheme.gold : null,
+                    ),
+                    title: Text(reason),
+                    onTap: () => update(() => selected = reason),
+                  ),
+                if (selected == 'Otro motivo')
+                  TextField(
+                    controller: otherController,
+                    maxLength: 240,
+                    minLines: 2,
+                    maxLines: 3,
+                    onChanged: (_) => update(() {}),
+                    decoration: const InputDecoration(
+                      labelText: 'Explica el motivo',
+                    ),
+                  ),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Volver'),
+            ),
+            FilledButton(
+              onPressed: selected == null ||
+                      (selected == 'Otro motivo' && otherController.text.trim().isEmpty)
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(
+                        selected == 'Otro motivo'
+                            ? otherController.text.trim()
+                            : selected,
+                      ),
+              child: const Text('Confirmar cancelación'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Volver'),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(controller.text.trim()),
-            child: const Text('Confirmar cancelación'),
-          ),
-        ],
       ),
     );
-
-    controller.dispose();
+    otherController.dispose();
     return result;
   }
-
   Future<void> _finishJob() async {
     final job = _job;
 
@@ -339,63 +398,150 @@ class _MarketplaceCustomerTrackingScreenState
   }
 
   Future<void> _cancelJob() async {
-    final job = _job;
-
-    if (job == null || !job.customerCanCancel) return;
-
-    final reason = await _askCancellationReason();
-
-    if (!mounted || reason == null) return;
-
-    if (reason.isEmpty) {
-      setState(() {
-        _error = 'Debes indicar el motivo de la cancelación.';
-      });
+    final displayed = _job;
+    if (displayed == null ||
+        !displayed.customerCanCancel ||
+        _cancelling ||
+        _finishing) {
       return;
     }
 
-    final payloadSignature = jsonEncode({'job_id': job.id, 'reason': reason});
+    // Antes de preguntar, consulta el estado real en el servidor.
+    MarketplaceCustomerJob latest;
+    try {
+      latest = await widget.service.getJob(
+        sessionId: widget.session.sessionId,
+        sessionToken: widget.session.token,
+        jobId: displayed.id,
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'No pudimos comprobar el estado del viaje. Inténtalo otra vez.');
+      }
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _job = latest);
+    if (!latest.customerCanCancel) {
+      setState(() => _error =
+          'Este viaje ya no puede cancelarse directamente. Contacta con soporte.');
+      return;
+    }
 
+    String? reason;
+    if (latest.customerCancellationRequiresReason) {
+      reason = await _askCancellationReason();
+    } else {
+      final confirmed = await _confirmCancellationWithoutDriver();
+      if (!mounted || !confirmed) return;
+      // El contrato actual de Supabase exige una causa registrada en el evento.
+      reason = 'Cancelación antes de asignar conductor';
+
+      // Si alguien acepta durante el dialogo, preguntar el motivo real.
+      try {
+        latest = await widget.service.getJob(
+          sessionId: widget.session.sessionId,
+          sessionToken: widget.session.token,
+          jobId: displayed.id,
+        );
+      } catch (_) {
+        if (mounted) {
+          setState(() => _error = 'No pudimos comprobar el estado del viaje. Inténtalo otra vez.');
+        }
+        return;
+      }
+      if (!mounted) return;
+      setState(() => _job = latest);
+      if (!latest.customerCanCancel) {
+        setState(() => _error =
+            'Este viaje ya no puede cancelarse directamente. Contacta con soporte.');
+        return;
+      }
+      if (latest.customerCancellationRequiresReason) {
+        reason = await _askCancellationReason();
+      }
+    }
+    if (!mounted || reason == null || reason.trim().isEmpty) return;
+
+    final payloadSignature = jsonEncode({'job_id': latest.id, 'reason': reason});
     if (_cancelPayloadSignature != payloadSignature ||
         _cancelIdempotencyKey == null) {
       _cancelPayloadSignature = payloadSignature;
       _cancelIdempotencyKey = _marketplaceUuid();
     }
-
     setState(() {
       _cancelling = true;
       _error = null;
     });
-
     try {
       await widget.service.cancelJob(
         sessionId: widget.session.sessionId,
         sessionToken: widget.session.token,
-        jobId: job.id,
+        jobId: latest.id,
         reason: reason,
         idempotencyKey: _cancelIdempotencyKey!,
       );
-
       await _refresh();
     } catch (error) {
       if (!mounted) return;
-
       final value = error.toString();
-
+      // Si se asigno conductor tras el ultimo getJob, el servidor bloquea
+      // el motivo automatico. Pedir el motivo real y reintentar solo una vez.
+      if (value.contains('CUSTOMER_CANCELLATION_REASON_REQUIRED_AFTER_ASSIGNMENT') &&
+          reason == 'Cancelación antes de asignar conductor') {
+        try {
+          final assignedNow = await widget.service.getJob(
+            sessionId: widget.session.sessionId,
+            sessionToken: widget.session.token,
+            jobId: latest.id,
+          );
+          if (!mounted) return;
+          setState(() => _job = assignedNow);
+          if (!assignedNow.customerCanCancel) {
+            setState(() => _error =
+                'El viaje ya comenzó. Contacta con soporte para cancelar.');
+            return;
+          }
+          final chosenReason = await _askCancellationReason();
+          if (!mounted || chosenReason == null || chosenReason.trim().isEmpty) {
+            return;
+          }
+          _cancelPayloadSignature = jsonEncode({
+            'job_id': assignedNow.id,
+            'reason': chosenReason,
+          });
+          _cancelIdempotencyKey = _marketplaceUuid();
+          await widget.service.cancelJob(
+            sessionId: widget.session.sessionId,
+            sessionToken: widget.session.token,
+            jobId: assignedNow.id,
+            reason: chosenReason,
+            idempotencyKey: _cancelIdempotencyKey!,
+          );
+          await _refresh();
+          return;
+        } catch (retryError) {
+          if (!mounted) return;
+          setState(() {
+            _error = retryError.toString().contains(
+                    'CUSTOMER_CANCELLATION_REQUIRES_SUPPORT')
+                ? 'El viaje ya comenzó. Contacta con soporte para cancelar.'
+                : 'No pudimos cancelar la solicitud. Inténtalo otra vez.';
+          });
+          await _refresh();
+          return;
+        }
+      }
       setState(() {
         _error = value.contains('CUSTOMER_CANCELLATION_REQUIRES_SUPPORT')
-            ? 'Este servicio ya no puede cancelarse directamente.'
+            ? 'El viaje ya comenzó. Contacta con soporte para cancelar.'
             : 'No pudimos cancelar la solicitud. Inténtalo otra vez.';
       });
+      await _refresh();
     } finally {
-      if (mounted) {
-        setState(() {
-          _cancelling = false;
-        });
-      }
+      if (mounted) setState(() => _cancelling = false);
     }
   }
-
   Future<void> _openWhatsApp(String phone) async {
     final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
 
