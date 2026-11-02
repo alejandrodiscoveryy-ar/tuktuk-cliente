@@ -278,7 +278,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
       // Primero registramos ambos PNG en el estilo Mapbox Web/Android/iOS.
       final pickup = await assets.load('assets/map_markers/pickup_green.png');
       final destination = await assets.load(
-        'assets/map_markers/destination_red.png',
+        'assets/map_markers/destination_orange.png',
       );
       if (!mounted || map != _map) return;
       await map.addImage(
@@ -289,7 +289,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
         ),
       );
       await map.addImage(
-        'tuktuk-client-destination-red-v7',
+        'tuktuk-client-destination-orange-v8',
         2.0,
         mbx.StyleImage.bytes(
           destination.buffer.asUint8List(
@@ -314,7 +314,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
         mbx.SymbolLayer(
           id: 'tuktuk-client-destination-point',
           sourceId: _sourceDestination,
-          iconImage: 'tuktuk-client-destination-red-v7',
+          iconImage: 'tuktuk-client-destination-orange-v8',
           iconAnchor: mbx.IconAnchor.BOTTOM,
           iconSize: 1.0,
           iconAllowOverlap: true,

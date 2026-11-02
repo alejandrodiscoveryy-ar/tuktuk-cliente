@@ -1486,7 +1486,7 @@ class _MarketplaceCustomerBookingFlowState
                   const Divider(color: TuktukTheme.border, height: 1),
                   _floatingLocationRow(
                     icon: Icons.location_on_rounded,
-                    color: TuktukTheme.gold,
+                    color: TuktukTheme.destinationOrange,
                     label: 'Destino',
                     value: flow.destination?.label ?? 'Marcar destino',
                     onTap: flow.origin == null
@@ -2375,7 +2375,7 @@ class _MarketplaceCustomerBookingFlowState
                         icon: Icons.flag_outlined,
                         label: 'Destino',
                         value: flow.destination?.label ?? '',
-                        iconColor: TuktukTheme.gold,
+                        iconColor: TuktukTheme.destinationOrange,
                       ),
                       const Divider(color: TuktukTheme.border, height: 1),
                       TuktukSummaryRow(
