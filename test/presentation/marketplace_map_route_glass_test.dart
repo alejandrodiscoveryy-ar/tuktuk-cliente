@@ -66,7 +66,7 @@ void main() {
     expect(source, contains('TuktukTheme.background.withValues(alpha: .80)'));
     expect(source, contains('TuktukTheme.background.withValues(alpha: .77)'));
     expect(source, contains('Widget _floatingQuoteOptions()'));
-    expect(source, contains('Color(0x1208141B')));
+    expect(source, contains('Color(0x1208141B)'));
     final tracking = File(
       'lib/presentation/marketplace_customer_tracking.dart',
     ).readAsStringSync();
