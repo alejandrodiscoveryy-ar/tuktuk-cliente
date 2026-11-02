@@ -2538,10 +2538,21 @@ class _MarketplaceCustomerBookingFlowState
       if (!mounted) return;
       final sessionStore = MarketplaceCustomerSessionStore(Hive.box(_metaBox));
       await sessionStore.saveActiveJobId(publication.jobId);
+      Map<String, dynamic>? transitionMap;
       try {
-        // Caché local, no consulta la ubicación de ningún conductor.
+        // Respaldo en memoria: mantiene el mapa al pasar a la busqueda,
+        // aun si la persistencia local falla. No incluye datos del conductor.
         final quote = flow.route;
         if (flow.origin != null && flow.destination != null && quote != null) {
+          transitionMap = <String, dynamic>{
+            'job_id': publication.jobId,
+            'origin': flow.origin!.toMap(),
+            'destination': flow.destination!.toMap(),
+            'distance_km': quote.distanceKm,
+            'route_points': quote.routePoints
+                .map((point) => point.toMap())
+                .toList(growable: false),
+          };
           await sessionStore.saveActiveJobMap(
             jobId: publication.jobId,
             origin: flow.origin!,
@@ -2560,6 +2571,7 @@ class _MarketplaceCustomerBookingFlowState
             service: widget.service,
             session: flow.session,
             jobId: publication.jobId,
+            initialMapData: transitionMap,
             onDone: sessionStore.clearActiveJobId,
           ),
         ),

@@ -6,6 +6,7 @@ class MarketplaceCustomerTrackingScreen extends StatefulWidget {
     required this.session,
     required this.jobId,
     required this.onDone,
+    this.initialMapData,
     super.key,
   });
 
@@ -13,6 +14,9 @@ class MarketplaceCustomerTrackingScreen extends StatefulWidget {
   final MarketplaceCustomerSessionSnapshot session;
   final String jobId;
   final Future<void> Function() onDone;
+  // Geometria de la ruta durante la transicion. Respaldo si falla Hive.
+  // Solo se usa para este jobId; nunca incluye GPS del conductor.
+  final Map<String, dynamic>? initialMapData;
 
   @override
   State<MarketplaceCustomerTrackingScreen> createState() =>
@@ -218,11 +222,18 @@ class _MarketplaceCustomerTrackingScreenState
   }
 
   MarketplaceMapPoint? _pickupForArrival() {
+    Map<String, dynamic>? route = widget.initialMapData;
     try {
-      final route = MarketplaceCustomerSessionStore(
-        Hive.box(_metaBox),
-      ).readActiveJobMap(widget.jobId);
-      final origin = route?['origin'];
+      route = MarketplaceCustomerSessionStore(
+            Hive.box(_metaBox),
+          ).readActiveJobMap(widget.jobId) ??
+          route;
+    } catch (_) {
+      // El respaldo de la transicion sigue disponible si falla Hive.
+    }
+    if (route == null || route['job_id'] != widget.jobId) return null;
+    try {
+      final origin = route['origin'];
       if (origin is Map) {
         return MarketplaceMapPoint.fromMap(Map<String, dynamic>.from(origin));
       }
@@ -737,54 +748,61 @@ class _MarketplaceCustomerTrackingScreenState
     } catch (_) {
       // La vista también debe funcionar si el almacenamiento local no carga.
     }
-    if (stored != null && MarketplaceMapService.publicToken.startsWith('pk.')) {
-      try {
-        final origin = MarketplaceMapPoint.fromMap(
-          Map<String, dynamic>.from(stored['origin'] as Map),
-        );
-        final destination = MarketplaceMapPoint.fromMap(
-          Map<String, dynamic>.from(stored['destination'] as Map),
-        );
-        final rawPoints = stored['route_points'];
-        final points = rawPoints is List
-            ? rawPoints
-                .whereType<Map>()
-                .map((point) => MarketplaceMapPoint.fromMap(point))
-                .toList(growable: false)
-            : <MarketplaceMapPoint>[];
-        final gps = _job?.driverLocation;
-        final driverPoint = gps != null && gps.isFresh
-            ? MarketplaceMapPoint(
-                label: 'Conductor',
-                lat: gps.latitude,
-                lon: gps.longitude,
-              )
-            : null;
-        final distance = (stored['distance_km'] as num?)?.toDouble() ?? 0;
-        // El mapa de seguimiento ocupa la zona visible superior, no la
-        // pantalla completa bajo la ficha. Adaptar el zoom a esa altura.
-        final zoom = distance <= 3
-            ? 12.3
-            : distance <= 8
-                ? 11.3
-                : 10.3;
-        return MarketplaceVectorMap(
-          initialCenter: LatLng(
-            (origin.lat + destination.lat) / 2,
-            (origin.lon + destination.lon) / 2,
-          ),
-          initialZoom: zoom,
-          ornamentBottomInset: _trackingMapInset,
-          requestedCenter: _driverCameraTarget,
-          requestedZoom: 14.0,
-          onCenterMoved: _onCustomerMapMoved,
-          driverPoint: driverPoint,
-          originPoint: origin,
-          destinationPoint: destination,
-          routePoints: points,
-        );
-      } catch (_) {
-        // Si la caché no es válida, nunca inventar coordenadas.
+    if (MarketplaceMapService.publicToken.startsWith('pk.')) {
+      // Priorizar cache persistente; si esta corrupta o inaccesible,
+      // recuperar la geometria validada que llego desde la reserva.
+      for (final mapData in <Map<String, dynamic>?>[
+        stored,
+        widget.initialMapData,
+      ]) {
+        if (mapData == null || mapData['job_id'] != widget.jobId) continue;
+        try {
+          final origin = MarketplaceMapPoint.fromMap(
+            Map<String, dynamic>.from(mapData['origin'] as Map),
+          );
+          final destination = MarketplaceMapPoint.fromMap(
+            Map<String, dynamic>.from(mapData['destination'] as Map),
+          );
+          final rawPoints = mapData['route_points'];
+          final points = rawPoints is List
+              ? rawPoints
+                  .whereType<Map>()
+                  .map((point) => MarketplaceMapPoint.fromMap(point))
+                  .toList(growable: false)
+              : <MarketplaceMapPoint>[];
+          final gps = _job?.driverLocation;
+          final driverPoint = gps != null && gps.isFresh
+              ? MarketplaceMapPoint(
+                  label: 'Conductor',
+                  lat: gps.latitude,
+                  lon: gps.longitude,
+                )
+              : null;
+          final distance = (mapData['distance_km'] as num?)?.toDouble() ?? 0;
+          // Mantener zoom adaptado a la ruta en la zona superior disponible.
+          final zoom = distance <= 3
+              ? 12.3
+              : distance <= 8
+                  ? 11.3
+                  : 10.3;
+          return MarketplaceVectorMap(
+            initialCenter: LatLng(
+              (origin.lat + destination.lat) / 2,
+              (origin.lon + destination.lon) / 2,
+            ),
+            initialZoom: zoom,
+            ornamentBottomInset: _trackingMapInset,
+            requestedCenter: _driverCameraTarget,
+            requestedZoom: 14.0,
+            onCenterMoved: _onCustomerMapMoved,
+            driverPoint: driverPoint,
+            originPoint: origin,
+            destinationPoint: destination,
+            routePoints: points,
+          );
+        } catch (_) {
+          // Probar la siguiente fuente sin inventar coordenadas ni rutas.
+        }
       }
     }
     return Stack(
@@ -1188,7 +1206,7 @@ class _MarketplaceCustomerTrackingScreenState
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.center,
-                        colors: [Color(0x52050B10), Color(0x00050B10)],
+                        colors: [Color(0x1208141B), Color(0x0008141B)],
                       ),
                     ),
                   ),

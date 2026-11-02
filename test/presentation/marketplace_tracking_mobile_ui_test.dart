@@ -32,6 +32,45 @@ void main() {
     expect(source, isNot(contains('driverLiveLatitude')));
   });
 
+  test('reserva y seguimiento mantienen el mismo filtro de luz', () {
+    final booking = File(
+      'lib/presentation/marketplace_customer_booking_flow.dart',
+    ).readAsStringSync();
+    final tracking = File(
+      'lib/presentation/marketplace_customer_tracking.dart',
+    ).readAsStringSync();
+    const overlay = 'colors: [Color(0x1208141B), Color(0x0008141B)]';
+    expect(booking, contains(overlay));
+    expect(tracking, contains(overlay));
+    expect(tracking, isNot(contains('Color(0x52050B10)')));
+    // El estilo vectorial permanece compartido; solo se adapta el zoom.
+    final map = File(
+      'lib/presentation/marketplace_vector_map.dart',
+    ).readAsStringSync();
+    expect(map, contains('styleUri: MarketplaceMapService.vectorStyleUri'));
+    expect(booking, contains('MarketplaceVectorMap('));
+    expect(tracking, contains('MarketplaceVectorMap('));
+  });
+
+  test('seguimiento recibe respaldo de ruta sin duplicar datos remotos', () {
+    final booking = File(
+      'lib/presentation/marketplace_customer_booking_flow.dart',
+    ).readAsStringSync();
+    final tracking = File(
+      'lib/presentation/marketplace_customer_tracking.dart',
+    ).readAsStringSync();
+    expect(booking, contains('initialMapData: transitionMap'));
+    expect(booking, contains("'job_id': publication.jobId"));
+    expect(booking, contains('saveActiveJobMap('));
+    expect(tracking, contains('final Map<String, dynamic>? initialMapData;'));
+    expect(tracking, contains('widget.initialMapData,'));
+    expect(tracking, contains("mapData['job_id'] != widget.jobId"));
+    expect(tracking, contains('Map<String, dynamic>.from(mapData'));
+    expect(tracking, contains('Probar la siguiente fuente'));
+    expect(tracking, contains('route = MarketplaceCustomerSessionStore('));
+    expect(tracking, contains('El mapa de esta carrera no está disponible'));
+  });
+
   test('calificacion utilizable sin pantalla vacia ni boton al fondo', () {
     final source = File(
       'lib/presentation/marketplace_customer_tracking.dart',
