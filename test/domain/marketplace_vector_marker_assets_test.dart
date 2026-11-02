@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -10,7 +11,7 @@ void main() {
         'assets/map_markers/pickup_green.png',
       );
       final destination = await rootBundle.load(
-        'assets/map_markers/destination_red.png',
+        'assets/map_markers/destination_orange.png',
       );
       const magic = <int>[137, 80, 78, 71, 13, 10, 26, 10];
       for (final icon in [pickup, destination]) {
@@ -29,4 +30,19 @@ void main() {
       );
     },
   );
+  test('destination orange is used in map, booking and tracking', () {
+    final theme = File('lib/presentation/tuktuk_ui.dart').readAsStringSync();
+    final vector = File('lib/presentation/marketplace_vector_map.dart').readAsStringSync();
+    final booking = File('lib/presentation/marketplace_customer_booking_flow.dart').readAsStringSync();
+    final tracking = File('lib/presentation/marketplace_customer_tracking.dart').readAsStringSync();
+    expect(theme, contains('destinationOrange = Color(0xFFFF963E)'));
+    expect(vector, contains('destination_orange.png'));
+    expect(vector, contains('tuktuk-client-destination-orange-v8'));
+    expect(vector, contains('lineColor: 0xFFFFC400'));
+    expect(booking, contains('color: TuktukTheme.destinationOrange'));
+    expect(booking, contains('iconColor: TuktukTheme.destinationOrange'));
+    expect(tracking, contains('iconColor: TuktukTheme.destinationOrange'));
+    expect(tracking, contains('color: TuktukTheme.destinationOrange'));
+  });
+
 }

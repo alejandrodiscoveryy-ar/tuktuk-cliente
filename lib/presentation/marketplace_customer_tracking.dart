@@ -618,7 +618,7 @@ class _MarketplaceCustomerTrackingScreenState
             icon: Icons.flag_outlined,
             label: 'Destino',
             value: job.destinationText ?? 'Destino',
-            iconColor: TuktukTheme.gold,
+            iconColor: TuktukTheme.destinationOrange,
           ),
           const Divider(color: TuktukTheme.border, height: 1),
           TuktukSummaryRow(
@@ -1111,7 +1111,7 @@ class _MarketplaceCustomerTrackingScreenState
                       const Icon(
                         Icons.flag_outlined,
                         size: 19,
-                        color: TuktukTheme.gold,
+                        color: TuktukTheme.destinationOrange,
                       ),
                       const SizedBox(width: 9),
                       Expanded(

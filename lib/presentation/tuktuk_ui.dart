@@ -10,6 +10,7 @@ class TuktukTheme {
   static const mint = Color(0xFF35D6A2);
   static const mintSoft = Color(0xFF6FE6BD);
   static const gold = Color(0xFFE5A84E);
+  static const destinationOrange = Color(0xFFFF963E);
   static const goldSurface = Color(0xFFDCA24C);
   static const goldDark = gold;
   static const text = Color(0xFFF6F8FA);
