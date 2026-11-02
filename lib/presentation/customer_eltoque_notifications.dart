@@ -30,13 +30,14 @@ Future<void> customerRateRegisterDevice({
   required String secret,
   required bool needsProof,
   required Future<String> Function() challenge,
+  String proofKey = 'turnstile_token',
   required Future<Object?> Function(Map<String, Object?>) invoke,
 }) async {
   Future<Object?> send(String? proof) => invoke({
         'action': 'subscribe',
         'token': token,
         'device_secret': secret,
-        if (proof != null) 'turnstile_token': proof,
+        if (proof != null) proofKey: proof,
       });
   Object? data;
   try {
@@ -70,8 +71,9 @@ class CustomerRatePushClient {
       _store.get(_customerPushTokenCacheKey) is String;
 
   Future<bool> isSupported() async {
-    if (!kIsWeb) return false; // Web phase only; future APK handled separately.
+    if (!kIsWeb && defaultTargetPlatform != TargetPlatform.android) return false;
     try {
+      if (!await customerFirebaseReady) return false;
       return await FirebaseMessaging.instance.isSupported();
     } catch (_) {
       return false;
@@ -79,9 +81,10 @@ class CustomerRatePushClient {
   }
 
   Future<void> activate() async {
-    if (!kIsWeb) {
-      throw StateError(
-          'Las notificaciones no están disponibles en este navegador.');
+    // La Web pide permiso sin awaits previos para conservar el gesto.
+    // Android admite comprobar compatibilidad antes del permiso.
+    if (!kIsWeb && !(await isSupported())) {
+      throw StateError('Las notificaciones no están disponibles en este dispositivo.');
     }
     // The permission request is the FIRST awaited browser operation after the
     // tap. A preflight await can discard the browser's transient user gesture.
@@ -95,10 +98,12 @@ class CustomerRatePushClient {
       throw StateError(
           'Permiso denegado. Puedes activarlo en los ajustes del navegador.');
     }
-    final token = await FirebaseMessaging.instance.getToken(
-      vapidKey: customerRateFirebaseVapidKey,
-      serviceWorkerScriptPath: 'firebase-messaging-sw.js',
-    );
+    final token = kIsWeb
+        ? await FirebaseMessaging.instance.getToken(
+            vapidKey: customerRateFirebaseVapidKey,
+            serviceWorkerScriptPath: 'firebase-messaging-sw.js',
+          )
+        : await FirebaseMessaging.instance.getToken();
     if (token == null || token.isEmpty) {
       throw StateError(
           'No se pudo registrar el dispositivo para recibir avisos.');
@@ -119,7 +124,15 @@ class CustomerRatePushClient {
       token: token,
       secret: secret,
       needsProof: needsProof,
-      challenge: () => customerRateTurnstileProof(_customerTurnstileSiteKey),
+      proofKey: kIsWeb ? 'turnstile_token' : 'app_check_token',
+      challenge: () async {
+        if (kIsWeb) return customerRateTurnstileProof(_customerTurnstileSiteKey);
+        final proof = await FirebaseAppCheck.instance.getToken();
+        if (proof == null || proof.isEmpty) {
+          throw StateError('No se pudo validar esta instalación Android.');
+        }
+        return proof;
+      },
       invoke: (body) async => (await supabase.functions
               .invoke(_customerRatePushFunction, body: body))
           .data,
@@ -130,10 +143,12 @@ class CustomerRatePushClient {
   Future<void> refreshExisting() async {
     if (!hasSavedSubscription || !await isSupported()) return;
     try {
-      final freshToken = await FirebaseMessaging.instance.getToken(
-        vapidKey: customerRateFirebaseVapidKey,
-        serviceWorkerScriptPath: 'firebase-messaging-sw.js',
-      );
+      final freshToken = kIsWeb
+          ? await FirebaseMessaging.instance.getToken(
+              vapidKey: customerRateFirebaseVapidKey,
+              serviceWorkerScriptPath: 'firebase-messaging-sw.js',
+            )
+          : await FirebaseMessaging.instance.getToken();
       if (freshToken == null || freshToken.isEmpty) return;
       final secret = _store.get(_customerPushSecretCacheKey) as String;
       final response = await supabase.functions.invoke(

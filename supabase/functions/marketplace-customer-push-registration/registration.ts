@@ -54,7 +54,7 @@ export async function verifyTurnstile(proof: string, secret: string, request: ty
 
 // The admin client is supplied by the service-only Edge wrapper; never by a caller.
 // deno-lint-ignore no-explicit-any
-export async function handleRegistration(request: Request, admin: any, verifyProof: (proof: string) => Promise<ProofVerdict>): Promise<Response> {
+export async function handleRegistration(request: Request, admin: any, verifyProof: (proof: string) => Promise<ProofVerdict>, verifyMobileProof: (proof: string) => Promise<ProofVerdict> = async () => "invalid"): Promise<Response> {
   const origin = request.headers.get("origin");
   const headers: Record<string, string> = { "cache-control": "no-store", "vary": "Origin" };
   if (origin === ORIGIN) Object.assign(headers, {
@@ -108,10 +108,22 @@ export async function handleRegistration(request: Request, admin: any, verifyPro
       return json({ ok: false, error: "subscription_disabled" }, 403);
     }
     if (!knownDevice) {
-      if (typeof body.turnstile_token !== "string" || body.turnstile_token.length < 10 || body.turnstile_token.length > 2048) {
+      // Browser enrolment is protected by verified Turnstile; Android uses a
+      // Firebase App Check Play Integrity token signed by Google's service.
+      // Neither Origin, User-Agent, nor a client-chosen package name is proof.
+      const browserProof = body.turnstile_token;
+      const mobileProof = body.app_check_token;
+      if (browserProof !== undefined && mobileProof !== undefined) {
+        return json({ ok: false, error: "invalid_proof" }, 400);
+      }
+      let verdict: ProofVerdict;
+      if (typeof browserProof === "string" && browserProof.length >= 10 && browserProof.length <= 2048) {
+        verdict = await verifyProof(browserProof);
+      } else if (typeof mobileProof === "string" && mobileProof.length >= 100 && mobileProof.length <= 7000) {
+        verdict = await verifyMobileProof(mobileProof);
+      } else {
         return json({ ok: false, error: "verification_required" }, 403);
       }
-      const verdict = await verifyProof(body.turnstile_token);
       if (verdict !== "valid") return json({ ok: false, error: verdict === "unavailable" ? "verification_unavailable" : "verification_failed" }, verdict === "unavailable" ? 503 : 403);
     }
     const values = { token_hash: tokenHash, fcm_token: body.token, secret_hash: secretHash, enabled: true,

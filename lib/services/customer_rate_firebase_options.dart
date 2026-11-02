@@ -19,10 +19,10 @@ const customerRateFirebaseVapidKey =
 // appId de Web como si fuera Android. Si faltan, el transporte sigue activo
 // pero los avisos nativos quedan deshabilitados.
 FirebaseOptions? get customerRateFirebaseAndroidOptionsOrNull {
-  const apiKey = String.fromEnvironment('FIREBASE_ANDROID_API_KEY');
-  const appId = String.fromEnvironment('FIREBASE_ANDROID_APP_ID');
-  const sender = String.fromEnvironment('FIREBASE_ANDROID_SENDER_ID');
-  const project = String.fromEnvironment('FIREBASE_ANDROID_PROJECT_ID');
+  const apiKey = String.fromEnvironment('FIREBASE_ANDROID_API_KEY', defaultValue: 'AIzaSyBMS6ymLrWDGSeBWFzk_Jtmah8Hn59jfRY');
+  const appId = String.fromEnvironment('FIREBASE_ANDROID_APP_ID', defaultValue: '1:835856456604:android:49f0f8437cd4bffefec659');
+  const sender = String.fromEnvironment('FIREBASE_ANDROID_SENDER_ID', defaultValue: '835856456604');
+  const project = String.fromEnvironment('FIREBASE_ANDROID_PROJECT_ID', defaultValue: 'tuktuk-control-9e74c');
   if (apiKey.isEmpty || appId.isEmpty || sender.isEmpty || project.isEmpty) {
     return null;
   }

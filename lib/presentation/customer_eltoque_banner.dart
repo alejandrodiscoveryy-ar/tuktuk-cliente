@@ -113,7 +113,9 @@ class _TuktukCustomerEltoqueBannerState
     WidgetsBinding.instance.addObserver(this);
     _pushClient = CustomerRatePushClient(widget.client);
     _pushEnabled = _pushClient.hasSavedSubscription;
-    if (kIsWeb) unawaited(_enablePushWhenReady());
+    if (kIsWeb || defaultTargetPlatform == TargetPlatform.android) {
+      unawaited(_enablePushWhenReady());
+    }
     // La tasa es solo informativa: no competir con la carga de carreras.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -142,7 +144,7 @@ class _TuktukCustomerEltoqueBannerState
       _pushMessages = FirebaseMessaging.onMessage.listen((message) {
         if (message.data['kind'] != 'customer_exchange_rate_update') return;
         unawaited(_refresh());
-        if (mounted) {
+        if (kIsWeb && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text(
                 'elTOQUE: la tasa ha cambiado. Consulta la franja superior.'),
