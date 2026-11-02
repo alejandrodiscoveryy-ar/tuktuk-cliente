@@ -1,11 +1,13 @@
 {
     "name": "TUKTUK Cliente",
     "short_name": "TUKTUK Cliente",
-    "start_url": ".",
+    "id": "/cliente/tuk/",
+    "scope": "/cliente/tuk/",
+    "start_url": "/cliente/tuk/",
     "display": "standalone",
     "background_color": "#050B10",
     "theme_color": "#050B10",
-    "description": "TUKTUK Cliente.",
+    "description": "Instala TUKTUK Cliente para acceder desde tu pantalla de inicio.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
