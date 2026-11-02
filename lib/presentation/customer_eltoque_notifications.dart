@@ -81,7 +81,9 @@ class CustomerRatePushClient {
   }
 
   Future<void> activate() async {
-    if (!await isSupported()) {
+    // La Web pide permiso sin awaits previos para conservar el gesto.
+    // Android admite comprobar compatibilidad antes del permiso.
+    if (!kIsWeb && !(await isSupported())) {
       throw StateError('Las notificaciones no están disponibles en este dispositivo.');
     }
     // The permission request is the FIRST awaited browser operation after the

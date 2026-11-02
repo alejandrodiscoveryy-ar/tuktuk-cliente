@@ -31,6 +31,10 @@ void main() {
     expect(main, contains('FirebaseMessaging.onBackgroundMessage('));
     expect(main, contains('FirebaseAppCheck.instance.activate('));
     expect(subscriptions, contains('defaultTargetPlatform != TargetPlatform.android'));
+    expect(subscriptions, contains('if (!kIsWeb && !(await isSupported()))'));
+    final banner = File('lib/presentation/customer_eltoque_banner.dart').readAsStringSync();
+    expect(banner, contains('kIsWeb || defaultTargetPlatform == TargetPlatform.android'));
+    expect(banner, contains('if (kIsWeb && mounted)'));
     expect(subscriptions, contains("proofKey: kIsWeb ? 'turnstile_token' : 'app_check_token'"));
     expect(subscriptions, contains('customerRateTurnstileProof('));
   });
