@@ -269,6 +269,7 @@ void main() {
         'status': status,
       });
       expect(beforeStart.customerCanCancel, isTrue);
+      expect(beforeStart.customerCancellationRequiresReason, isTrue);
     }
     final underway = MarketplaceCustomerJob.fromMap({
       ...base,

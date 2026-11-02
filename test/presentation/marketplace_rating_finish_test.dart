@@ -87,7 +87,7 @@ void main() {
     service.status = 'en_route';
     await open(tester);
     expect(find.text('Finalizar carrera'), findsNothing);
-    expect(find.text('Cancelar solicitud'), findsNothing);
+    expect(find.text('Cancelar solicitud'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 
