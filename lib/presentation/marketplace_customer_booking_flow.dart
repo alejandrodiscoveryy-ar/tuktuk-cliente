@@ -1519,7 +1519,23 @@ class _MarketplaceCustomerBookingFlowState
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             children: [
-              Icon(icon, color: color, size: 21),
+              if (showRestoreGps)
+                IconButton(
+                  tooltip: 'Volver a mi ubicación',
+                  onPressed: onRestoreGps,
+                  color: color,
+                  iconSize: 23,
+                  visualDensity: VisualDensity.compact,
+                  icon: restoringGps
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(icon),
+                )
+              else
+                Icon(icon, color: color, size: 21),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -1544,21 +1560,6 @@ class _MarketplaceCustomerBookingFlowState
                   ],
                 ),
               ),
-              if (showRestoreGps)
-                IconButton(
-                  tooltip: 'Volver a mi ubicación',
-                  onPressed: onRestoreGps,
-                  color: TuktukTheme.mint,
-                  iconSize: 23,
-                  visualDensity: VisualDensity.compact,
-                  icon: restoringGps
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.gps_fixed_rounded),
-                ),
               Tooltip(
                 message: tooltip,
                 child: Icon(
