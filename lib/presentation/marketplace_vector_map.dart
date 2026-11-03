@@ -91,6 +91,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
     _lastCenter = widget.initialCenter;
     widget.requestedCenter?.addListener(_centerRequested);
     widget.ornamentBottomInset?.addListener(_updateOrnaments);
+    MarketplaceMapService.publicVisualRevision.addListener(_visualStyleChanged);
   }
 
   @override
@@ -121,6 +122,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
   void dispose() {
     widget.requestedCenter?.removeListener(_centerRequested);
     widget.ornamentBottomInset?.removeListener(_updateOrnaments);
+    MarketplaceMapService.publicVisualRevision.removeListener(_visualStyleChanged);
     _map = null;
     super.dispose();
   }
@@ -137,8 +139,13 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
       ? widget.markerPoint
       : widget.destinationPoint;
 
+  void _visualStyleChanged() {
+    if (mounted) setState(() {});
+  }
+
   void _onMapCreated(mbx.MapboxMap map) {
     _map = map;
+    _layersReady = false;
     map.addInteraction(
       mbx.TapInteraction.onMap((context) {
         if (!mounted || widget.onPointTap == null) return;
@@ -398,6 +405,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
       fit: StackFit.expand,
       children: [
         mbx.MapWidget(
+          key: ValueKey<String>(MarketplaceMapService.vectorStyleUri),
           styleUri: MarketplaceMapService.vectorStyleUri,
           viewport: mbx.CameraViewportState(
             center: mbx.Point(

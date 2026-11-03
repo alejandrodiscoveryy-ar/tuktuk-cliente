@@ -12,7 +12,7 @@ void main() {
     expect(gradle, contains('applicationId = "com.vrixora.tuktukcliente"'));
     expect(gradle, contains('namespace = "com.vrixora.tuktukcliente"'));
     expect(activity, contains('package com.vrixora.tuktukcliente'));
-    expect(manifest, contains('android:label="TUKTUK Cliente"'));
+    expect(manifest, contains('android:label="TukTuk Cliente"'));
     expect(manifest, contains('android.permission.INTERNET'));
     expect(manifest, contains('android.permission.ACCESS_COARSE_LOCATION'));
     expect(manifest, contains('android.permission.ACCESS_FINE_LOCATION'));

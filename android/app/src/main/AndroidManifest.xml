@@ -6,7 +6,7 @@
     <!-- Android 13+ solicita autorizacion de notificaciones al usuario. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
-        android:label="TUKTUK Cliente"
+        android:label="TukTuk Cliente"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

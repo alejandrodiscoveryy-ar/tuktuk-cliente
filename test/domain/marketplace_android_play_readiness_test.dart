@@ -16,7 +16,10 @@ void main() {
     expect(gradle, contains('releaseBuildRequested && !uploadSigningReady'));
     expect(manifest, contains('android.permission.POST_NOTIFICATIONS'));
     expect(manifest, isNot(contains('android.permission.ACCESS_BACKGROUND_LOCATION')));
-    expect(pubspec, contains('version: 1.0.0+1'));
+    final match = RegExp(r'^version: \d+\.\d+\.\d+\+(\d+)\r?$', multiLine: true)
+        .firstMatch(pubspec);
+    expect(match, isNotNull);
+    expect(int.parse(match!.group(1)!), greaterThan(1));
   });
 
   test('Android FCM: opciones Android distintas de Web, sin bypass Turnstile', () {
