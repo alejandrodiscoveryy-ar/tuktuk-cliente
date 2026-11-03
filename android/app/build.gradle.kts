@@ -47,6 +47,7 @@ android {
 
     signingConfigs {
         create("release") {
+            storeType = "pkcs12"
             if (uploadSigningReady) {
                 keyAlias = uploadProperties.getProperty("keyAlias")
                 keyPassword = uploadProperties.getProperty("keyPassword")

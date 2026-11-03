@@ -1,0 +1,200 @@
+name: TUKTUK Cliente - generar AAB firmado
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_build:
+        description: "Autorizo compilar UN AAB firmado (sin APK ni publicacion)"
+        required: true
+        default: false
+        type: boolean
+      expected_version_code:
+        description: "versionCode existente en pubspec.yaml"
+        required: true
+        default: "1"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tuktuk-cliente-android-signed-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  signed-aab:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_build == true }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
+    steps:
+      - name: Checkout exact main commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Reject outdated or foreign commits
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse origin/main)" = "$GITHUB_SHA"
+          test -n "$SUPABASE_URL"
+          test -n "$SUPABASE_PUBLISHABLE_KEY"
+          case "$MAPBOX_PUBLIC_TOKEN" in pk.*) ;; *) echo 'Public Mapbox token missing'; exit 1;; esac
+          test "$SUPABASE_PUBLISHABLE_KEY" != "$SUPABASE_URL"
+
+      - name: Set up Java 17
+        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Flutter 3.44.4
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.44.4'
+          channel: stable
+          cache: true
+
+      - name: Verify Android and Firebase identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'applicationId = "com.vrixora.tuktukcliente"' android/app/build.gradle.kts
+          grep -Fq 'targetSdk = 36' android/app/build.gradle.kts
+          python3 - <<'PY'
+          import json, os, pathlib
+          version = next(line.partition(':')[2].strip() for line in pathlib.Path('pubspec.yaml').read_text().splitlines() if line.startswith('version:'))
+          assert '+' in version
+          assert version.rsplit('+', 1)[1] == os.environ['EXPECTED_VERSION_CODE'], 'Unexpected versionCode'
+          data = json.loads(pathlib.Path('android/app/google-services.json').read_text())
+          matches = [c for c in data['client'] if c['client_info']['android_client_info']['package_name'] == 'com.vrixora.tuktukcliente']
+          assert len(matches) == 1, 'Firebase Android package does not match'
+          c = matches[0]
+          public_values = {
+              'FIREBASE_ANDROID_API_KEY': c['api_key'][0]['current_key'],
+              'FIREBASE_ANDROID_APP_ID': c['client_info']['mobilesdk_app_id'],
+              'FIREBASE_ANDROID_SENDER_ID': data['project_info']['project_number'],
+              'FIREBASE_ANDROID_PROJECT_ID': data['project_info']['project_id'],
+          }
+          assert all(v and '\n' not in v for v in public_values.values())
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as f:
+              for name, value in public_values.items():
+                  f.write(f'{name}={value}\n')
+          print('ANDROID_PACKAGE=VERIFIED; FIREBASE_ANDROID_IDENTITY=VERIFIED; VERSION=' + version)
+          PY
+        env:
+          EXPECTED_VERSION_CODE: ${{ inputs.expected_version_code }}
+
+      - name: Provision licensed arrival horn
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assets/sounds
+          curl -fsSL --retry 3 --connect-timeout 20 'https://assets.mixkit.co/active_storage/sfx/719/719.wav' -o 'assets/sounds/tuktuk-car-double-horn.wav'
+          echo '15c3836597e2b820a9543a1fa671d4b2691bca46ef98f7d4ca767936b5109ed0  assets/sounds/tuktuk-car-double-horn.wav' | sha256sum --check
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze and run tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter analyze --no-fatal-infos
+          flutter test
+
+      - name: Restore release signing files from protected secrets
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_PASSWORD"
+          test "$ANDROID_KEY_ALIAS" = 'tuktuk_cliente_upload'
+          umask 077
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/upload-keystore.p12
+          test -s android/upload-keystore.p12
+          python3 - <<'PY'
+          import os, pathlib
+          def escape_secret(value):
+              if '\n' in value or '\r' in value:
+                  raise SystemExit('Unsupported newline in signing password')
+              return value.replace('\\', '\\\\')
+          lines = [
+              'storeFile=../upload-keystore.p12',
+              'storePassword=' + escape_secret(os.environ['ANDROID_KEYSTORE_PASSWORD']),
+              'keyPassword=' + escape_secret(os.environ['ANDROID_KEY_PASSWORD']),
+              'keyAlias=' + os.environ['ANDROID_KEY_ALIAS'],
+          ]
+          pathlib.Path('android/key.properties').write_text('\n'.join(lines) + '\n', encoding='latin-1')
+          PY
+          chmod 600 android/upload-keystore.p12 android/key.properties
+          keytool -exportcert -storetype PKCS12 -keystore android/upload-keystore.p12 \
+            -alias "$ANDROID_KEY_ALIAS" -storepass:env ANDROID_KEYSTORE_PASSWORD \
+            -file "$RUNNER_TEMP/cliente-upload.cer" > /dev/null
+          test -s "$RUNNER_TEMP/cliente-upload.cer"
+          echo 'UPLOAD_CERTIFICATE=VERIFIED'
+
+      - name: Build one signed AAB (no APK)
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build appbundle --release \
+            --obfuscate \
+            --split-debug-info=build/symbols/android \
+            --dart-define="SUPABASE_URL=$SUPABASE_URL" \
+            --dart-define="SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY" \
+            --dart-define="MAPBOX_PUBLIC_TOKEN=$MAPBOX_PUBLIC_TOKEN" \
+            --dart-define="FIREBASE_ANDROID_API_KEY=$FIREBASE_ANDROID_API_KEY" \
+            --dart-define="FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID" \
+            --dart-define="FIREBASE_ANDROID_SENDER_ID=$FIREBASE_ANDROID_SENDER_ID" \
+            --dart-define="FIREBASE_ANDROID_PROJECT_ID=$FIREBASE_ANDROID_PROJECT_ID"
+          test -s build/app/outputs/bundle/release/app-release.aab
+
+      - name: Verify bundle signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAB=build/app/outputs/bundle/release/app-release.aab
+          jarsigner -verify -verbose -certs "$AAB" > "$RUNNER_TEMP/cliente-jarsigner.log" 2>&1 || {
+            echo 'AAB signature verification failed'
+            exit 1
+          }
+          grep -q 'jar verified' "$RUNNER_TEMP/cliente-jarsigner.log"
+          echo "AAB_SIGNATURE=VERIFIED"
+          sha256sum "$AAB"
+
+      - name: Save signed AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: tuktuk-cliente-aab-build-${{ inputs.expected_version_code }}
+          path: build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Preserve obfuscation symbols
+        uses: actions/upload-artifact@v4
+        with:
+          name: tuktuk-cliente-android-symbols-build-${{ inputs.expected_version_code }}
+          path: build/symbols/android/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove temporary signing material
+        if: always()
+        shell: bash
+        run: |
+          rm -f android/key.properties android/upload-keystore.p12 "$RUNNER_TEMP/cliente-upload.cer"
