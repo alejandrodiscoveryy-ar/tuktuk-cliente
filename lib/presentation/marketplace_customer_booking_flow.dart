@@ -27,6 +27,43 @@ bool marketplaceCustomerSessionNotFound(Object error) {
   return false;
 }
 
+@visibleForTesting
+String? marketplaceCustomerPublicLiteNumber(Object? data, String projectId) {
+  if (data is! Map || data['project_id'] != projectId) return null;
+  final support = data['support'];
+  if (support is! Map) return null;
+  final enabled = support['lite_enabled'] is bool
+      ? support['lite_enabled'] == true
+      : support['enabled'] == true;
+  if (!enabled || support['lite_open'] == false) return null;
+  final phone = support['number'];
+  if (phone is! String ||
+      !RegExp(r'^\+[1-9][0-9]{7,14}$').hasMatch(phone)) {
+    return null;
+  }
+  return phone;
+}
+
+// Numero publico del canal Lite, verificado por Admin; no es una tarifa ni reserva.
+// Caduca tras 24 horas si no se consigue consultar la configuracion otra vez.
+@visibleForTesting
+String? marketplaceCustomerCachedAndroidLiteNumber({
+  required Object? number,
+  required Object? verifiedAt,
+  required DateTime now,
+}) {
+  if (number is! String ||
+      !RegExp(r'^\+[1-9][0-9]{7,14}$').hasMatch(number) ||
+      verifiedAt is! String) {
+    return null;
+  }
+  final instant = DateTime.tryParse(verifiedAt)?.toUtc();
+  if (instant == null) return null;
+  final age = now.toUtc().difference(instant);
+  if (age.isNegative || age >= const Duration(hours: 24)) return null;
+  return number;
+}
+
 enum MarketplaceBookingStep { location, origin, destination, quote, confirm }
 
 @visibleForTesting
@@ -437,11 +474,14 @@ class CustomerBookingFlowController extends ChangeNotifier {
     error = null;
     notifyListeners();
     try {
-      final result = await mapService.route(
+      final pendingRoute = mapService.route(
         origin: start,
         destination: end,
         pricing: pricing,
       );
+      final result = kIsWeb
+          ? await pendingRoute
+          : await pendingRoute.timeout(const Duration(seconds: 22));
       if (revision == _pricingRevision) {
         route = result;
         unawaited(loadCategoryComparisons());
@@ -464,12 +504,15 @@ class CustomerBookingFlowController extends ChangeNotifier {
     loading = true;
     notifyListeners();
     try {
-      final updated = await mapService.reprice(
+      final pendingPrice = mapService.reprice(
         origin: start,
         destination: end,
         routeToken: previous.routeToken,
         pricing: pricing,
       );
+      final updated = kIsWeb
+          ? await pendingPrice
+          : await pendingPrice.timeout(const Duration(seconds: 22));
       if (revision != _pricingRevision) return;
       route = MarketplaceRouteQuote(
         distanceKm: previous.distanceKm,
@@ -573,7 +616,7 @@ class MarketplaceCustomerBookingFlow extends StatefulWidget {
 }
 
 class _MarketplaceCustomerBookingFlowState
-    extends State<MarketplaceCustomerBookingFlow> {
+    extends State<MarketplaceCustomerBookingFlow> with WidgetsBindingObserver {
   late final CustomerBookingFlowController flow;
   bool _ownsFlow = false;
   final noteController = TextEditingController();
@@ -598,6 +641,13 @@ class _MarketplaceCustomerBookingFlowState
   String? _placeMessage;
   List<MarketplaceMapPoint> _placeResults = const <MarketplaceMapPoint>[];
   MarketplaceRouteQuote? _lastRoute;
+  static const _liteProjectId = 'dfb41cea-a812-46f2-b511-7a60bd3d78af';
+  static const _litePhoneKey = 'tuktuk_android_lite_phone_v1';
+  static const _liteVerifiedKey = 'tuktuk_android_lite_verified_at_v1';
+  Timer? _liteRefreshTimer;
+  Future<void>? _liteRefreshInFlight;
+  DateTime? _liteLastAttempt;
+  bool _liteInForeground = true;
 
   @override
   void initState() {
@@ -609,7 +659,19 @@ class _MarketplaceCustomerBookingFlowState
           widget.session,
         );
     _ownsFlow = widget.controller == null;
-    if (kIsWeb) unawaited(flow.loadPublishedModalities());
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      WidgetsBinding.instance.addObserver(this);
+      unawaited(_refreshAndroidLiteNumber(force: true));
+      // Si la conexion vuelve mientras la app esta abierta, se reintenta
+      // como maximo en los siguientes 15 minutos; nunca se mantiene un polling
+      // activo en segundo plano.
+      _liteRefreshTimer = Timer.periodic(const Duration(minutes: 15), (_) {
+        if (mounted && _liteInForeground) {
+          unawaited(_refreshAndroidLiteNumber());
+        }
+      });
+    }
+    unawaited(flow.loadPublishedModalities());
     noteController.text = flow.note;
     weightController.text = flow.cargoWeightKg?.toString() ?? '';
     volumeController.text = flow.cargoVolumeM3?.toString() ?? '';
@@ -647,6 +709,10 @@ class _MarketplaceCustomerBookingFlowState
 
   @override
   void dispose() {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      WidgetsBinding.instance.removeObserver(this);
+    }
+    _liteRefreshTimer?.cancel();
     flow.removeListener(_changed);
     if (_ownsFlow) flow.dispose();
     noteController.dispose();
@@ -879,6 +945,189 @@ class _MarketplaceCustomerBookingFlowState
     } catch (_) {
       _customerSupportMessage('No se pudo consultar el soporte. Revisa tu conexion.');
     }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _liteInForeground = state == AppLifecycleState.resumed;
+    if (_liteInForeground && mounted && !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android) {
+      unawaited(_refreshAndroidLiteNumber(force: true));
+    }
+  }
+
+  Future<void> _refreshAndroidLiteNumber({bool force = false}) async {
+    if (!mounted || kIsWeb ||
+        defaultTargetPlatform != TargetPlatform.android) return;
+    final running = _liteRefreshInFlight;
+    if (running != null) {
+      await running;
+      return;
+    }
+    final now = DateTime.now().toUtc();
+    final last = _liteLastAttempt;
+    final minimum = force
+        ? const Duration(seconds: 30)
+        : const Duration(minutes: 15);
+    if (last != null && now.difference(last) < minimum) return;
+    _liteLastAttempt = now;
+    final request = _fetchAndroidLiteNumberFromAdmin();
+    _liteRefreshInFlight = request;
+    try {
+      await request;
+    } finally {
+      if (identical(_liteRefreshInFlight, request)) {
+        _liteRefreshInFlight = null;
+      }
+    }
+  }
+
+  Future<void> _fetchAndroidLiteNumberFromAdmin() async {
+    try {
+      final data = await widget.service._client.rpc(
+        'get_public_whatsapp_settings',
+        params: {'target_project_id': _liteProjectId},
+      ).timeout(const Duration(seconds: 8));
+      // Respuesta malformada o de otro proyecto: no actualizar el cache.
+      if (data is! Map || data['project_id'] != _liteProjectId) return;
+      final phone = marketplaceCustomerPublicLiteNumber(data, _liteProjectId);
+      final cache = Hive.box(_metaBox);
+      if (phone == null) {
+        // Si Administracion cierra Lite, invalidar inmediatamente el cache.
+        await cache.delete(_litePhoneKey);
+        await cache.delete(_liteVerifiedKey);
+      } else {
+        await cache.putAll({
+          _litePhoneKey: phone,
+          _liteVerifiedKey: DateTime.now().toUtc().toIso8601String(),
+        });
+      }
+    } catch (_) {
+      // Fallo de red: conservar solo un numero previamente validado,
+      // que caducara en 24 horas. No inventar ni fijar numeros manuales.
+    }
+  }
+
+  Future<String?> _androidLitePhoneForContact() async {
+    await _refreshAndroidLiteNumber(force: true);
+    try {
+      final cache = Hive.box(_metaBox);
+      return marketplaceCustomerCachedAndroidLiteNumber(
+        number: cache.get(_litePhoneKey),
+        verifiedAt: cache.get(_liteVerifiedKey),
+        now: DateTime.now().toUtc(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _openAndroidLiteWhatsApp() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    final origin = flow.origin;
+    final destination = flow.destination;
+    if (origin == null || destination == null) {
+      _customerSupportMessage('Indica origen y destino antes de continuar.');
+      return;
+    }
+    try {
+      final phone = await _androidLitePhoneForContact();
+      if (!mounted) return;
+      if (phone == null) {
+        _customerSupportMessage(
+          'No hay un numero Lite autorizado y verificado en las ultimas 24 horas. '
+          'Revisa la conexion y vuelve a intentar.',
+        );
+        return;
+      }
+      final message = <String>[
+        'TukTuk Cliente | SOLICITUD ALTERNATIVA',
+        'Servicio: ${flow.serviceCode}',
+        if (flow.session.displayName?.trim().isNotEmpty == true)
+          'Cliente: ${flow.session.displayName!.trim()}',
+        if (flow.session.whatsappPhone?.trim().isNotEmpty == true)
+          'Telefono: ${flow.session.whatsappPhone!.trim()}',
+        'Recogida: ${origin.label}',
+        'GPS recogida: https://www.google.com/maps?q=${origin.lat},${origin.lon}',
+        'Destino: ${destination.label}',
+        'Canal: Android Lite por WhatsApp',
+        'Pendiente de respuesta humana.',
+        'No hay precio ni reserva confirmados.',
+      ].join('\n');
+      final uri = Uri.https(
+        'wa.me',
+        '/${phone.substring(1)}',
+        {'text': message},
+      );
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened) {
+        _customerSupportMessage('No se pudo abrir WhatsApp. Reintenta.');
+      }
+    } catch (_) {
+      _customerSupportMessage(
+        'No se pudo consultar el canal Lite. Comprueba tu conexion.',
+      );
+    }
+  }
+
+  Widget _androidWeakConnectionFallback() {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android ||
+        flow.origin == null || flow.destination == null) {
+      return const SizedBox.shrink();
+    }
+    final missingQuote = flow.publicationReady &&
+        flow.serviceCode == 'passenger' && flow.route != null &&
+        flow.selectedPrice == null && !flow.loading;
+    if (flow.error == null && !missingQuote) {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: TuktukTheme.backgroundSoft,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: TuktukTheme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'No se pudo completar la cotizacion',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Reintenta con conexion estable o solicita asistencia por WhatsApp. '
+            'El canal Lite no confirma un viaje ni un precio automaticamente.',
+            style: TextStyle(fontSize: 12, color: TuktukTheme.muted),
+          ),
+          const SizedBox(height: 7),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              TextButton.icon(
+                onPressed: flow.loading ? null : () {
+                  if (flow.publicationReady) {
+                    unawaited(flow.refreshRoute());
+                  } else {
+                    unawaited(flow.loadPublishedModalities());
+                  }
+                },
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Reintentar'),
+              ),
+              TextButton.icon(
+                onPressed: () => unawaited(_openAndroidLiteWhatsApp()),
+                icon: const Icon(Icons.chat_outlined),
+                label: const Text('Alternativa WhatsApp'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   void _customerSupportMessage(String message) {
@@ -1908,6 +2157,7 @@ class _MarketplaceCustomerBookingFlowState
         if (flow.loading) const LinearProgressIndicator(),
         if (flow.error != null)
           Text(flow.error!, style: const TextStyle(color: TuktukTheme.danger)),
+        _androidWeakConnectionFallback(),
         if (flow.serviceCode == 'cargo' && flow.selectedPrice == null)
           const Text(
             'Indica peso o volumen en Más opciones para cotizar.',
