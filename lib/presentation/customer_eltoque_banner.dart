@@ -77,7 +77,15 @@ class TuktukCustomerHomeWithRate extends StatelessWidget {
   Widget build(BuildContext context) => Column(
         children: [
           TuktukCustomerEltoqueBanner(client: client),
-          Expanded(child: MarketplaceCustomerShell(client: client)),
+          Expanded(
+            child: MediaQuery.removePadding(
+              context: context,
+              // El banner elTOQUE ya consume el margen superior Android.
+              // Evitar una segunda franja vacia en la reserva.
+              removeTop: !kIsWeb && defaultTargetPlatform == TargetPlatform.android,
+              child: MarketplaceCustomerShell(client: client),
+            ),
+          ),
         ],
       );
 }
