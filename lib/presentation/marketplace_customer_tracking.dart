@@ -249,7 +249,10 @@ class _MarketplaceCustomerTrackingScreenState
 
   void _observeArrival(MarketplaceCustomerJob job) {
     if (_arrivalNotified) return;
-    final arrived = _arrivalGeofence.observe(
+    // El servidor confirma pickup tanto por GPS doble como por el boton.
+    // Conservamos el detector local como respaldo de aviso si la consulta
+    // llega antes que la transicion de estado del servidor.
+    final arrived = job.status == 'pickup' || _arrivalGeofence.observe(
       status: job.status,
       location: job.driverLocation,
       pickup: _pickupForArrival(),
