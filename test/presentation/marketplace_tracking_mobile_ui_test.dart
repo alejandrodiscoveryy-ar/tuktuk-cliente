@@ -67,7 +67,7 @@ void main() {
     expect(tracking, contains("mapData['job_id'] != widget.jobId"));
     expect(tracking, contains('Map<String, dynamic>.from(mapData'));
     expect(tracking, contains('Probar la siguiente fuente'));
-    expect(tracking, contains('route = MarketplaceCustomerSessionStore('));
+    expect(tracking, contains('stored = MarketplaceCustomerSessionStore('));
     expect(tracking, contains('El mapa de esta carrera no está disponible'));
   });
 
