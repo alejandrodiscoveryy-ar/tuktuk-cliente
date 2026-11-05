@@ -27,8 +27,6 @@ class _MarketplaceCustomerTrackingScreenState
     extends State<MarketplaceCustomerTrackingScreen>
     with WidgetsBindingObserver {
   Timer? _pollTimer;
-  final MarketplaceCustomerArrivalGeofence _arrivalGeofence =
-      MarketplaceCustomerArrivalGeofence();
   bool _arrivalNotified = false;
   String get _arrivalNoticeKey => 'arrival_notified_${widget.jobId}';
 
@@ -221,40 +219,14 @@ class _MarketplaceCustomerTrackingScreenState
     setState(() => _followDriver = false);
   }
 
-  MarketplaceMapPoint? _pickupForArrival() {
-    Map<String, dynamic>? route = widget.initialMapData;
-    try {
-      route = MarketplaceCustomerSessionStore(
-            Hive.box(_metaBox),
-          ).readActiveJobMap(widget.jobId) ??
-          route;
-    } catch (_) {
-      // El respaldo de la transicion sigue disponible si falla Hive.
-    }
-    if (route == null || route['job_id'] != widget.jobId) return null;
-    try {
-      final origin = route['origin'];
-      if (origin is Map) {
-        return MarketplaceMapPoint.fromMap(Map<String, dynamic>.from(origin));
-      }
-    } catch (_) {
-      // Nunca inferir una recogida sin coordenadas verificadas.
-    }
-    return null;
-  }
-
   Future<void> _playArrivalSound() async {
     await customer_arrival_sound.playArrivalClaxon();
   }
 
   void _observeArrival(MarketplaceCustomerJob job) {
     if (_arrivalNotified) return;
-    final arrived = _arrivalGeofence.observe(
-      status: job.status,
-      location: job.driverLocation,
-      pickup: _pickupForArrival(),
-      now: DateTime.now().toUtc(),
-    );
+    // Solo sonar despues de una llegada confirmada por servidor.
+    final arrived = job.status == 'pickup';
     if (!arrived || !mounted) return;
     setState(() => _arrivalNotified = true);
     try {
