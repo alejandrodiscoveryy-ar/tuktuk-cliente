@@ -4,7 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('El cliente oye el aviso cuando servidor indica pickup', () {
     final tracking = File('lib/presentation/marketplace_customer_tracking.dart').readAsStringSync();
-    expect(tracking, contains("job.status == 'pickup' || _arrivalGeofence.observe"));
+    expect(tracking, contains("final arrived = job.status == 'pickup';"));
+    expect(tracking, isNot(contains('_arrivalGeofence.observe')));
     expect(tracking, contains('_arrivalNotified = true'));
     expect(tracking, contains('playArrivalClaxon()'));
   });
