@@ -9,6 +9,12 @@ void main() {
     expect(tracking, contains('_arrivalNotified = true'));
     expect(tracking, contains('playArrivalClaxon()'));
   });
+  test('Si el navegador bloquea el sonido, aparece reproduccion manual', () {
+    final tracking = File('lib/presentation/marketplace_customer_tracking.dart').readAsStringSync();
+    expect(tracking, contains('Escuchar claxon de llegada'));
+    expect(tracking, contains("if (const {'accepted', 'en_route', 'pickup'}"));
+    expect(tracking, contains('playArrivalClaxon()'));
+  });
   test('Android usa el claxon original empaquetado, no beep generico', () {
     final main = File('lib/main.dart').readAsStringSync();
     final kotlin = File('android/app/src/main/kotlin/com/vrixora/tuktukcliente/MainActivity.kt').readAsStringSync();
