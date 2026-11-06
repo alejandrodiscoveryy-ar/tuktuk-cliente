@@ -1052,15 +1052,16 @@ class _MarketplaceCustomerTrackingScreenState
                       ),
                     ),
                   ],
-                  if (!_arrivalNotified &&
-                      const {'accepted', 'en_route', 'pickup'}
-                          .contains(job.status)) ...[
+                  if (const {'accepted', 'en_route', 'pickup'}
+                      .contains(job.status)) ...[
                     Align(
                       alignment: Alignment.centerLeft,
                       child: TextButton.icon(
                         onPressed: () => unawaited(_playArrivalSound()),
                         icon: const Icon(Icons.volume_up_rounded, size: 18),
-                        label: const Text('Activar y probar claxon'),
+                        label: Text(_arrivalNotified
+                            ? 'Escuchar claxon de llegada'
+                            : 'Activar y probar claxon'),
                       ),
                     ),
                   ],
