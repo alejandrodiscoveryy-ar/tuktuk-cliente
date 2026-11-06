@@ -79,7 +79,9 @@ jobs:
           node -e 'const fs=require("node:fs");const h=fs.readFileSync("build/web/index.html","utf8");if(h.includes("{{flutter_bootstrap_js}}")||!h.includes("_flutter.loader.load(")){process.exit(1)}'
 
   android-debug-build:
-    # Verifica compilacion nativa real sin usar claves privadas de publicacion.
+    # NO compilar APK por un PR: requiere nueva autorizacion expresa.
+    # Un workflow de compilacion separado se utilizara solo si se solicita.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
