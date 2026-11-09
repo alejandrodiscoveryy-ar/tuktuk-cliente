@@ -101,31 +101,21 @@
     return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(cleanMessage(address));
   }
 
+  // Resumen corto para conexiones lentas: solo ubicaciones comunicadas,
+  // datos de contacto y, si existe, un vínculo de GPS real.
   function messageFor(fields) {
     const gps = originGps(fields);
-    const origin = cleanMessage(fields.origin);
-    const destination = cleanMessage(fields.destination);
+    const notes = cleanMessage(fields.notes);
     return [
-      '🚕 *TUKTUK | NUEVA SOLICITUD*',
-      '',
-      '🛵 *Servicio:* ' + cleanMessage(fields.service),
-      '👤 *Cliente:* ' + cleanMessage(fields.name),
-      '📞 *Contacto:* ' + cleanMessage(fields.phone),
-      '',
-      '📍 *RECOGIDA*',
-      origin,
-      gps ? '🧭 *GPS:* ' + gps.coords + (gps.accuracy === null ? '' : ' (precisión aprox. ' + gps.accuracy + ' m)') : '🧭 *GPS:* No proporcionado',
-      gps ? '🗺️ *Abrir pin de recogida:* ' + gps.url : '🗺️ *Buscar origen (dirección, no pin):* ' + addressMapSearch(origin),
-      '',
-      '🏁 *DESTINO*',
-      destination,
-      '🗺️ *Buscar destino (dirección, no pin):* ' + addressMapSearch(destination),
-      '',
-      '📝 *Indicaciones:* ' + (cleanMessage(fields.notes) || 'Ninguna'),
-      '📲 *Canal:* WhatsApp Lite',
-      '⏳ *Estado:* Pendiente de respuesta humana.',
-      '_No hay precio ni reserva confirmados._'
-    ].join('\n');
+      'TUKTUK Lite | Solicitud',
+      'Servicio: ' + cleanMessage(fields.service),
+      'Cliente: ' + cleanMessage(fields.name) + ' | ' + cleanMessage(fields.phone),
+      'Recogida: ' + cleanMessage(fields.origin),
+      'Destino: ' + cleanMessage(fields.destination),
+      gps ? 'GPS recogida: ' + gps.url : '',
+      notes ? 'Indicaciones: ' + notes : '',
+      'Sin precio ni reserva confirmados.'
+    ].filter(Boolean).join('\n');
   }
 
   function whatsappUrl(phone, fields) {
