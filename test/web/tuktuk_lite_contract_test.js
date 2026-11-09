@@ -70,8 +70,8 @@ test('formulario usa consentimiento, datos validos y mensaje sin precio inventad
   assert.match(core.validateForm({...fields,origin:'a'}),/origen/);
   assert.match(core.validateForm({...fields,service:'Sin tarifa'}),/servicio/);
   const msg=core.messageFor(fields);
-  assert.match(msg,/WhatsApp Lite/);
-  assert.match(msg,/No hay precio ni reserva confirmados/);
+  assert.match(msg,/TUKTUK Lite \| Solicitud/);
+  assert.match(msg,/Sin precio ni reserva confirmados/);
   const url=core.whatsappUrl('+5355555555',fields);
   assert.match(url,/^https:\/\/wa\.me\/5355555555\?text=/);
   assert.match(decodeURIComponent(url),/Ana Pérez/);
