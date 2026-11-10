@@ -13,20 +13,20 @@ function storage() {
   const values = new Map();
   return {getItem:k=>values.get(k)||null, setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)};
 }
-test('WhatsApp tiene iconos, bloques y enlaces; nunca inventa un pin',()=>{
+test('WhatsApp Lite es compacto y nunca inventa un pin',()=>{
   const message = lite.messageFor(fields);
-  assert.match(message,/🚕 \*TUKTUK \| NUEVA SOLICITUD\*/);
-  assert.match(message,/📍 \*RECOGIDA\*/);
-  assert.match(message,/🏁 \*DESTINO\*/);
-  assert.match(message,/No proporcionado/);
-  assert.match(message,/Buscar destino \(dirección, no pin\)/);
-  assert.match(message,/No hay precio ni reserva confirmados/);
-  assert.doesNotMatch(message,/Abrir pin de recogida/);
+  assert.match(message,/TUKTUK Lite \| Solicitud/);
+  assert.match(message,/Recogida: Calle 10 y 15/);
+  assert.match(message,/Destino: Hospital central/);
+  assert.doesNotMatch(message,/No proporcionado|Indicaciones: Ninguna/);
+  assert.doesNotMatch(message,/google\.com\/maps\/search|Buscar destino/);
+  assert.match(message,/Sin precio ni reserva confirmados/);
+  assert.doesNotMatch(message,/GPS recogida:|https?:\/\//);
   const withGps = {...fields,origin:'Mi ubicación actual (GPS)',originLatitude:23.1254,originLongitude:-82.3876,originAccuracy:25.3};
   const gpsMessage = lite.messageFor(withGps);
-  assert.match(gpsMessage,/Abrir pin de recogida/);
+  assert.match(gpsMessage,/GPS recogida: /);
   assert.match(gpsMessage,/https:\/\/maps.google.com\/\?q=23.125400,-82.387600/);
-  assert.match(gpsMessage,/precisión aprox. 25 m/);
+  assert.doesNotMatch(gpsMessage,/precisión aprox|Buscar origen|Buscar destino/);
   assert.match(lite.whatsappUrl('+5355555555',withGps),/^https:\/\/wa.me\/5355555555\?text=/);
 });
 test('SMS sin emojis incluye coordenadas y enlace si hay GPS confirmado',()=>{
