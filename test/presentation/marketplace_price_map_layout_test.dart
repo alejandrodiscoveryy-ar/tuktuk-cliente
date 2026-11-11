@@ -38,6 +38,6 @@ void main() {
     expect(source, contains('snapSizes: const [.56, .72, .82]'));
     expect(source, contains('Widget _quoteStickyFooter()'));
     expect(source, contains('NotificationListener<DraggableScrollableNotification>'));
-    expect(source, contains('class _MarineCardSurface'));
+    expect(File('lib/presentation/marketplace_booking_visual_primitives.dart').readAsStringSync(), contains('class _MarineCardSurface'));
   });
 }
