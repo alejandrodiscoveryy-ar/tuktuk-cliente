@@ -1,0 +1,22 @@
+name: Verificar politica de despliegue web automatico (PR)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-web-production.yml'
+      - '.github/workflows/verify-web-auto-deploy-pr.yml'
+      - '.github/ci/check-web-auto-deploy.mjs'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Contratos de merge seguro y Android manual
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - name: Comprobar disparador y protecciones
+        run: node --test .github/ci/check-web-auto-deploy.mjs
