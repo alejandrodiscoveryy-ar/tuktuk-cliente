@@ -1,6 +1,8 @@
 name: Deploy TUKTUK Cliente Web
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       confirm_production:
@@ -11,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: tuktuk-cliente-web-production
@@ -18,7 +21,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ inputs.confirm_production == true }}
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.confirm_production == true)) }}
     environment: production
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -52,6 +55,31 @@ jobs:
           echo "SOURCE_SHA=$SOURCE_SHA"
           echo "APPROVED_COMMIT_STILL_MAIN=OK"
 
+      - name: Verify automatic main update comes from a merged PR
+        if: ${{ github.event_name == 'push' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Never publish direct pushes to main. Only approved PR integrations.
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
+            -H "Accept: application/vnd.github+json" \
+            > "$RUNNER_TEMP/associated-merged-prs.json"
+          node - "$RUNNER_TEMP/associated-merged-prs.json" <<'NODE'
+          const fs = require('node:fs');
+          const prs = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const merged = Array.isArray(prs) && prs.find(pr =>
+            pr.merged_at &&
+            pr.base?.ref === 'main' &&
+            pr.merge_commit_sha === process.env.GITHUB_SHA
+          );
+          if (!merged) {
+            console.error('AUTO_DEPLOY_REJECTED: no merged PR for this main commit');
+            process.exit(1);
+          }
+          console.log('AUTO_DEPLOY_MERGED_PR=' + merged.number);
+          NODE
       - name: Setup Flutter 3.44.4
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
@@ -183,6 +211,15 @@ jobs:
           EOF
           echo "WRANGLER_CONFIG=$WRANGLER_CONFIG" >> "$GITHUB_ENV"
 
+      - name: Reject stale main commit before upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          if [ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]; then
+            echo 'STALE_RELEASE_REJECTED: main moved to a newer commit'
+            exit 1
+          fi
       - name: Upload exact build to existing Worker
         shell: bash
         run: |
@@ -200,6 +237,15 @@ jobs:
           echo "VERSION_ID=$VERSION_ID" >> "$GITHUB_ENV"
           echo "UPLOADED_VERSION_ID=$VERSION_ID"
 
+      - name: Reject stale main commit before activation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          if [ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]; then
+            echo 'STALE_RELEASE_REJECTED: main moved to a newer commit'
+            exit 1
+          fi
       - name: Promote uploaded version to 100 percent
         shell: bash
         run: |
