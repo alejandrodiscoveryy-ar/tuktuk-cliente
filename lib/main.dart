@@ -111,21 +111,15 @@ Future<void> main() async {
   if (MarketplaceMapService.publicToken.startsWith('pk.')) {
     mbx.MapboxOptions.setAccessToken(MarketplaceMapService.publicToken);
   }
-  if (kIsWeb) {
-    final ready = Completer<bool>();
-    customerFirebaseReady = ready.future;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_initializeCustomerFirebaseAfterFirstFrame(ready));
-      unawaited(_loadPublicMapConfigurationAfterFirstFrame(client));
-    });
-  } else {
-    final ready = Completer<bool>();
-    customerFirebaseReady = ready.future;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_initializeCustomerFirebaseAfterFirstFrame(ready));
-      unawaited(_loadPublicMapConfigurationAfterFirstFrame(client));
-    });
-  }
+  // Firebase y configuración pública se inicializan de la misma forma en
+  // web y Android; las diferencias de plataforma ya se gestionan dentro de
+  // _initializeCustomerFirebaseAfterFirstFrame.
+  final ready = Completer<bool>();
+  customerFirebaseReady = ready.future;
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(_initializeCustomerFirebaseAfterFirstFrame(ready));
+    unawaited(_loadPublicMapConfigurationAfterFirstFrame(client));
+  });
   // Ni mapas remotos ni Firebase bloquean la primera pantalla utilizable.
   runApp(MarketplaceCustomerApp(client: client));
 }
