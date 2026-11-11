@@ -9,6 +9,7 @@ void main() {
     final source = File(
       'lib/presentation/marketplace_customer_booking_flow.dart',
     ).readAsStringSync();
+    final visuals = File('lib/presentation/marketplace_booking_visual_primitives.dart').readAsStringSync();
     expect(source, contains('list_marketplace_published_modalities'));
     expect(source, contains('flow.publishedServices'));
     expect(
@@ -18,9 +19,9 @@ void main() {
     );
     expect(source, contains('flow.setServiceVehicleCategory(category)'));
     expect(source, contains('flow.setPassengerVehicleCategory'));
-    expect(source, contains('class _MarineVeinsPainter extends CustomPainter'));
+    expect(visuals, contains('class _MarineVeinsPainter extends CustomPainter'));
     expect(
-      source,
+      visuals,
       contains('class _MarineCardSurface extends StatelessWidget'),
     );
     expect(source, contains("'Solicitar transporte'"));
