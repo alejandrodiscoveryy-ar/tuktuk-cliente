@@ -256,14 +256,44 @@ jobs:
             --name "$WORKER_NAME" \
             --yes
 
-      - name: Verify production hash
+      - name: Verify production hash with edge retries
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS -H "Cache-Control: no-cache" "${PUBLIC_URL}?release=${GITHUB_SHA}" >/dev/null
           REMOTE="$RUNNER_TEMP/tuktuk-customer-main.dart.js"
-          curl -fsSL -H "Cache-Control: no-cache" "${PUBLIC_URL}main.dart.js?release=${GITHUB_SHA}" -o "$REMOTE"
-          REMOTE_HASH="$(sha256sum "$REMOTE" | awk '{print toupper($1)}')"
-          echo "REMOTE_SHA256=$REMOTE_HASH"
-          test "$REMOTE_HASH" = "$LOCAL_HASH"
-          echo "PRODUCTION_INTEGRITY=OK"
+          MAX_ATTEMPTS=24
+          SLEEP_SECONDS=5
+
+          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
+            cache_buster="${GITHUB_SHA}-${attempt}-$(date +%s)"
+
+            curl -fsS \
+              -H "Cache-Control: no-cache, no-store, max-age=0" \
+              -H "Pragma: no-cache" \
+              "${PUBLIC_URL}?release=${cache_buster}" >/dev/null || true
+
+            if curl -fsSL \
+              -H "Cache-Control: no-cache, no-store, max-age=0" \
+              -H "Pragma: no-cache" \
+              "${PUBLIC_URL}main.dart.js?release=${cache_buster}" \
+              -o "$REMOTE"; then
+              REMOTE_HASH="$(sha256sum "$REMOTE" | awk '{print toupper($1)}')"
+              echo "PRODUCTION_VERIFY_ATTEMPT=${attempt}/${MAX_ATTEMPTS}"
+              echo "REMOTE_SHA256=$REMOTE_HASH"
+
+              if [ "$REMOTE_HASH" = "$LOCAL_HASH" ]; then
+                echo "PRODUCTION_INTEGRITY=OK"
+                exit 0
+              fi
+            fi
+
+            if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
+              echo "Production edge still serves the previous asset; waiting ${SLEEP_SECONDS}s..."
+              sleep "$SLEEP_SECONDS"
+            fi
+          done
+
+          echo "PRODUCTION_INTEGRITY=ERROR"
+          echo "Expected: $LOCAL_HASH"
+          echo "Observed: ${REMOTE_HASH:-unavailable}"
+          exit 1
