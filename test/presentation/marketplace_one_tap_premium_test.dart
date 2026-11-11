@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   final quote = File('lib/presentation/marketplace_customer_booking_flow.dart').readAsStringSync();
   final tracking = File('lib/presentation/marketplace_customer_tracking.dart').readAsStringSync();
+  final visuals = File('lib/presentation/marketplace_booking_visual_primitives.dart').readAsStringSync();
 
   test('recogida automatica permite marcar directamente destino en mapa', () {
     expect(quote, contains('onPointTap: flow.origin == null && _selectingOrigin == null'));
@@ -24,7 +25,7 @@ void main() {
     expect(quote, contains('Color marketplaceVehicleAccent(String category)'));
     expect(quote, contains('tint: accent,'));
     expect(quote, contains('final columns = available.maxWidth < 280 ? 2 : 3;'));
-    expect(quote, contains('class _MarineCardSurface extends StatelessWidget'));
+    expect(visuals, contains('class _MarineCardSurface extends StatelessWidget'));
     expect(tracking, contains('Color(0xE8173742)'));
     expect(quote, contains('visualOffset'));
   });
