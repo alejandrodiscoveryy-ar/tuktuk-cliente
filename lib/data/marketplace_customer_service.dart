@@ -438,6 +438,30 @@ class MarketplaceCustomerService {
     return <String, dynamic>{};
   }
 
+  /// Only approximate, anonymous positions from the authenticated gateway.
+  Future<List<MarketplaceMapPoint>> workingFleet({
+    required String sessionId,
+    required String sessionToken,
+  }) async {
+    final value = await _gateway('working_fleet', {
+      'target_session_id': sessionId,
+      'target_session_token': sessionToken,
+    });
+    if (value is! List) throw StateError('FLEET_RESPONSE_INVALID');
+    final points = <MarketplaceMapPoint>[];
+    for (final raw in value) {
+      if (raw is! Map) throw StateError('FLEET_RESPONSE_INVALID');
+      final lat = double.tryParse('${raw['latitude']}');
+      final lon = double.tryParse('${raw['longitude']}');
+      if (lat == null || lon == null || !lat.isFinite || !lon.isFinite ||
+          lat < 18 || lat > 24.5 || lon < -85.5 || lon > -73) {
+        throw StateError('FLEET_RESPONSE_INVALID');
+      }
+      points.add(MarketplaceMapPoint(label: '', lat: lat, lon: lon));
+    }
+    return List.unmodifiable(points);
+  }
+
   Future<List<MarketplaceCustomerJob>> history({
     required String sessionId,
     required String sessionToken,

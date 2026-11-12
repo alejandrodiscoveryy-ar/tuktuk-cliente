@@ -1779,6 +1779,10 @@ class _MarketplaceCustomerBookingFlowState
                     requestedCenter: _mapCenter,
                     requestedZoom: _mapRequestedZoom,
                     ornamentBottomInset: _mapPanelInset,
+                    loadFleetPoints: () => widget.service.workingFleet(
+                      sessionId: widget.session.sessionId,
+                      sessionToken: widget.session.token,
+                    ),
                     originPoint: origin,
                     destinationPoint: destination,
                     routePoints:
