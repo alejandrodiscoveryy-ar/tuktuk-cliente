@@ -2891,8 +2891,7 @@ class MarketplaceCompactVehicleSelector extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(
         builder: (context, constraints) {
           if (categories.isEmpty) return const SizedBox.shrink();
-          // En telefonos normales los cuatro se ven a la vez; en anchos
-          // realmente estrechos se organizan en una cuadricula 2 x 2.
+          // Dos columnas en telefonos y cuatro cuando hay espacio suficiente.
           final columns = constraints.maxWidth < 540 ? 2 : 4;
           const gap = 8.0;
           final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
@@ -2924,46 +2923,58 @@ class MarketplaceCompactVehicleSelector extends StatelessWidget {
           key: Key('vehicle-$category'),
           onTap: () => onSelected(category),
           borderRadius: BorderRadius.circular(15),
-          child: _MarineCardSurface(
-            selected: selected,
-            tint: accent,
-            radius: 15,
-            height: 76,
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                Icon(
-                  _icon(category),
-                  size: 20,
-                  color: selected ? Color.lerp(accent, Colors.white, .22)! : accent,
-                ),
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 56),
+            child: _MarineCardSurface(
+              selected: selected,
+              tint: accent,
+              radius: 15,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                children: [
+                  Icon(
+                    _icon(category),
+                    size: 22,
+                    color: selected
+                        ? Color.lerp(accent, Colors.white, .22)!
+                        : accent,
                   ),
-                ),
-                SizedBox(
-                  height: 15,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      price,
-                      maxLines: 1,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: selected ? accent : Color.lerp(TuktukTheme.muted, accent, .60)!,
-                      ),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            price,
+                            maxLines: 1,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: selected
+                                  ? accent
+                                  : Color.lerp(TuktukTheme.muted, accent, .60)!,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
