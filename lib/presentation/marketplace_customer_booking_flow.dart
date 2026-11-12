@@ -1998,7 +1998,8 @@ class _MarketplaceCustomerBookingFlowState
                   ],
                 ),
               ),
-              if (_hasQuoteFooter) _quoteStickyFooter(),
+              if (flow.origin != null && flow.destination != null && _selectingOrigin == null)
+                _quoteStickyFooter(),
             ],
           ),
         ),
