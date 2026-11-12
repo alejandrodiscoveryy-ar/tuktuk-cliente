@@ -47,12 +47,21 @@ void main() {
     }
   });
 
-  test('distancia arriba y selector de servicios horizontal sin titulo redundante', () {
+  test('distancia junto a mas opciones y servicios horizontales sin titulo redundante', () {
     final source = File('lib/presentation/marketplace_customer_booking_flow.dart').readAsStringSync();
     final locations = source.split('Widget _floatingOriginDestination()').last.split('Widget _floatingBookingPanel()').first;
     final options = source.split('Widget _floatingQuoteOptions()').last.split('Future<void> _openFloatingOptions()').first;
-    expect(locations, contains('distanceLabel: flow.route == null'));
-    expect(locations, contains('flow.route!.distanceKm.toStringAsFixed(1)'));
+    expect(locations, isNot(contains('distanceLabel')));
+    expect(locations, isNot(contains('distanceKm')));
+    expect(options, contains("ValueKey('booking-options-distance-row')"));
+    expect(options, contains("ValueKey('booking-route-distance')"));
+    expect(options, contains('route.distanceKm.toStringAsFixed(1)'));
+    expect(options, contains('alignment: Alignment.centerRight'));
+    expect(options.indexOf("ValueKey('booking-options-distance-row')"),
+        lessThan(options.indexOf("Text('Más opciones'")));
+    expect(options.indexOf("Text('Más opciones'"),
+        lessThan(options.indexOf("ValueKey('booking-route-distance')")));
+    expect(options, contains('if (route != null)'));
     expect(options, isNot(contains('Pide tu transporte')));
     expect(options, contains('MarketplaceCompactVehicleSelector('));
     expect(options, contains('BoxConstraints(minHeight: 32)'));
