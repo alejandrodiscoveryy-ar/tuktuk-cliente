@@ -24,7 +24,8 @@ void main() {
     expect(quote, contains('final columns = constraints.maxWidth < 540 ? 2 : 4;'));
     expect(quote, contains('Color marketplaceVehicleAccent(String category)'));
     expect(quote, contains('tint: accent,'));
-    expect(quote, contains('final columns = available.maxWidth < 280 ? 2 : 3;'));
+    expect(quote, contains('categories: flow.categoriesForService(flow.serviceCode)'));
+    expect(quote, contains('onSelected: flow.setServiceVehicleCategory'));
     expect(visuals, contains('class _MarineCardSurface extends StatelessWidget'));
     expect(tracking, contains('Color(0xE8173742)'));
     expect(quote, contains('visualOffset'));

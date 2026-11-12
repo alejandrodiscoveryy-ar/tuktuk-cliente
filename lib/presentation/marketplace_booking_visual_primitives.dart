@@ -8,7 +8,6 @@ class _MarineCardSurface extends StatelessWidget {
     required this.child,
     required this.padding,
     this.radius = 16,
-    this.height,
     this.tint,
   });
 
@@ -16,14 +15,12 @@ class _MarineCardSurface extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   final double radius;
-  final double? height;
   final Color? tint;
 
   @override
   Widget build(BuildContext context) => AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOutCubic,
-        height: height,
         decoration: BoxDecoration(
           gradient: RadialGradient(
             center: const Alignment(-.8, -.85),

@@ -88,6 +88,7 @@ const marketplacePassengerVehicleCategories = <String>[
 @visibleForTesting
 String marketplacePassengerVehicleLabel(String code) => switch (code) {
       'motorcycle' => 'Moto',
+      'bicycle' => 'Bicicleta',
       'bicitaxi' => 'Bicitaxi',
       'tricycle' => 'Triciclo',
       'light_car' => 'Auto',
@@ -106,6 +107,12 @@ const marketplaceCargoCourierVehicleCategories = <String>[
   'van',
   'truck',
   'other',
+];
+
+@visibleForTesting
+const marketplaceCourierVehicleCategories = <String>[
+  'bicycle',
+  ...marketplaceCargoCourierVehicleCategories,
 ];
 
 class CustomerBookingFlowController extends ChangeNotifier {
@@ -258,7 +265,9 @@ class CustomerBookingFlowController extends ChangeNotifier {
         for (final service in const ['passenger', 'courier', 'cargo'])
           service: (service == 'passenger'
                   ? marketplacePassengerVehicleCategories
-                  : marketplaceCargoCourierVehicleCategories)
+                  : service == 'courier'
+                      ? marketplaceCourierVehicleCategories
+                      : marketplaceCargoCourierVehicleCategories)
               .where(
                 (category) => pairs.any(
                   (r) =>
@@ -2128,20 +2137,16 @@ class _MarketplaceCustomerBookingFlowState
             'Tipo de vehículo',
             style: TextStyle(fontWeight: FontWeight.w800),
           ),
-          LayoutBuilder(
-            builder: (context, available) {
-              final columns = available.maxWidth < 280 ? 2 : 3;
-              const gap = 6.0;
-              final tileWidth = (available.maxWidth - gap * (columns - 1)) / columns;
-              return Wrap(
-                spacing: gap,
-                runSpacing: gap,
-                children: [
-                  for (final category in flow.categoriesForService(flow.serviceCode))
-                    SizedBox(width: tileWidth, child: _premiumServiceVehicleChoice(category)),
-                ],
-              );
-            },
+          const SizedBox(height: 6),
+          MarketplaceCompactVehicleSelector(
+            selectedCategory: flow.selectedVehicleCategoryCode,
+            categories: flow.categoriesForService(flow.serviceCode),
+            priceLabel: (category) => _priceLabel(
+              flow.vehiclePriceForCard(category),
+              flow.serviceCode,
+            ),
+            onSelected: flow.setServiceVehicleCategory,
+            wrapPriceLabel: flow.serviceCode == 'cargo',
           ),
         ],
         const SizedBox(height: 6),
@@ -2168,51 +2173,6 @@ class _MarketplaceCustomerBookingFlowState
     );
   }
 
-  Widget _premiumServiceVehicleChoice(String category) {
-    final selected = flow.selectedVehicleCategoryCode == category;
-    final accent = marketplaceVehicleAccent(category);
-    final title = marketplacePassengerVehicleLabel(category);
-    final quote = flow.vehiclePriceForCard(category);
-    final price = _priceLabel(quote, flow.serviceCode);
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: '$title. Precio $price',
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => flow.setServiceVehicleCategory(category),
-          borderRadius: BorderRadius.circular(15),
-          child: _MarineCardSurface(
-            selected: selected,
-            tint: accent,
-            radius: 15,
-            height: 76,
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                Icon(_marineVehicleIcon(category), size: 20,
-                    color: selected ? Color.lerp(accent, Colors.white, .22)! : accent),
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
-                SizedBox(
-                  height: 15,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(price, maxLines: 1,
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800,
-                            color: selected ? accent : Color.lerp(TuktukTheme.muted, accent, .60)!)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
   Widget _floatingServiceChoice(String code) {
     final selected = flow.serviceCode == code;
     return InkWell(
@@ -2863,7 +2823,7 @@ Color marketplaceVehicleAccent(String category) => switch (category) {
       _ => TuktukTheme.mint,
     };
 
-// Selector de cuatro vehiculos visible sin scroll horizontal.
+// Selector compartido de vehiculos, sin scroll horizontal.
 // Unicamente recibe precios calculados por el gateway existente.
 class MarketplaceCompactVehicleSelector extends StatelessWidget {
   const MarketplaceCompactVehicleSelector({
@@ -2871,6 +2831,7 @@ class MarketplaceCompactVehicleSelector extends StatelessWidget {
     this.categories = marketplacePassengerVehicleCategories,
     required this.priceLabel,
     required this.onSelected,
+    this.wrapPriceLabel = false,
     super.key,
   });
 
@@ -2878,14 +2839,7 @@ class MarketplaceCompactVehicleSelector extends StatelessWidget {
   final List<String> categories;
   final String Function(String category) priceLabel;
   final ValueChanged<String> onSelected;
-
-  IconData _icon(String category) => switch (category) {
-        'motorcycle' => Icons.two_wheeler_rounded,
-        'bicitaxi' => Icons.pedal_bike_rounded,
-        'tricycle' => Icons.electric_rickshaw_rounded,
-        'light_car' => Icons.directions_car_filled_outlined,
-        _ => Icons.local_taxi_outlined,
-      };
+  final bool wrapPriceLabel;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -2933,7 +2887,7 @@ class MarketplaceCompactVehicleSelector extends StatelessWidget {
               child: Row(
                 children: [
                   Icon(
-                    _icon(category),
+                    _marineVehicleIcon(category),
                     size: 22,
                     color: selected
                         ? Color.lerp(accent, Colors.white, .22)!
@@ -2955,12 +2909,9 @@ class MarketplaceCompactVehicleSelector extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 2),
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Text(
+                        if (wrapPriceLabel)
+                          Text(
                             price,
-                            maxLines: 1,
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w800,
@@ -2968,8 +2919,23 @@ class MarketplaceCompactVehicleSelector extends StatelessWidget {
                                   ? accent
                                   : Color.lerp(TuktukTheme.muted, accent, .60)!,
                             ),
+                          )
+                        else
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              price,
+                              maxLines: 1,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: selected
+                                    ? accent
+                                    : Color.lerp(TuktukTheme.muted, accent, .60)!,
+                              ),
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -2985,6 +2951,7 @@ class MarketplaceCompactVehicleSelector extends StatelessWidget {
 
 IconData _marineVehicleIcon(String category) => switch (category) {
       'motorcycle' => Icons.two_wheeler_rounded,
+      'bicycle' => Icons.pedal_bike_rounded,
       'bicitaxi' => Icons.pedal_bike_rounded,
       'tricycle' => Icons.electric_rickshaw_rounded,
       'light_car' => Icons.directions_car_filled_outlined,

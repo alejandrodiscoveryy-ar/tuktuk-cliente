@@ -161,8 +161,82 @@ void main() {
     expect(source, contains("'vehicle_category_code': selectedVehicleCategoryCode"));
     expect(source, contains("'target_vehicle_category_code': selectedVehicleCategoryCode"));
     expect(source, contains('publishedCategoriesByService'));
-    expect(source, contains('_premiumServiceVehicleChoice(category)'));
-    expect(source, contains('onTap: () => flow.setServiceVehicleCategory(category)'));
+    expect(source, contains('flow.vehiclePriceForCard(category)'));
+    expect(source, contains('onSelected: flow.setServiceVehicleCategory'));
+    expect(source, contains("wrapPriceLabel: flow.serviceCode == 'cargo'"));
+  });
+
+  test('Bicicleta pertenece a Mensajeria y no a Pasajeros o Carga', () {
+    expect(marketplaceCourierVehicleCategories, contains('bicycle'));
+    expect(marketplaceCourierVehicleCategories.first, 'bicycle');
+    expect(marketplaceCargoCourierVehicleCategories, isNot(contains('bicycle')));
+    expect(marketplacePassengerVehicleCategories, isNot(contains('bicycle')));
+    expect(marketplacePassengerVehicleLabel('bicycle'), 'Bicicleta');
+  });
+
+  testWidgets('Mensajeria muestra bicicleta y camion con icono lateral', (
+    tester,
+  ) async {
+    String? chosen;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: SizedBox(
+            width: 350,
+            child: MarketplaceCompactVehicleSelector(
+              selectedCategory: 'bicycle',
+              categories: const ['bicycle', 'truck'],
+              priceLabel: (category) => category == 'bicycle'
+                  ? '800 CUP'
+                  : '7.300 CUP',
+              onSelected: (value) => chosen = value,
+            ),
+          ),
+        ),
+      ),
+    ));
+    final bicycle = find.byKey(const Key('vehicle-bicycle'));
+    final truck = find.byKey(const Key('vehicle-truck'));
+    expect(find.text('Bicicleta'), findsOneWidget);
+    expect(find.text('800 CUP'), findsOneWidget);
+    expect(find.text('7.300 CUP'), findsOneWidget);
+    expect(find.descendant(of: bicycle, matching: find.byIcon(Icons.pedal_bike_rounded)), findsOneWidget);
+    expect(tester.getRect(bicycle).top, tester.getRect(truck).top);
+    await tester.tap(bicycle);
+    expect(chosen, 'bicycle');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Carga muestra indicacion de peso sin reducirla a texto diminuto', (
+    tester,
+  ) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: SizedBox(
+            width: 285,
+            child: MarketplaceCompactVehicleSelector(
+              selectedCategory: 'light_car',
+              categories: const ['light_car', 'motorcycle'],
+              priceLabel: (_) => 'Indica peso o volumen',
+              wrapPriceLabel: true,
+              onSelected: (_) {},
+            ),
+          ),
+        ),
+      ),
+    ));
+    for (final category in ['light_car', 'motorcycle']) {
+      final tile = find.byKey(Key('vehicle-$category'));
+      final label = find.descendant(
+        of: tile,
+        matching: find.text('Indica peso o volumen'),
+      );
+      expect(label, findsOneWidget);
+      expect(tester.widget<Text>(label).style?.fontSize, 12);
+      expect(tester.getRect(tile).contains(tester.getRect(label).bottomRight - const Offset(1, 1)), isTrue);
+    }
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('ancho pequeno adapta a 2 x 2 sin ocultar vehiculos', (
