@@ -1,9 +1,36 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tuktuk_cliente/main.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('fleet marker PNG has the exact blue, light rim and transparent edge', () async {
+    final codec = await ui.instantiateImageCodec(marketplaceFleetMarkerPng);
+    try {
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      try {
+        expect(image.width, 28);
+        expect(image.height, 28);
+        final pixels = (await image.toByteData(format: ui.ImageByteFormat.rawRgba))!;
+        List<int> pixel(int x, int y) {
+          final offset = (y * image.width + x) * 4;
+          return List.generate(4, (i) => pixels.getUint8(offset + i));
+        }
+        expect(pixel(14, 14), [50, 155, 255, 255]);
+        expect(pixel(5, 14), [213, 235, 255, 255]);
+        expect(pixel(0, 0)[3], 0);
+      } finally {
+        image.dispose();
+      }
+    } finally {
+      codec.dispose();
+    }
+  });
+
   test('fleet GeoJSON contains anonymous coordinates only, including empty snapshot', () {
     final raw = jsonDecode(marketplaceVectorFleetGeoJson(const [
       MarketplaceMapPoint(label: 'private', lat: 23.124, lon: -82.347),
@@ -21,8 +48,19 @@ void main() {
     final booking = File('lib/presentation/marketplace_customer_booking_flow.dart').readAsStringSync();
     final service = File('lib/data/marketplace_customer_service.dart').readAsStringSync();
     expect(map, contains("tuktuk-client-working-fleet-points"));
-    expect(map, contains('circleColor: 0xFF329BFF'));
-    expect(map, contains('circleRadius: 5.5'));
+    final fleetLayerStart = map.indexOf("id: 'tuktuk-client-working-fleet-points'");
+    final fleetLayerEnd = map.indexOf('));', fleetLayerStart);
+    expect(fleetLayerStart, greaterThanOrEqualTo(0));
+    expect(fleetLayerEnd, greaterThan(fleetLayerStart));
+    final fleetLayer = map.substring(fleetLayerStart, fleetLayerEnd);
+    expect(fleetLayer, contains("iconImage: 'tuktuk-client-fleet-blue-v1'"));
+    expect(fleetLayer, contains('iconAnchor: mbx.IconAnchor.CENTER'));
+    expect(fleetLayer, contains("slot: 'top'"));
+    expect(fleetLayer, contains('iconAllowOverlap: true'));
+    expect(fleetLayer, contains('iconOpacity: 1.0'));
+    expect(map.indexOf("id: 'tuktuk-client-origin-point'"), greaterThan(fleetLayerStart));
+    expect(map.indexOf("id: 'tuktuk-client-destination-point'"), greaterThan(fleetLayerStart));
+    expect(map, contains('mbx.StyleImage.bytes(marketplaceFleetMarkerPng)'));
     expect(map, contains('Timer.periodic(const Duration(seconds: 30)'));
     expect(map, contains('if (!mounted || !_fleetForeground || loader == null || _fleetRequestPending) return;'));
     expect(map, contains('_fleetTimer?.cancel();'));
