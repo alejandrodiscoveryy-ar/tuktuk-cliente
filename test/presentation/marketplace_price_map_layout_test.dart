@@ -34,8 +34,11 @@ void main() {
     final source = File('lib/presentation/marketplace_customer_booking_flow.dart').readAsStringSync();
     expect(source, contains('initialChildSize: _initialBookingPanelFraction()'));
     expect(source, contains('if (flow.destination == null) return .36;'));
-    expect(source, contains("return MediaQuery.sizeOf(context).height < 760 ? .82 : .72;"));
+    expect(source, contains("MediaQuery.sizeOf(context).height < 760 ? .82 : .72"));
+    expect(source, contains('return max(preferred, _minBookingPanelFraction);'));
+    expect(source, contains('minChildSize: _minBookingPanelFraction'));
     expect(source, contains('snapSizes: const [.56, .72, .82]'));
+    expect(source, contains('.where((size) => size > _minBookingPanelFraction)'));
     expect(source, contains('Widget _quoteStickyFooter()'));
     expect(source, contains('NotificationListener<DraggableScrollableNotification>'));
     expect(File('lib/presentation/marketplace_booking_visual_primitives.dart').readAsStringSync(), contains('class _MarineCardSurface'));
