@@ -622,6 +622,79 @@ class CustomerBookingFlowController extends ChangeNotifier {
   }
 }
 
+/// Dos formas de pago excluyentes, visibles sin abrir otro menú.
+class MarketplaceRidePaymentSelector extends StatelessWidget {
+  const MarketplaceRidePaymentSelector({
+    required this.value,
+    required this.onChanged,
+    this.enabled = true,
+    super.key,
+  });
+
+  final String value;
+  final ValueChanged<String> onChanged;
+  final bool enabled;
+
+  Widget _option(String code, String label, IconData icon) {
+    final selected = value == code;
+    final foreground = selected ? TuktukTheme.background : TuktukTheme.text;
+    final background = selected ? TuktukTheme.mint : TuktukTheme.surfaceStrong;
+    return Expanded(
+      child: Semantics(
+        selected: selected,
+        child: OutlinedButton(
+          key: ValueKey('booking-ride-payment-$code'),
+          onPressed: enabled ? () => onChanged(code) : null,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: foreground,
+            backgroundColor: background,
+            disabledForegroundColor: foreground.withValues(alpha: .75),
+            disabledBackgroundColor: background.withValues(alpha: .65),
+            side: BorderSide(
+              color: selected ? TuktukTheme.mint : TuktukTheme.border,
+              width: selected ? 1.6 : 1,
+            ),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            minimumSize: const Size(0, 44),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            tapTargetSize: MaterialTapTargetSize.padded,
+          ),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(selected ? Icons.check_circle_rounded : icon, size: 18),
+                const SizedBox(width: 5),
+                Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => Row(
+        key: const ValueKey('booking-ride-payment-method'),
+        children: [
+          _option('cash', 'Efectivo', Icons.payments_outlined),
+          const SizedBox(width: 8),
+          _option('transfer', 'Transferencia', Icons.account_balance_outlined),
+        ],
+      );
+}
+
+/// Reserva espacio al pie fijo incluso al arrastrar la ficha hacia abajo.
+/// La ficha de elección de puntos mantiene su altura compacta original.
+@visibleForTesting
+double marketplaceBookingPanelMinFraction(double viewportHeight,
+    {required bool hasQuoteFooter}) {
+  if (!hasQuoteFooter) return .26;
+  return (248 / (max(viewportHeight, 1.0) * .78)).clamp(.26, .90).toDouble();
+}
+
 class MarketplaceCustomerBookingFlow extends StatefulWidget {
   const MarketplaceCustomerBookingFlow({
     required this.service,
@@ -1632,10 +1705,20 @@ class _MarketplaceCustomerBookingFlowState
   }
 
   // Abre suficiente espacio para las cuatro fichas en dos filas.
+  bool get _hasQuoteFooter =>
+      flow.origin != null && flow.destination != null && _selectingOrigin == null;
+
+  double get _minBookingPanelFraction => marketplaceBookingPanelMinFraction(
+        MediaQuery.sizeOf(context).height,
+        hasQuoteFooter: _hasQuoteFooter,
+      );
+
   double _initialBookingPanelFraction() {
     if (flow.destination == null) return .36;
-    if (flow.serviceCode != 'passenger' || !flow.publicationReady) return .56;
-    return MediaQuery.sizeOf(context).height < 760 ? .82 : .72;
+    final preferred = flow.serviceCode != 'passenger' || !flow.publicationReady
+        ? .56
+        : MediaQuery.sizeOf(context).height < 760 ? .82 : .72;
+    return max(preferred, _minBookingPanelFraction);
   }
 
   void _syncInitialMapboxCredits() {
@@ -1862,10 +1945,11 @@ class _MarketplaceCustomerBookingFlowState
         ),
         expand: false,
         initialChildSize: _initialBookingPanelFraction(),
-        minChildSize: .26,
+        minChildSize: _minBookingPanelFraction,
         maxChildSize: .96,
         snap: true,
-        snapSizes: const [.56, .72, .82],
+        snapSizes: const [.56, .72, .82]
+            .where((size) => size > _minBookingPanelFraction).toList(),
         builder: (context, scroller) => Container(
           decoration: BoxDecoration(
                         gradient: const LinearGradient(
@@ -1914,42 +1998,16 @@ class _MarketplaceCustomerBookingFlowState
                   ],
                 ),
               ),
-              if (flow.origin != null && flow.destination != null && _selectingOrigin == null)
-                _quoteStickyFooter(),
+              if (_hasQuoteFooter) _quoteStickyFooter(),
             ],
           ),
         ),
       );
 
-  Widget _ridePaymentSelector() => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('Forma de pago',
-              style: TextStyle(color: TuktukTheme.muted, fontSize: 12,
-                  fontWeight: FontWeight.w700)),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              key: const ValueKey('booking-ride-payment-method'),
-              value: flow.ridePaymentMethod,
-              isExpanded: true,
-              isDense: true,
-              icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 19),
-              dropdownColor: TuktukTheme.background,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800,
-                  color: TuktukTheme.mint),
-              onChanged: _publishing || flow.loading || flow.ridePaymentMethodLocked
-                  ? null
-                  : (value) {
-                      if (value != null) flow.setRidePaymentMethod(value);
-                    },
-              items: const [
-                DropdownMenuItem(value: 'cash', child: Text('Efectivo')),
-                DropdownMenuItem(value: 'transfer', child: Text('Transferencia')),
-              ],
-            ),
-          ),
-        ],
+  Widget _ridePaymentSelector() => MarketplaceRidePaymentSelector(
+        value: flow.ridePaymentMethod,
+        enabled: !_publishing && !flow.loading && !flow.ridePaymentMethodLocked,
+        onChanged: flow.setRidePaymentMethod,
       );
 
   Widget _quoteStickyFooter() {
@@ -1972,27 +2030,32 @@ class _MarketplaceCustomerBookingFlowState
         children: [
           Row(
             children: [
-              Expanded(flex: 5, child: _ridePaymentSelector()),
-              const SizedBox(width: 12),
-              Expanded(
+              const Expanded(
                 flex: 4,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('Estimado', style: TextStyle(color: TuktukTheme.muted,
-                        fontWeight: FontWeight.w700)),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerRight,
-                      child: Text(price, style: const TextStyle(color: TuktukTheme.gold,
+                child: Text('Forma de pago', style: TextStyle(
+                    color: TuktukTheme.text, fontSize: 14, fontWeight: FontWeight.w800)),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 5,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text.rich(TextSpan(
+                    text: 'Estimado  ',
+                    style: const TextStyle(color: TuktukTheme.muted,
+                        fontSize: 12, fontWeight: FontWeight.w700),
+                    children: [
+                      TextSpan(text: price, style: const TextStyle(color: TuktukTheme.gold,
                           fontSize: 18, fontWeight: FontWeight.w900)),
-                    ),
-                  ],
+                    ],
+                  )),
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 4),
+          _ridePaymentSelector(),
           const SizedBox(height: 7),
           TuktukPrimaryButton(
             onPressed: enabled ? _submit : null,
@@ -2666,7 +2729,15 @@ class _MarketplaceCustomerBookingFlowState
                 const SizedBox(height: 14),
                 TuktukGlassCard(
                   padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-                  child: _ridePaymentSelector(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Forma de pago',
+                          style: TextStyle(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 6),
+                      _ridePaymentSelector(),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 14),
                 LayoutBuilder(
