@@ -70,8 +70,17 @@ void main() {
     final footer = source.split('Widget _quoteStickyFooter()').last.split('Widget _destinationSearchPrompt()').first;
     expect(footer, contains('_ridePaymentSelector()'));
     expect(footer.indexOf('_ridePaymentSelector()'), lessThan(footer.indexOf('? _submit')));
-    expect(source, contains("DropdownMenuItem(value: 'cash', child: Text('Efectivo'))"));
-    expect(source, contains("DropdownMenuItem(value: 'transfer', child: Text('Transferencia'))"));
+    expect(source, contains("_option('cash', 'Efectivo', Icons.payments_outlined)"));
+    expect(source, contains("_option('transfer', 'Transferencia', Icons.account_balance_outlined)"));
+    expect(source, contains('value: flow.ridePaymentMethod'));
+    expect(source, contains('onChanged: flow.setRidePaymentMethod'));
+    expect(footer, contains("Text('Forma de pago'"));
+    final selector = source.split('class MarketplaceRidePaymentSelector').last
+        .split('class MarketplaceCustomerBookingFlow').first;
+    expect(selector, isNot(contains('DropdownButton')));
+    expect(selector, contains('selected: selected'));
+    expect(selector, contains('TuktukTheme.mint'));
+    expect(selector, contains('minimumSize: const Size(0, 44)'));
     expect(source, contains("'ride_payment_method': _ridePaymentMethod"));
   });
 
