@@ -346,13 +346,29 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
         id: _sourceFleet,
         data: marketplaceVectorFleetGeoJson(_fleetPoints),
       ));
+      // Explicit white halo underneath the blue core; both use the same
+      // anonymous snapshot so position and intensity remain identical.
+      await map.addLayer(mbx.CircleLayer(
+        id: 'tuktuk-client-working-fleet-white-halo',
+        sourceId: _sourceFleet,
+        circleColor: 0xFFFFFFFF,
+        circleRadius: 10,
+        circleOpacity: 0.40,
+        circleBlur: 0.30,
+        // Mapbox Standard night lighting must not dim the white halo.
+        circleEmissiveStrength: 1.0,
+      ));
       await map.addLayer(mbx.CircleLayer(
         id: 'tuktuk-client-working-fleet-points',
         sourceId: _sourceFleet,
         circleColor: 0xFF329BFF,
         circleRadius: 5.5,
-        circleStrokeColor: 0xFFD5EBFF,
-        circleStrokeWidth: 1.2,
+        circleOpacity: 1.0,
+        // Preserve the specified blue and white in the night basemap.
+        circleEmissiveStrength: 1.0,
+        circleStrokeColor: 0xFFFFFFFF,
+        circleStrokeWidth: 2.2,
+        circleStrokeOpacity: 1.0,
       ));
       // La geometria vial verificada se representa siempre en dorado.
       // Sin slot: sobre el mapa base dark-v11 y estilos privados por igual.
