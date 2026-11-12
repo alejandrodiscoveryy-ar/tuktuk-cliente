@@ -695,6 +695,16 @@ double marketplaceBookingPanelMinFraction(double viewportHeight,
   return (248 / (max(viewportHeight, 1.0) * .78)).clamp(.26, .90).toDouble();
 }
 
+/// Reserve room for the payment footer and two vehicle rows on mobile.
+/// Very short viewports retain the draggable, scrolling sheet.
+@visibleForTesting
+double marketplaceQuoteInitialFraction(double viewportHeight,
+    {required double preferred, required double minimum}) {
+  final contentFraction = (460 / (max(viewportHeight, 1.0) * .78))
+      .clamp(.26, .94).toDouble();
+  return max(max(preferred, minimum), contentFraction);
+}
+
 class MarketplaceCustomerBookingFlow extends StatefulWidget {
   const MarketplaceCustomerBookingFlow({
     required this.service,
@@ -1718,7 +1728,12 @@ class _MarketplaceCustomerBookingFlowState
     final preferred = flow.serviceCode != 'passenger' || !flow.publicationReady
         ? .56
         : MediaQuery.sizeOf(context).height < 760 ? .82 : .72;
-    return max(preferred, _minBookingPanelFraction);
+    if (!_hasQuoteFooter) return max(preferred, _minBookingPanelFraction);
+    return marketplaceQuoteInitialFraction(
+      MediaQuery.sizeOf(context).height,
+      preferred: preferred,
+      minimum: _minBookingPanelFraction,
+    );
   }
 
   void _syncInitialMapboxCredits() {
@@ -1850,6 +1865,9 @@ class _MarketplaceCustomerBookingFlowState
                     color: TuktukTheme.destinationOrange,
                     label: 'Destino',
                     value: flow.destination?.label ?? 'Marcar destino',
+                    distanceLabel: flow.route == null
+                        ? null
+                        : '${flow.route!.distanceKm.toStringAsFixed(1)} km',
                     onTap: flow.origin == null
                         ? null
                         : () => _selectPoint(origin: false),
@@ -1869,6 +1887,7 @@ class _MarketplaceCustomerBookingFlowState
     required String value,
     required VoidCallback? onTap,
     required String tooltip,
+    String? distanceLabel,
     bool showRestoreGps = false,
     bool restoringGps = false,
     VoidCallback? onRestoreGps,
@@ -1902,12 +1921,33 @@ class _MarketplaceCustomerBookingFlowState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        color: TuktukTheme.muted,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            label,
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: TuktukTheme.muted,
+                            ),
+                          ),
+                        ),
+                        if (distanceLabel != null) ...[
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              distanceLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: TuktukTheme.mint,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     Text(
                       value,
@@ -1968,7 +2008,7 @@ class _MarketplaceCustomerBookingFlowState
               Expanded(
                 child: ListView(
             controller: scroller,
-            padding: const EdgeInsets.fromLTRB(15, 10, 15, 20),
+            padding: EdgeInsets.fromLTRB(15, 10, 15, _hasQuoteFooter ? 8 : 20),
             children: [
               Align(
                 alignment: Alignment.center,
@@ -1981,7 +2021,7 @@ class _MarketplaceCustomerBookingFlowState
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: _hasQuoteFooter ? 6 : 12),
               if (_selectingOrigin != null)
                 _floatingPlaceSelection()
               else if (flow.origin == null)
@@ -2213,30 +2253,9 @@ class _MarketplaceCustomerBookingFlowState
       );
 
   Widget _floatingQuoteOptions() {
-    final route = flow.route;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'Pide tu transporte',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-              ),
-            ),
-            if (route != null)
-              Text(
-                '${route.distanceKm.toStringAsFixed(1)} km',
-                style: const TextStyle(
-                  color: TuktukTheme.mint,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 9),
         Row(
           children: [
             for (final code in flow.publishedServices) ...[
@@ -2310,26 +2329,33 @@ class _MarketplaceCustomerBookingFlowState
       child: _MarineCardSurface(
         selected: selected,
         radius: 14,
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              _serviceIcon(code),
-              size: 22,
-              color: selected ? TuktukTheme.gold : TuktukTheme.mint,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              marketplaceServiceLabel(code),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w800,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 32),
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _serviceIcon(code),
+                    size: 18,
+                    color: selected ? TuktukTheme.gold : TuktukTheme.mint,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    marketplaceServiceLabel(code),
+                    maxLines: 1,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
