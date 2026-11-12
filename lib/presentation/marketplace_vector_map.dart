@@ -355,6 +355,8 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
         circleRadius: 10,
         circleOpacity: 0.40,
         circleBlur: 0.30,
+        // Mapbox Standard night lighting must not dim the white halo.
+        circleEmissiveStrength: 1.0,
       ));
       await map.addLayer(mbx.CircleLayer(
         id: 'tuktuk-client-working-fleet-points',
@@ -362,6 +364,8 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
         circleColor: 0xFF329BFF,
         circleRadius: 5.5,
         circleOpacity: 1.0,
+        // Preserve the specified blue and white in the night basemap.
+        circleEmissiveStrength: 1.0,
         circleStrokeColor: 0xFFFFFFFF,
         circleStrokeWidth: 2.2,
         circleStrokeOpacity: 1.0,
