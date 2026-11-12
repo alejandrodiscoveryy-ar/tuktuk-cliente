@@ -8,6 +8,7 @@ class FakeMapService extends MarketplaceMapService {
   int routeCalls = 0;
   int priceCalls = 0;
   int createCalls = 0;
+  Map<String, dynamic>? lastCreateParams;
 
   @override
   Future<MarketplaceRouteQuote> route({
@@ -72,6 +73,7 @@ class FakeMapService extends MarketplaceMapService {
     required Map<String, dynamic> params,
   }) async {
     createCalls++;
+    lastCreateParams = Map<String, dynamic>.from(params);
 
     return const MarketplaceCustomerRequestDraft(
       jobId: 'job',
@@ -214,6 +216,44 @@ void main() {
       expect(map.createCalls, 1);
     },
   );
+  test('la forma de pago viaja a la solicitud sin recalcular el precio y queda fija en reintentos', () async {
+    flow.setOrigin(origin);
+    flow.setDestination(destination);
+    await waitForVerifiedRoute(flow);
+    expect(flow.ridePaymentMethod, 'cash');
+    final oldKey = flow.idempotencyKey;
+    final oldPublishKey = flow.publishIdempotencyKey;
+    final oldRoute = map.routeCalls;
+    final oldReprice = map.priceCalls;
+    flow.setRidePaymentMethod('transfer');
+    expect(flow.ridePaymentMethod, 'transfer');
+    expect(flow.idempotencyKey, isNot(oldKey));
+    expect(flow.publishIdempotencyKey, isNot(oldPublishKey));
+    expect(map.routeCalls, oldRoute);
+    expect(map.priceCalls, oldReprice);
+    expect(flow.selectedPrice?['recommended_price'], 3900);
+    flow.setRidePaymentMethod('card');
+    expect(flow.ridePaymentMethod, 'transfer');
+
+    final requestKey = flow.idempotencyKey;
+    await flow.submit();
+    expect(map.lastCreateParams?['target_details']['ride_payment_method'], 'transfer');
+    expect(flow.ridePaymentMethodLocked, isTrue);
+    flow.setRidePaymentMethod('cash');
+    await flow.submit();
+    expect(map.lastCreateParams?['target_details']['ride_payment_method'], 'transfer');
+    expect(map.lastCreateParams?['target_idempotency_key'], requestKey);
+
+    flow.resetToStart();
+    expect(flow.ridePaymentMethodLocked, isFalse);
+    expect(flow.ridePaymentMethod, 'cash');
+    flow.setOrigin(origin);
+    flow.setDestination(destination);
+    await waitForVerifiedRoute(flow);
+    await flow.submit();
+    expect(map.lastCreateParams?['target_details']['ride_payment_method'], 'cash');
+  });
+
   test('volver al inicio limpia el borrador y renueva idempotencia', () async {
     flow.setOrigin(origin);
     flow.setDestination(destination);

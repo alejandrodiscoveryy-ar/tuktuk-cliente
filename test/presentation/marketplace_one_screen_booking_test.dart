@@ -65,6 +65,16 @@ void main() {
     expect(source, contains('saveActiveJobId('));
   });
 
+  test('la forma de pago se muestra junto al precio antes de solicitar', () {
+    final source = File('lib/presentation/marketplace_customer_booking_flow.dart').readAsStringSync();
+    final footer = source.split('Widget _quoteStickyFooter()').last.split('Widget _destinationSearchPrompt()').first;
+    expect(footer, contains('_ridePaymentSelector()'));
+    expect(footer.indexOf('_ridePaymentSelector()'), lessThan(footer.indexOf('? _submit')));
+    expect(source, contains("DropdownMenuItem(value: 'cash', child: Text('Efectivo'))"));
+    expect(source, contains("DropdownMenuItem(value: 'transfer', child: Text('Transferencia'))"));
+    expect(source, contains("'ride_payment_method': _ridePaymentMethod"));
+  });
+
   test('moto ajusta automaticamente a un pasajero', () {
     final client = SupabaseClient('https://example.supabase.co', 'test-key');
     final flow = CustomerBookingFlowController(

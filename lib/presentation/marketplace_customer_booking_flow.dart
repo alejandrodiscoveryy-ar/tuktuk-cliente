@@ -141,6 +141,10 @@ class CustomerBookingFlowController extends ChangeNotifier {
   double? cargoVolumeM3;
   DateTime? scheduledFor;
   String note = '';
+  String _ridePaymentMethod = 'cash';
+  bool _ridePaymentMethodLocked = false;
+  String get ridePaymentMethod => _ridePaymentMethod;
+  bool get ridePaymentMethodLocked => _ridePaymentMethodLocked;
   bool loading = false;
   String? error;
   String idempotencyKey = _marketplaceUuid();
@@ -368,6 +372,18 @@ class CustomerBookingFlowController extends ChangeNotifier {
     notifyListeners();
   }
 
+  // No recalcular tarifas por la forma de pago. Un intento de publicación
+  // conserva su elección para no cambiar el contenido de una solicitud
+  // idempotente cuando la respuesta de red se pierde.
+  void setRidePaymentMethod(String value) {
+    if (loading || _ridePaymentMethodLocked || value == _ridePaymentMethod ||
+        !const ['cash', 'transfer'].contains(value)) return;
+    _ridePaymentMethod = value;
+    idempotencyKey = _marketplaceUuid();
+    publishIdempotencyKey = _marketplaceUuid();
+    notifyListeners();
+  }
+
   void resetToStart() {
     // Abandonar un borrador no crea ni cancela ninguna carrera real.
     _pricingRevision++;
@@ -386,6 +402,8 @@ class CustomerBookingFlowController extends ChangeNotifier {
     cargoWeightKg = null;
     cargoVolumeM3 = null;
     note = '';
+    _ridePaymentMethod = 'cash';
+    _ridePaymentMethodLocked = false;
     error = null;
     idempotencyKey = _marketplaceUuid();
     publishIdempotencyKey = _marketplaceUuid();
@@ -562,6 +580,7 @@ class CustomerBookingFlowController extends ChangeNotifier {
         selectedPrice == null) {
       throw StateError('BOOKING_INCOMPLETE');
     }
+    _ridePaymentMethodLocked = true;
     loading = true;
     notifyListeners();
     try {
@@ -587,6 +606,7 @@ class CustomerBookingFlowController extends ChangeNotifier {
           'target_required_body_type': null,
           'target_notes': note,
           'target_details': {
+            'ride_payment_method': _ridePaymentMethod,
             'stop_count': stopCount,
             'urgent': urgent,
             'load_help': loadHelp,
@@ -1901,6 +1921,37 @@ class _MarketplaceCustomerBookingFlowState
         ),
       );
 
+  Widget _ridePaymentSelector() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Forma de pago',
+              style: TextStyle(color: TuktukTheme.muted, fontSize: 12,
+                  fontWeight: FontWeight.w700)),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              key: const ValueKey('booking-ride-payment-method'),
+              value: flow.ridePaymentMethod,
+              isExpanded: true,
+              isDense: true,
+              icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 19),
+              dropdownColor: TuktukTheme.background,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800,
+                  color: TuktukTheme.mint),
+              onChanged: _publishing || flow.loading || flow.ridePaymentMethodLocked
+                  ? null
+                  : (value) {
+                      if (value != null) flow.setRidePaymentMethod(value);
+                    },
+              items: const [
+                DropdownMenuItem(value: 'cash', child: Text('Efectivo')),
+                DropdownMenuItem(value: 'transfer', child: Text('Transferencia')),
+              ],
+            ),
+          ),
+        ],
+      );
+
   Widget _quoteStickyFooter() {
     final price = _priceLabel(flow.selectedPrice, flow.serviceCode);
     final enabled = flow.route != null && flow.selectedPrice != null &&
@@ -1921,11 +1972,25 @@ class _MarketplaceCustomerBookingFlowState
         children: [
           Row(
             children: [
-              const Text('Estimado', style: TextStyle(color: TuktukTheme.muted,
-                  fontWeight: FontWeight.w700)),
-              const Spacer(),
-              Text(price, style: const TextStyle(color: TuktukTheme.gold,
-                  fontSize: 18, fontWeight: FontWeight.w900)),
+              Expanded(flex: 5, child: _ridePaymentSelector()),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 4,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Estimado', style: TextStyle(color: TuktukTheme.muted,
+                        fontWeight: FontWeight.w700)),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(price, style: const TextStyle(color: TuktukTheme.gold,
+                          fontSize: 18, fontWeight: FontWeight.w900)),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 7),
@@ -2597,6 +2662,11 @@ class _MarketplaceCustomerBookingFlowState
                       ),
                     ],
                   ),
+                ),
+                const SizedBox(height: 14),
+                TuktukGlassCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+                  child: _ridePaymentSelector(),
                 ),
                 const SizedBox(height: 14),
                 LayoutBuilder(
