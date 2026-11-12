@@ -70,7 +70,7 @@ Future<mbx.StyleImage> _assignedDriverIcon({required bool directional}) async {
     ..strokeCap = StrokeCap.round;
   final fill = Paint()..color = const Color(0xFF3287F6);
   if (directional) {
-    final arrow = Path()
+    final arrow = ui.Path()
       ..moveTo(48, 9)
       ..lineTo(77, 83)
       ..lineTo(48, 67)
