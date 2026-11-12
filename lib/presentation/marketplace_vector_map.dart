@@ -53,6 +53,17 @@ String marketplaceVectorFleetGeoJson(List<MarketplaceMapPoint> points) =>
       ],
     });
 
+// 28x28 RGBA PNG, 2x density: #329BFF core, #D5EBFF rim, subtle halo.
+// A 14 logical pixel sprite with a 7 pixel core preserves map legibility.
+final marketplaceFleetMarkerPng = base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAABwAAAAcCAYAAAByDd+UAAAAw0lEQVR42u2WsRGDMAxF'
+  'LQ1DeiZhAZdMRckCniQ9WSapuDNCwpIjcO7CL3UfPcvYkkO45SywmPvp3XHx5wgvV'
+  '6AEqgGDBTQPYeF8MYWHFgwamAQ6AktQsMJi2nrnwQbFoxXnsJj2MC5e2g2UqqMwx'
+  'XbuoNxhQ0siDy+WqquVVCV6Vaf9Bq9ubX8OpJdaeVj0wLUz0N5YozUH7Tb47Yqt'
+  'XpRGTF6lJlHukarT3MMNlAPTeOl3/MZ4ajKAmzwxznhE3XLXB6JhaySpNTbCAAAAA'
+  'ElFTkSuQmCC',
+).asUnmodifiableView();
+
 class MarketplaceVectorMap extends StatefulWidget {
   const MarketplaceVectorMap({
     required this.initialCenter,
@@ -346,13 +357,24 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
         id: _sourceFleet,
         data: marketplaceVectorFleetGeoJson(_fleetPoints),
       ));
-      await map.addLayer(mbx.CircleLayer(
+      // A fixed RGBA sprite avoids platform-dependent circle color conversion.
+      // Same top slot as pickup/destination; add before their layers so they
+      // remain above anonymous fleet points.
+      await map.addImage(
+        'tuktuk-client-fleet-blue-v1',
+        2.0,
+        mbx.StyleImage.bytes(marketplaceFleetMarkerPng),
+      );
+      await map.addLayer(mbx.SymbolLayer(
         id: 'tuktuk-client-working-fleet-points',
         sourceId: _sourceFleet,
-        circleColor: 0xFF329BFF,
-        circleRadius: 5.5,
-        circleStrokeColor: 0xFFD5EBFF,
-        circleStrokeWidth: 1.2,
+        iconImage: 'tuktuk-client-fleet-blue-v1',
+        iconAnchor: mbx.IconAnchor.CENTER,
+        iconSize: 1.0,
+        iconOpacity: 1.0,
+        iconAllowOverlap: true,
+        iconIgnorePlacement: true,
+        slot: 'top',
       ));
       // La geometria vial verificada se representa siempre en dorado.
       // Sin slot: sobre el mapa base dark-v11 y estilos privados por igual.
