@@ -37,6 +37,22 @@ String marketplaceVectorLineGeoJson(List<MarketplaceMapPoint> points) =>
             ],
     });
 
+String marketplaceVectorFleetGeoJson(List<MarketplaceMapPoint> points) =>
+    jsonEncode({
+      'type': 'FeatureCollection',
+      'features': [
+        for (final point in points)
+          {
+            'type': 'Feature',
+            'geometry': {
+              'type': 'Point',
+              'coordinates': [point.lon, point.lat],
+            },
+            'properties': <String, Object>{},
+          },
+      ],
+    });
+
 class MarketplaceVectorMap extends StatefulWidget {
   const MarketplaceVectorMap({
     required this.initialCenter,
@@ -47,6 +63,7 @@ class MarketplaceVectorMap extends StatefulWidget {
     this.markerPoint,
     this.markerIsDestination = false,
     this.driverPoint,
+    this.loadFleetPoints,
     this.originPoint,
     this.destinationPoint,
     this.routePoints = const <MarketplaceMapPoint>[],
@@ -63,6 +80,7 @@ class MarketplaceVectorMap extends StatefulWidget {
   final MarketplaceMapPoint? markerPoint;
   final bool markerIsDestination;
   final MarketplaceMapPoint? driverPoint;
+  final Future<List<MarketplaceMapPoint>> Function()? loadFleetPoints;
   final MarketplaceMapPoint? originPoint;
   final MarketplaceMapPoint? destinationPoint;
   final List<MarketplaceMapPoint> routePoints;
@@ -73,11 +91,17 @@ class MarketplaceVectorMap extends StatefulWidget {
   State<MarketplaceVectorMap> createState() => _MarketplaceVectorMapState();
 }
 
-class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
+class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
+    with WidgetsBindingObserver {
   static const _sourceOrigin = 'tuktuk-client-vector-origin';
   static const _sourceDestination = 'tuktuk-client-vector-destination';
   static const _sourceDriver = 'tuktuk-client-vector-driver';
   static const _sourceRoute = 'tuktuk-client-vector-route';
+  static const _sourceFleet = 'tuktuk-client-vector-working-fleet';
+  Timer? _fleetTimer;
+  bool _fleetRequestPending = false;
+  bool _fleetForeground = true;
+  List<MarketplaceMapPoint> _fleetPoints = const [];
 
   mbx.MapboxMap? _map;
   bool _layersReady = false;
@@ -92,6 +116,10 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
     widget.requestedCenter?.addListener(_centerRequested);
     widget.ornamentBottomInset?.addListener(_updateOrnaments);
     MarketplaceMapService.publicVisualRevision.addListener(_visualStyleChanged);
+    WidgetsBinding.instance.addObserver(this);
+    _fleetForeground = WidgetsBinding.instance.lifecycleState == null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+    _startFleetPolling();
   }
 
   @override
@@ -116,10 +144,68 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
     if (oldWidget.driverPoint != widget.driverPoint) {
       unawaited(_refreshDriverPoint());
     }
+    if ((oldWidget.loadFleetPoints == null) != (widget.loadFleetPoints == null)) {
+      _fleetTimer?.cancel();
+      _fleetTimer = null;
+      if (widget.loadFleetPoints == null) {
+        _fleetPoints = const [];
+        unawaited(_refreshFleetSource());
+      } else {
+        _startFleetPolling();
+      }
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _fleetForeground = state == AppLifecycleState.resumed;
+    if (_fleetForeground) {
+      _startFleetPolling();
+    } else {
+      _fleetTimer?.cancel();
+      _fleetTimer = null;
+    }
+  }
+
+  void _startFleetPolling() {
+    if (!_fleetForeground || widget.loadFleetPoints == null || _fleetTimer != null) return;
+    unawaited(_loadFleet());
+    _fleetTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      unawaited(_loadFleet());
+    });
+  }
+
+  Future<void> _loadFleet() async {
+    final loader = widget.loadFleetPoints;
+    if (!mounted || !_fleetForeground || loader == null || _fleetRequestPending) return;
+    _fleetRequestPending = true;
+    try {
+      final points = await loader().timeout(const Duration(seconds: 12));
+      if (!mounted || widget.loadFleetPoints == null) return;
+      // A successful empty snapshot removes resting drivers. Network failure
+      // is not evidence of a state change; retain the last known snapshot.
+      _fleetPoints = points;
+      await _refreshFleetSource();
+    } catch (_) {
+      // Optional map layer must never block booking or clear on weak networks.
+    } finally {
+      _fleetRequestPending = false;
+    }
+  }
+
+  Future<void> _refreshFleetSource() async {
+    if (!_layersReady || _map == null) return;
+    try {
+      await _updateSource(_sourceFleet, marketplaceVectorFleetGeoJson(_fleetPoints));
+    } catch (_) {
+      // Map/style can be disposed while the snapshot is in flight.
+    }
   }
 
   @override
   void dispose() {
+    _fleetTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     widget.requestedCenter?.removeListener(_centerRequested);
     widget.ornamentBottomInset?.removeListener(_updateOrnaments);
     MarketplaceMapService.publicVisualRevision.removeListener(_visualStyleChanged);
@@ -255,6 +341,19 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
           data: marketplaceVectorPointGeoJson(widget.driverPoint),
         ),
       );
+      // Separate anonymous fleet layer, behind the route and assigned driver.
+      await map.addSource(mbx.GeoJsonSource(
+        id: _sourceFleet,
+        data: marketplaceVectorFleetGeoJson(_fleetPoints),
+      ));
+      await map.addLayer(mbx.CircleLayer(
+        id: 'tuktuk-client-working-fleet-points',
+        sourceId: _sourceFleet,
+        circleColor: 0xFF329BFF,
+        circleRadius: 5.5,
+        circleStrokeColor: 0xFFD5EBFF,
+        circleStrokeWidth: 1.2,
+      ));
       // La geometria vial verificada se representa siempre en dorado.
       // Sin slot: sobre el mapa base dark-v11 y estilos privados por igual.
       // Aura tenue + trazo opaco: contraste legible sin tapar las calles.
@@ -346,6 +445,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap> {
       });
       await _refreshGeometry();
       await _refreshDriverPoint();
+      await _refreshFleetSource();
     } catch (_) {
       if (mounted && map == _map) {
         setState(() => _loadError = 'No se pudo dibujar el mapa.');
