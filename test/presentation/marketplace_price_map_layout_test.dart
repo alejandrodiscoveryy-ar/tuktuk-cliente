@@ -41,6 +41,8 @@ void main() {
       expect(initial, lessThanOrEqualTo(.94));
       if (height >= 640) {
         expect(height * .78 * initial, greaterThanOrEqualTo(459.9));
+      } else {
+        expect(initial, preferred);
       }
     }
   });
