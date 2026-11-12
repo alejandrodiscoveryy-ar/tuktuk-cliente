@@ -700,6 +700,7 @@ double marketplaceBookingPanelMinFraction(double viewportHeight,
 @visibleForTesting
 double marketplaceQuoteInitialFraction(double viewportHeight,
     {required double preferred, required double minimum}) {
+  if (viewportHeight < 640) return max(preferred, minimum);
   final contentFraction = (460 / (max(viewportHeight, 1.0) * .78))
       .clamp(.26, .94).toDouble();
   return max(max(preferred, minimum), contentFraction);
