@@ -17,7 +17,7 @@ void main() {
           .hasMatch(source),
       isTrue,
     );
-    expect(source, contains('flow.setServiceVehicleCategory(category)'));
+    expect(source, contains('onSelected: flow.setServiceVehicleCategory'));
     expect(source, contains('flow.setPassengerVehicleCategory'));
     expect(visuals, contains('class _MarineVeinsPainter extends CustomPainter'));
     expect(
