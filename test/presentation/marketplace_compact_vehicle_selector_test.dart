@@ -58,6 +58,60 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('fichas horizontales compactas con precio visible', (tester) async {
+    await tester.pumpWidget(preview(350, (_) {}));
+    for (final category in marketplacePassengerVehicleCategories) {
+      final tile = find.byKey(Key('vehicle-$category'));
+      final icon = find.descendant(of: tile, matching: find.byType(Icon));
+      final name = find.descendant(
+        of: tile,
+        matching: find.text(marketplacePassengerVehicleLabel(category)),
+      );
+      final price = find.descendant(
+        of: tile,
+        matching: find.text(prices[category]!),
+      );
+      final rect = tester.getRect(tile);
+      expect(rect.height, greaterThanOrEqualTo(48));
+      expect(rect.height, lessThanOrEqualTo(60));
+      expect(tester.getRect(icon).right, lessThan(tester.getRect(name).left));
+      expect(tester.getRect(icon).right, lessThan(tester.getRect(price).left));
+      expect(tester.getRect(name).top, lessThan(tester.getRect(price).top));
+      expect(rect.contains(tester.getRect(price).center), isTrue);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('texto ampliado no desborda el selector compacto', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(1.7)),
+            child: Center(
+              child: SizedBox(
+                width: 285,
+                child: MarketplaceCompactVehicleSelector(
+                  selectedCategory: 'motorcycle',
+                  priceLabel: (category) => prices[category]!,
+                  onSelected: (_) {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    for (final category in marketplacePassengerVehicleCategories) {
+      final tile = find.byKey(Key('vehicle-$category'));
+      final price = find.descendant(of: tile, matching: find.text(prices[category]!));
+      expect(tile, findsOneWidget);
+      expect(price, findsOneWidget);
+      expect(tester.getRect(tile).contains(tester.getRect(price).center), isTrue);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('en pantalla ancha las cuatro fichas pueden compartir fila', (tester) async {
     await tester.pumpWidget(preview(650, (_) {}));
     final motoY = tester.getTopLeft(find.byKey(const Key('vehicle-motorcycle'))).dy;
