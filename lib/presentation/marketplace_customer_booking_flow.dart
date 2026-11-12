@@ -1866,9 +1866,6 @@ class _MarketplaceCustomerBookingFlowState
                     color: TuktukTheme.destinationOrange,
                     label: 'Destino',
                     value: flow.destination?.label ?? 'Marcar destino',
-                    distanceLabel: flow.route == null
-                        ? null
-                        : '${flow.route!.distanceKm.toStringAsFixed(1)} km',
                     onTap: flow.origin == null
                         ? null
                         : () => _selectPoint(origin: false),
@@ -1888,7 +1885,6 @@ class _MarketplaceCustomerBookingFlowState
     required String value,
     required VoidCallback? onTap,
     required String tooltip,
-    String? distanceLabel,
     bool showRestoreGps = false,
     bool restoringGps = false,
     VoidCallback? onRestoreGps,
@@ -1922,33 +1918,12 @@ class _MarketplaceCustomerBookingFlowState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            label,
-                            style: const TextStyle(
-                              fontSize: 11.5,
-                              color: TuktukTheme.muted,
-                            ),
-                          ),
-                        ),
-                        if (distanceLabel != null) ...[
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              distanceLabel,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: TuktukTheme.mint,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: TuktukTheme.muted,
+                      ),
                     ),
                     Text(
                       value,
@@ -2254,6 +2229,7 @@ class _MarketplaceCustomerBookingFlowState
       );
 
   Widget _floatingQuoteOptions() {
+    final route = flow.route;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2299,14 +2275,42 @@ class _MarketplaceCustomerBookingFlowState
           ),
         ],
         const SizedBox(height: 6),
-        TextButton.icon(
-          onPressed: _openFloatingOptions,
-          icon: const Icon(Icons.tune_rounded, size: 18),
-          label: const Text('Más opciones'),
-          style: TextButton.styleFrom(
-            alignment: Alignment.centerLeft,
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-          ),
+        Row(
+          key: const ValueKey('booking-options-distance-row'),
+          children: [
+            Expanded(
+              child: TextButton.icon(
+                onPressed: _openFloatingOptions,
+                icon: const Icon(Icons.tune_rounded, size: 18),
+                label: const Text('Más opciones', maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+                style: TextButton.styleFrom(
+                  alignment: Alignment.centerLeft,
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                ),
+              ),
+            ),
+            if (route != null) ...[
+              const SizedBox(width: 8),
+              Flexible(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '${route.distanceKm.toStringAsFixed(1)} km',
+                      key: const ValueKey('booking-route-distance'),
+                      style: const TextStyle(
+                        color: TuktukTheme.mint,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
         if (flow.loading) const LinearProgressIndicator(),
         if (flow.error != null)
