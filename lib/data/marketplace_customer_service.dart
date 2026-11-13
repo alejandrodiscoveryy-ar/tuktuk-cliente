@@ -443,7 +443,7 @@ class MarketplaceCustomerService {
     required String sessionId,
     required String sessionToken,
   }) async {
-    final value = await _gateway('working_fleet', {
+    final value = await _gateway('fleet_presence_v2', {
       'target_session_id': sessionId,
       'target_session_token': sessionToken,
     });
