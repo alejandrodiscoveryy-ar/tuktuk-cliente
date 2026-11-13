@@ -54,6 +54,11 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
   String? _editIdempotencyKey;
   String? _error;
   bool _showFirstTimeForm = false;
+  MarketplacePromoProfile? _promoProfile;
+  bool _promoLoading = false;
+  bool _promoEntryCompleted = false;
+  MarketplaceMapPoint? _promoOrigin, _promoDestination;
+  String? _promoService;
   final ValueNotifier<LatLng?> _welcomeMapCenter = ValueNotifier<LatLng?>(null);
 
   @override
@@ -79,12 +84,87 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
 
     _sessionToken = marketplaceCustomerSessionToken();
     _startIdempotencyKey = _marketplaceUuid();
-    if (_existingSession == null &&
+    final promoCode = kIsWeb ? MarketplacePromoProfile.codeFromUri(Uri.base) : null;
+    if (promoCode != null && _activeJobId == null) {
+      _promoLoading = true;
+      unawaited(_resolvePromo(promoCode));
+    }
+    if (promoCode == null && _existingSession == null &&
         MarketplaceMapService.publicToken.startsWith('pk.')) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(_centerFirstEntryMap());
       });
     }
+  }
+
+  Future<void> _resolvePromo(String code) async {
+    MarketplacePromoProfile? profile;
+    try {
+      profile = await _service.promoProfile(code).timeout(const Duration(seconds: 8));
+    } catch (_) {
+      // A stale link or an unavailable gateway must not block normal booking.
+    }
+    if (!mounted) return;
+    setState(() {
+      _promoProfile = profile;
+      _promoService = profile?.services.first;
+      _promoLoading = false;
+    });
+    if (profile == null) customer_promo_link.clearCustomerPromoLink();
+  }
+
+  Future<void> _pickPromoAddress(bool origin) async {
+    final point = await Navigator.of(context).push<MarketplaceMapPoint>(
+      MaterialPageRoute<MarketplaceMapPoint>(builder: (routeContext) => Scaffold(
+        appBar: AppBar(title: Text(origin ? 'Punto de recogida' : '¿Cuál es tu destino?')),
+        body: SafeArea(child: MarketplaceLocationPicker(
+          service: MarketplaceMapService(widget.client),
+          title: origin ? 'Elige el origen' : 'Elige el destino',
+          origin: origin ? null : _promoOrigin,
+          onConfirm: (value) => Navigator.of(routeContext).pop(value),
+        )),
+      )),
+    );
+    if (!mounted || point == null) return;
+    setState(() {
+      if (origin) {
+        _promoOrigin = point;
+      } else {
+        _promoDestination = point;
+      }
+    });
+  }
+
+  CustomerBookingFlowController _newBookingFlow(MarketplaceCustomerSessionSnapshot session) {
+    final profile = _promoEntryCompleted ? _promoProfile : null;
+    final flow = CustomerBookingFlowController(MarketplaceMapService(widget.client), _service, session, promo: profile);
+    if (profile != null) {
+      flow.serviceCode = _promoService ?? profile.services.first;
+      flow.origin = _promoOrigin;
+      flow.destination = _promoDestination;
+      flow.step = MarketplaceBookingStep.quote;
+      if (flow.origin != null && flow.destination != null) unawaited(flow.refreshRoute());
+    }
+    return flow;
+  }
+
+  void _continuePromo() {
+    if (_promoOrigin == null) {
+      unawaited(_pickPromoAddress(true));
+      return;
+    }
+    if (_promoDestination == null) {
+      unawaited(_pickPromoAddress(false));
+      return;
+    }
+    setState(() {
+      _promoEntryCompleted = true;
+      if (_existingSession != null) {
+        _bookingFlow = _newBookingFlow(_existingSession!);
+      } else {
+        _showFirstTimeForm = true;
+      }
+    });
   }
 
   @override
@@ -276,11 +356,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
 
       setState(() {
         _existingSession = snapshot;
-        _bookingFlow = CustomerBookingFlowController(
-          MarketplaceMapService(_service._client),
-          _service,
-          snapshot,
-        );
+        _bookingFlow = _newBookingFlow(snapshot);
       });
     } catch (_) {
       if (!mounted) return;
@@ -369,6 +445,18 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
   @override
   Widget build(BuildContext context) {
     final existingSession = _existingSession;
+    if (_activeJobId == null && _promoLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    final promo = _promoProfile;
+    if (_activeJobId == null && promo != null && !_promoEntryCompleted) {
+      return MarketplacePromoEntry(profile: promo, origin: _promoOrigin, destination: _promoDestination,
+        serviceCode: _promoService ?? promo.services.first,
+        onOrigin: () => unawaited(_pickPromoAddress(true)),
+        onDestination: () => unawaited(_pickPromoAddress(false)),
+        onContinue: _continuePromo,
+        onServiceChanged: (value) => setState(() => _promoService = value));
+    }
 
     if (existingSession != null) {
       final activeJobId = _activeJobId;
@@ -382,11 +470,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
         );
       }
 
-      _bookingFlow ??= CustomerBookingFlowController(
-        MarketplaceMapService(_service._client),
-        _service,
-        existingSession,
-      );
+      _bookingFlow ??= _newBookingFlow(existingSession);
       return Stack(
         children: [
           MarketplaceCustomerBookingFlow(
@@ -559,7 +643,10 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
                       ? null
                       : () {
                           FocusScope.of(context).unfocus();
-                          setState(() => _showFirstTimeForm = false);
+                          setState(() {
+                            _showFirstTimeForm = false;
+                            if (_promoProfile != null) _promoEntryCompleted = false;
+                          });
                         },
                   icon: const Icon(Icons.close_rounded),
                 ),
