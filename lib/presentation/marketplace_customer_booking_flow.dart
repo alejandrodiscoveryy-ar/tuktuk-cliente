@@ -130,6 +130,7 @@ class CustomerBookingFlowController extends ChangeNotifier {
   MarketplaceMapPoint? origin;
   MarketplaceMapPoint? destination;
   MarketplaceRouteQuote? route;
+  MarketplacePromoProfile? promoProfile;
   String serviceCode = 'passenger';
   String passengerVehicleCategoryCode = 'motorcycle';
   int passengerCount = 1;
@@ -158,6 +159,20 @@ class CustomerBookingFlowController extends ChangeNotifier {
   bool _loadingPublishedModalities = false;
   String cargoVehicleCategoryCode = 'light_car';
   String courierVehicleCategoryCode = 'motorcycle';
+
+  void applyPromo(MarketplacePromoProfile profile, String service,
+      MarketplaceMapPoint pickup, MarketplaceMapPoint dropoff) {
+    if (!profile.services.contains(service)) return;
+    promoProfile = profile;
+    serviceCode = service;
+    passengerVehicleCategoryCode = profile.category;
+    cargoVehicleCategoryCode = profile.category;
+    courierVehicleCategoryCode = profile.category;
+    origin = pickup;
+    destination = dropoff;
+    route = null;
+    step = MarketplaceBookingStep.quote;
+  }
 
   String get selectedVehicleCategoryCode => switch (serviceCode) {
         'passenger' => passengerVehicleCategoryCode,
@@ -281,6 +296,14 @@ class CustomerBookingFlowController extends ChangeNotifier {
               )
               .toList(growable: false),
       };
+      final promo = promoProfile;
+      if (promo != null) {
+        for (final service in categoriesByService.keys.toList()) {
+          categoriesByService[service] = promo.services.contains(service)
+              ? categoriesByService[service]!.where((category) => category == promo.category).toList(growable: false)
+              : const <String>[];
+        }
+      }
       final services = const ['passenger', 'courier', 'cargo']
           .where((service) => categoriesByService[service]!.isNotEmpty)
           .toList(growable: false);
@@ -289,7 +312,7 @@ class CustomerBookingFlowController extends ChangeNotifier {
       publishedCategoriesByService = categoriesByService;
       publishedPassengerCategories = categoriesByService['passenger']!;
       publishedServices = services;
-      if (!services.contains(serviceCode) && services.isNotEmpty) {
+      if (promo == null && !services.contains(serviceCode) && services.isNotEmpty) {
         serviceCode = services.first;
       }
       if (!publishedPassengerCategories.contains(
@@ -313,7 +336,7 @@ class CustomerBookingFlowController extends ChangeNotifier {
       notifyListeners();
       if (origin != null &&
           destination != null &&
-          (prevService != serviceCode ||
+          ((promo != null && route == null) || prevService != serviceCode ||
               prevCategory != selectedVehicleCategoryCode)) {
         await refreshRoute();
       }
@@ -390,6 +413,8 @@ class CustomerBookingFlowController extends ChangeNotifier {
     _categoryQuoteRequestId++;
     _categoryQuoteCache.clear();
     _categoryQuoteSignature = null;
+    final hadPromo = promoProfile != null;
+    promoProfile = null;
     origin = null;
     destination = null;
     route = null;
@@ -408,6 +433,10 @@ class CustomerBookingFlowController extends ChangeNotifier {
     idempotencyKey = _marketplaceUuid();
     publishIdempotencyKey = _marketplaceUuid();
     step = MarketplaceBookingStep.quote;
+    if (hadPromo) {
+      publicationReady = false;
+      unawaited(loadPublishedModalities());
+    }
     notifyListeners();
   }
 
@@ -613,6 +642,7 @@ class CustomerBookingFlowController extends ChangeNotifier {
             'unload_help': unloadHelp,
           },
           'target_idempotency_key': idempotencyKey,
+          if (promoProfile != null) 'target_promo_code': promoProfile!.code,
         },
       );
     } finally {
@@ -2274,7 +2304,13 @@ class _MarketplaceCustomerBookingFlowState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
+        if (flow.promoProfile != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 7),
+            child: Text('Viaja con ${flow.promoProfile!.name} · ${marketplaceServiceLabel(flow.serviceCode)}',
+              style: const TextStyle(fontWeight: FontWeight.w700, color: TuktukTheme.mint)),
+          ),
+        if (flow.promoProfile == null || flow.publishedServices.length > 1) Row(
           children: [
             for (final code in flow.publishedServices) ...[
               if (code != 'passenger') const SizedBox(width: 7),
