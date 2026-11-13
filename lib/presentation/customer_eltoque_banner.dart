@@ -70,8 +70,9 @@ String marketplaceEltoqueRateLabel(double value) =>
     '1 USD = ${marketplaceEltoqueAmount(value)} CUP';
 
 class TuktukCustomerHomeWithRate extends StatelessWidget {
-  const TuktukCustomerHomeWithRate({required this.client, super.key});
+  const TuktukCustomerHomeWithRate({required this.client, this.promoCode, super.key});
   final SupabaseClient client;
+  final String? promoCode;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -83,7 +84,7 @@ class TuktukCustomerHomeWithRate extends StatelessWidget {
               // El banner elTOQUE ya consume el margen superior Android.
               // Evitar una segunda franja vacia en la reserva.
               removeTop: !kIsWeb && defaultTargetPlatform == TargetPlatform.android,
-              child: MarketplaceCustomerShell(client: client),
+              child: MarketplaceCustomerShell(client: client, promoCode: promoCode),
             ),
           ),
         ],
