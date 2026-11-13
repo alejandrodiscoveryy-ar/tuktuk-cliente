@@ -1879,6 +1879,43 @@ class _MarketplaceCustomerBookingFlowState
               ],
             ),
           ),
+          if (MarketplaceMapService.publicToken.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 5),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: TuktukTheme.background.withValues(alpha: .86),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 10,
+                    runSpacing: 3,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.circle, size: 9, color: Color(0xFF329BFF)),
+                          SizedBox(width: 4),
+                          Text('Cobertura TukTuk', style: TextStyle(fontSize: 10)),
+                        ],
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.adjust, size: 12, color: Color(0xFF329BFF)),
+                          SizedBox(width: 4),
+                          Text('Disponibles ahora', style: TextStyle(fontSize: 10)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       );
 

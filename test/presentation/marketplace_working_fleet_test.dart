@@ -20,6 +20,13 @@ void main() {
     final map = File('lib/presentation/marketplace_vector_map.dart').readAsStringSync();
     final booking = File('lib/presentation/marketplace_customer_booking_flow.dart').readAsStringSync();
     final service = File('lib/data/marketplace_customer_service.dart').readAsStringSync();
+    expect(map, contains("tuktuk-client-fleet-coverage-points"));
+    expect(map, contains("point.source == 'fleet_live'"));
+    expect(map, contains("point.source != 'fleet_live'"));
+    expect(map, contains("source: 'fleet_coverage'"));
+    expect(service, contains("raw['available_now'] == true"));
+    expect(booking, contains('Cobertura TukTuk'));
+    expect(booking, contains('Disponibles ahora'));
     expect(map, contains("tuktuk-client-working-fleet-points"));
     expect(map, contains('circleColor: 0xFF329BFF'));
     expect(map, contains('circleRadius: 5.5'));
@@ -45,7 +52,7 @@ void main() {
     expect(map, contains('await _refreshFleetSource();'));
     expect(map, contains('tuktuk-client-driver-live-position'));
     expect(booking, contains('loadFleetPoints: () => widget.service.workingFleet('));
-    expect(service, contains("_gateway('working_fleet'"));
+    expect(service, contains("_gateway('fleet_presence_v2'"));
     expect(service, contains("'target_session_id': sessionId"));
     expect(service, contains("'target_session_token': sessionToken"));
     expect(service, isNot(contains("from('marketplace_driver_locations')")));

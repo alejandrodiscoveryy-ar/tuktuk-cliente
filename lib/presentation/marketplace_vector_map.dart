@@ -98,6 +98,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
   static const _sourceDriver = 'tuktuk-client-vector-driver';
   static const _sourceRoute = 'tuktuk-client-vector-route';
   static const _sourceFleet = 'tuktuk-client-vector-working-fleet';
+  static const _sourceCoverage = 'tuktuk-client-vector-fleet-coverage';
   Timer? _fleetTimer;
   bool _fleetRequestPending = false;
   bool _fleetForeground = true;
@@ -182,12 +183,18 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
     try {
       final points = await loader().timeout(const Duration(seconds: 12));
       if (!mounted || widget.loadFleetPoints == null) return;
-      // A successful empty snapshot removes resting drivers. Network failure
-      // is not evidence of a state change; retain the last known snapshot.
+      // A successful snapshot replaces coverage and real availability.
+      // Historical coverage is not a claim that a vehicle is ready.
       _fleetPoints = points;
       await _refreshFleetSource();
     } catch (_) {
-      // Optional map layer must never block booking or clear on weak networks.
+      // Retain coverage on weak networks, but do not advertise cached live status.
+      if (mounted && widget.loadFleetPoints != null) {
+        _fleetPoints = _fleetPoints.map((point) => MarketplaceMapPoint(
+          label: '', lat: point.lat, lon: point.lon, source: 'fleet_coverage',
+        )).toList(growable: false);
+        await _refreshFleetSource();
+      }
     } finally {
       _fleetRequestPending = false;
     }
@@ -196,7 +203,12 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
   Future<void> _refreshFleetSource() async {
     if (!_layersReady || _map == null) return;
     try {
-      await _updateSource(_sourceFleet, marketplaceVectorFleetGeoJson(_fleetPoints));
+      await _updateSource(_sourceFleet, marketplaceVectorFleetGeoJson(
+        _fleetPoints.where((point) => point.source == 'fleet_live').toList(),
+      ));
+      await _updateSource(_sourceCoverage, marketplaceVectorFleetGeoJson(
+        _fleetPoints.where((point) => point.source != 'fleet_live').toList(),
+      ));
     } catch (_) {
       // Map/style can be disposed while the snapshot is in flight.
     }
@@ -341,10 +353,26 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
           data: marketplaceVectorPointGeoJson(widget.driverPoint),
         ),
       );
-      // Separate anonymous fleet layer, behind the route and assigned driver.
+      // Coverage and live availability are independent anonymous layers.
+      await map.addSource(mbx.GeoJsonSource(
+        id: _sourceCoverage,
+        data: marketplaceVectorFleetGeoJson(
+          _fleetPoints.where((point) => point.source != 'fleet_live').toList(),
+        ),
+      ));
+      await map.addLayer(mbx.CircleLayer(
+        id: 'tuktuk-client-fleet-coverage-points',
+        sourceId: _sourceCoverage,
+        circleColor: 0xFF329BFF,
+        circleRadius: 4,
+        circleOpacity: 0.45,
+        circleEmissiveStrength: 1.0,
+      ));
       await map.addSource(mbx.GeoJsonSource(
         id: _sourceFleet,
-        data: marketplaceVectorFleetGeoJson(_fleetPoints),
+        data: marketplaceVectorFleetGeoJson(
+          _fleetPoints.where((point) => point.source == 'fleet_live').toList(),
+        ),
       ));
       // Explicit white halo underneath the blue core; both use the same
       // anonymous snapshot so position and intensity remain identical.
