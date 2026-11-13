@@ -52,7 +52,7 @@ void main() {
     expect(map, contains('await _refreshFleetSource();'));
     expect(map, contains('tuktuk-client-driver-live-position'));
     expect(booking, contains('loadFleetPoints: () => widget.service.workingFleet('));
-    expect(service, contains("_gateway('working_fleet'"));
+    expect(service, contains("_gateway('fleet_presence_v2'"));
     expect(service, contains("'target_session_id': sessionId"));
     expect(service, contains("'target_session_token': sessionToken"));
     expect(service, isNot(contains("from('marketplace_driver_locations')")));
