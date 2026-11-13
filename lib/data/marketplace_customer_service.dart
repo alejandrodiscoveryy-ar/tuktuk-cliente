@@ -457,7 +457,13 @@ class MarketplaceCustomerService {
           lat < 18 || lat > 24.5 || lon < -85.5 || lon > -73) {
         throw StateError('FLEET_RESPONSE_INVALID');
       }
-      points.add(MarketplaceMapPoint(label: '', lat: lat, lon: lon));
+      // An older gateway without the flag must never imply live availability.
+      points.add(MarketplaceMapPoint(
+        label: '',
+        lat: lat,
+        lon: lon,
+        source: raw['available_now'] == true ? 'fleet_live' : 'fleet_coverage',
+      ));
     }
     return List.unmodifiable(points);
   }
