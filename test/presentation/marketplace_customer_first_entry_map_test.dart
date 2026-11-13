@@ -24,7 +24,8 @@ void main() {
     expect(source, contains('if (!_formKey.currentState!.validate()) return;'));
     expect(source, contains('await _service.startSession('));
     expect(source, contains('await _sessionStore.save('));
-    expect(source, contains('_bookingFlow = CustomerBookingFlowController('));
+    expect(source, contains('_bookingFlow = _newBookingFlow(snapshot)'));
+    expect(source, contains('CustomerBookingFlowController(MarketplaceMapService(widget.client), _service, session, promo: profile)'));
   });
 
   test('sin GPS o token de mapa, el cliente puede registrarse', () {
