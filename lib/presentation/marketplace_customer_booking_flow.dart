@@ -119,9 +119,19 @@ class CustomerBookingFlowController extends ChangeNotifier {
   CustomerBookingFlowController(
     this.mapService,
     this.customerService,
-    this.session,
-  );
+    this.session, {
+    MarketplacePromoProfile? promo,
+  }) : _promo = promo {
+    if (promo != null) {
+      serviceCode = promo.services.first;
+      passengerVehicleCategoryCode = promo.category;
+      cargoVehicleCategoryCode = promo.category;
+      courierVehicleCategoryCode = promo.category;
+    }
+  }
 
+  MarketplacePromoProfile? _promo;
+  MarketplacePromoProfile? get promo => _promo;
   final MarketplaceMapService mapService;
   final MarketplaceCustomerService customerService;
   MarketplaceCustomerSessionSnapshot session;
@@ -281,6 +291,14 @@ class CustomerBookingFlowController extends ChangeNotifier {
               )
               .toList(growable: false),
       };
+      final promo = _promo;
+      if (promo != null) {
+        for (final service in categoriesByService.keys.toList()) {
+          categoriesByService[service] = promo.services.contains(service)
+              ? categoriesByService[service]!.where((category) => category == promo.category).toList(growable: false)
+              : const <String>[];
+        }
+      }
       final services = const ['passenger', 'courier', 'cargo']
           .where((service) => categoriesByService[service]!.isNotEmpty)
           .toList(growable: false);
@@ -386,6 +404,16 @@ class CustomerBookingFlowController extends ChangeNotifier {
 
   void resetToStart() {
     // Abandonar un borrador no crea ni cancela ninguna carrera real.
+    final hadPromo = _promo != null;
+    _promo = null;
+    if (hadPromo) {
+      customer_promo_link.clearCustomerPromoLink();
+      serviceCode = 'passenger';
+      passengerVehicleCategoryCode = 'motorcycle';
+      cargoVehicleCategoryCode = 'light_car';
+      courierVehicleCategoryCode = 'motorcycle';
+      publicationReady = false;
+    }
     _pricingRevision++;
     _categoryQuoteRequestId++;
     _categoryQuoteCache.clear();
@@ -409,6 +437,7 @@ class CustomerBookingFlowController extends ChangeNotifier {
     publishIdempotencyKey = _marketplaceUuid();
     step = MarketplaceBookingStep.quote;
     notifyListeners();
+    if (hadPromo) unawaited(loadPublishedModalities());
   }
 
   void replaceSession(MarketplaceCustomerSessionSnapshot value) {
@@ -613,6 +642,7 @@ class CustomerBookingFlowController extends ChangeNotifier {
             'unload_help': unloadHelp,
           },
           'target_idempotency_key': idempotencyKey,
+          if (_promo != null) 'target_promo_code': _promo!.code,
         },
       );
     } finally {
@@ -2962,6 +2992,7 @@ class _MarketplaceCustomerBookingFlowState
       if (!mounted) return;
       final sessionStore = MarketplaceCustomerSessionStore(Hive.box(_metaBox));
       await sessionStore.saveActiveJobId(publication.jobId);
+      if (flow.promo != null) customer_promo_link.clearCustomerPromoLink();
       Map<String, dynamic>? transitionMap;
       try {
         // Respaldo en memoria: mantiene el mapa al pasar a la busqueda,

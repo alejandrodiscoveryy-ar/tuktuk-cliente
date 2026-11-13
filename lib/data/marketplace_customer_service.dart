@@ -403,6 +403,46 @@ class MarketplaceCustomerSessionStore {
   }
 }
 
+/// Public, consented information only. No internal driver ID or GPS.
+class MarketplacePromoProfile {
+  const MarketplacePromoProfile({required this.code, required this.name,
+    required this.category, required this.services, this.photoUrl,
+    this.city, this.verified = false});
+  final String code, name, category;
+  final List<String> services;
+  final String? photoUrl, city;
+  final bool verified;
+
+  static String? codeFromUri(Uri uri) {
+    final code = uri.queryParameters['conductor'];
+    return code != null && RegExp(r'^[0-9a-f]{32}$').hasMatch(code)
+        ? code : null;
+  }
+
+  static MarketplacePromoProfile? fromMap(String code, Object? raw) {
+    if (raw is! Map) return null;
+    final name = _marketText(raw['public_name']);
+    final category = _marketText(raw['category_code']);
+    final values = raw['service_codes'];
+    if (name == null || category == null || values is! List) return null;
+    final services = values.whereType<String>().where((service) {
+      final categories = switch (service) {
+        'passenger' => marketplacePassengerVehicleCategories,
+        'courier' => marketplaceCourierVehicleCategories,
+        'cargo' => marketplaceCargoCourierVehicleCategories,
+        _ => const <String>[],
+      };
+      return categories.contains(category);
+    }).toSet().toList(growable: false);
+    if (services.isEmpty) return null;
+    final photo = Uri.tryParse(_marketText(raw['photo_url']) ?? '');
+    return MarketplacePromoProfile(code: code, name: name, category: category,
+      services: services, photoUrl: photo?.scheme == 'https' && photo!.host.isNotEmpty
+          ? photo.toString() : null,
+      city: _marketText(raw['city']), verified: raw['verified'] == true);
+  }
+}
+
 class MarketplaceCustomerService {
   MarketplaceCustomerService(this._client);
 
@@ -436,6 +476,11 @@ class MarketplaceCustomerService {
       return Map<String, dynamic>.from(value.first as Map);
     }
     return <String, dynamic>{};
+  }
+
+  Future<MarketplacePromoProfile?> promoProfile(String code) async {
+    final value = await _gateway('promo_profile', {'target_code': code});
+    return MarketplacePromoProfile.fromMap(code, value);
   }
 
   /// Only approximate, anonymous positions from the authenticated gateway.

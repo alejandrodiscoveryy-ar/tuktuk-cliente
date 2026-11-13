@@ -8,6 +8,9 @@ import 'services/customer_arrival_sound_stub.dart'
     if (dart.library.html) 'services/customer_arrival_sound_web.dart'
     as customer_arrival_sound;
 import 'package:flutter/foundation.dart';
+import 'services/customer_promo_link_stub.dart'
+    if (dart.library.html) 'services/customer_promo_link_web.dart'
+    as customer_promo_link;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -27,6 +30,7 @@ part 'data/marketplace_customer_service.dart';
 part 'data/marketplace_customer_request.dart';
 part 'data/marketplace_map_service.dart';
 part 'presentation/marketplace_customer.dart';
+part 'presentation/marketplace_promo_entry.dart';
 part 'presentation/marketplace_customer_booking_flow.dart';
 part 'presentation/marketplace_booking_visual_primitives.dart';
 part 'presentation/marketplace_customer_tracking.dart';
