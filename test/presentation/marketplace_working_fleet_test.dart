@@ -20,6 +20,13 @@ void main() {
     final map = File('lib/presentation/marketplace_vector_map.dart').readAsStringSync();
     final booking = File('lib/presentation/marketplace_customer_booking_flow.dart').readAsStringSync();
     final service = File('lib/data/marketplace_customer_service.dart').readAsStringSync();
+    expect(map, contains("tuktuk-client-fleet-coverage-points"));
+    expect(map, contains("point.source == 'fleet_live'"));
+    expect(map, contains("point.source != 'fleet_live'"));
+    expect(map, contains("source: 'fleet_coverage'"));
+    expect(service, contains("raw['available_now'] == true"));
+    expect(booking, contains('Cobertura TukTuk'));
+    expect(booking, contains('Disponibles ahora'));
     expect(map, contains("tuktuk-client-working-fleet-points"));
     expect(map, contains('circleColor: 0xFF329BFF'));
     expect(map, contains('circleRadius: 5.5'));
