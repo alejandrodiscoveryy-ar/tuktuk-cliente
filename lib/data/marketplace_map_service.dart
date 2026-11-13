@@ -32,6 +32,32 @@ class MarketplaceMapPoint {
       );
 }
 
+/// Display-only directions. Never used to quote or change a fare.
+class MarketplaceTrackingRoute {
+  const MarketplaceTrackingRoute({required this.stage, required this.points});
+  final String? stage;
+  final List<MarketplaceMapPoint> points;
+
+  factory MarketplaceTrackingRoute.fromMap(Map value) {
+    final rawStage = value['stage'];
+    final stage = rawStage == 'pickup' || rawStage == 'destination'
+        ? rawStage as String : null;
+    final rawPoints = value['route_points'];
+    if (rawPoints is! List) throw StateError('TRACKING_ROUTE_INVALID');
+    final points = <MarketplaceMapPoint>[];
+    for (final raw in rawPoints) {
+      if (raw is! Map) throw StateError('TRACKING_ROUTE_INVALID');
+      final point = MarketplaceMapPoint.fromMap(raw);
+      if (!point.lat.isFinite || !point.lon.isFinite ||
+          point.lat.abs() > 90 || point.lon.abs() > 180) {
+        throw StateError('TRACKING_ROUTE_INVALID');
+      }
+      points.add(point);
+    }
+    return MarketplaceTrackingRoute(stage: stage, points: List.unmodifiable(points));
+  }
+}
+
 class MarketplaceRouteQuote {
   const MarketplaceRouteQuote({
     required this.distanceKm,
@@ -177,6 +203,17 @@ class MarketplaceMapService {
   Future<MarketplaceMapPoint> reverse(MarketplaceMapPoint point) async =>
       MarketplaceMapPoint.fromMap(await _invoke('reverse_geocode', {
         'point': point.toMap(),
+      }) as Map);
+
+  Future<MarketplaceTrackingRoute> trackingRoute({
+    required String sessionId,
+    required String sessionToken,
+    required String jobId,
+  }) async => MarketplaceTrackingRoute.fromMap(
+      await _invoke('customer_tracking_route', {
+        'target_session_id': sessionId,
+        'target_session_token': sessionToken,
+        'target_job_id': jobId,
       }) as Map);
 
   Future<MarketplaceRouteQuote> route({

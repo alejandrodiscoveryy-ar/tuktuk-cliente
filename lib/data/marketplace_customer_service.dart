@@ -41,6 +41,7 @@ class MarketplaceDriverLiveLocation {
     required this.capturedAt,
     this.accuracyM,
     this.speedMps,
+    this.headingDegrees,
   });
 
   final double latitude;
@@ -48,6 +49,7 @@ class MarketplaceDriverLiveLocation {
   final DateTime? capturedAt;
   final double? accuracyM;
   final double? speedMps;
+  final double? headingDegrees;
 
   bool get isFresh {
     if (capturedAt == null ||
@@ -77,12 +79,15 @@ class MarketplaceDriverLiveLocation {
     }
     final accuracy = double.tryParse('${raw['accuracy_m']}');
     final speed = double.tryParse('${raw['speed_mps']}');
+    final heading = double.tryParse('${raw['heading_degrees']}');
     return MarketplaceDriverLiveLocation(
       latitude: lat,
       longitude: lon,
       capturedAt: _marketDate(raw['captured_at']),
       accuracyM: accuracy?.isFinite == true ? accuracy : null,
-      speedMps: speed?.isFinite == true ? speed : null,
+      speedMps: speed?.isFinite == true && speed! >= 0 ? speed : null,
+      headingDegrees: heading != null && heading.isFinite && heading >= 0 && heading < 360
+          ? heading : null,
     );
   }
 }

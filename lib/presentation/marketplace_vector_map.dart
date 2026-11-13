@@ -37,6 +37,64 @@ String marketplaceVectorLineGeoJson(List<MarketplaceMapPoint> points) =>
             ],
     });
 
+String marketplaceVectorDriverGeoJson(
+  MarketplaceMapPoint? point, double? heading,
+) => jsonEncode({
+      'type': 'FeatureCollection',
+      'features': point == null ? <Object>[] : <Object>[
+        {
+          'type': 'Feature',
+          'geometry': {
+            'type': 'Point',
+            'coordinates': [point.lon, point.lat],
+          },
+          'properties': {
+            'has_heading': heading != null && heading.isFinite && heading >= 0 && heading < 360,
+            'heading': heading != null && heading.isFinite && heading >= 0 && heading < 360
+                ? heading : 0.0,
+          },
+        },
+      ],
+    });
+
+/// Original, resolution-independent icon, rasterized once per map style.
+/// North-up image; Mapbox rotates it clockwise using the GPS heading.
+Future<mbx.StyleImage> _assignedDriverIcon({required bool directional}) async {
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, 96, 96));
+  final outline = Paint()
+    ..color = Colors.white
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 6
+    ..strokeJoin = StrokeJoin.round
+    ..strokeCap = StrokeCap.round;
+  final fill = Paint()..color = const Color(0xFF3287F6);
+  if (directional) {
+    final arrow = ui.Path()
+      ..moveTo(48, 9)
+      ..lineTo(77, 83)
+      ..lineTo(48, 67)
+      ..lineTo(19, 83)
+      ..close();
+    canvas.drawPath(arrow, fill);
+    canvas.drawPath(arrow, outline);
+  } else {
+    // No reliable heading: a neutral location marker, never a false arrow.
+    canvas.drawCircle(const Offset(48, 48), 21, fill);
+    canvas.drawCircle(const Offset(48, 48), 21, outline);
+  }
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(96, 96);
+  try {
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (bytes == null) throw StateError('DRIVER_ICON_ENCODING_FAILED');
+    return mbx.StyleImage.bytes(bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes));
+  } finally {
+    image.dispose();
+    picture.dispose();
+  }
+}
+
 String marketplaceVectorFleetGeoJson(List<MarketplaceMapPoint> points) =>
     jsonEncode({
       'type': 'FeatureCollection',
@@ -63,6 +121,9 @@ class MarketplaceVectorMap extends StatefulWidget {
     this.markerPoint,
     this.markerIsDestination = false,
     this.driverPoint,
+    this.driverHeading,
+    this.enableDriverNavigation = false,
+    this.driverRoutePoints = const <MarketplaceMapPoint>[],
     this.loadFleetPoints,
     this.originPoint,
     this.destinationPoint,
@@ -80,6 +141,9 @@ class MarketplaceVectorMap extends StatefulWidget {
   final MarketplaceMapPoint? markerPoint;
   final bool markerIsDestination;
   final MarketplaceMapPoint? driverPoint;
+  final double? driverHeading;
+  final bool enableDriverNavigation;
+  final List<MarketplaceMapPoint> driverRoutePoints;
   final Future<List<MarketplaceMapPoint>> Function()? loadFleetPoints;
   final MarketplaceMapPoint? originPoint;
   final MarketplaceMapPoint? destinationPoint;
@@ -96,6 +160,9 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
   static const _sourceOrigin = 'tuktuk-client-vector-origin';
   static const _sourceDestination = 'tuktuk-client-vector-destination';
   static const _sourceDriver = 'tuktuk-client-vector-driver';
+  static const _sourceDriverRoute = 'tuktuk-client-vector-driver-route';
+  static const _driverArrow = 'tuktuk-client-assigned-driver-arrow-v1';
+  static const _driverNeutral = 'tuktuk-client-assigned-driver-neutral-v1';
   static const _sourceRoute = 'tuktuk-client-vector-route';
   static const _sourceFleet = 'tuktuk-client-vector-working-fleet';
   static const _sourceCoverage = 'tuktuk-client-vector-fleet-coverage';
@@ -139,10 +206,12 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
         oldWidget.markerIsDestination != widget.markerIsDestination ||
         oldWidget.originPoint != widget.originPoint ||
         oldWidget.destinationPoint != widget.destinationPoint ||
-        oldWidget.routePoints != widget.routePoints) {
+        oldWidget.routePoints != widget.routePoints ||
+        oldWidget.driverRoutePoints != widget.driverRoutePoints) {
       unawaited(_refreshGeometry());
     }
-    if (oldWidget.driverPoint != widget.driverPoint) {
+    if (oldWidget.driverPoint != widget.driverPoint ||
+        oldWidget.driverHeading != widget.driverHeading) {
       unawaited(_refreshDriverPoint());
     }
     if ((oldWidget.loadFleetPoints == null) != (widget.loadFleetPoints == null)) {
@@ -350,7 +419,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
       await map.addSource(
         mbx.GeoJsonSource(
           id: _sourceDriver,
-          data: marketplaceVectorPointGeoJson(widget.driverPoint),
+          data: marketplaceVectorDriverGeoJson(widget.driverPoint, widget.driverHeading),
         ),
       );
       // Coverage and live availability are independent anonymous layers.
@@ -424,6 +493,39 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
           lineJoin: mbx.LineJoin.ROUND,
         ),
       );
+      if (widget.enableDriverNavigation) {
+        await map.addSource(mbx.GeoJsonSource(
+          id: _sourceDriverRoute,
+          data: marketplaceVectorLineGeoJson(widget.driverRoutePoints),
+        ));
+        await map.addLayer(mbx.LineLayer(
+          id: 'tuktuk-client-assigned-route-outline',
+          sourceId: _sourceDriverRoute,
+          lineColor: 0xFF124F90,
+          lineWidth: 13,
+          lineEmissiveStrength: 1.0,
+          lineCap: mbx.LineCap.ROUND,
+          lineJoin: mbx.LineJoin.ROUND,
+        ));
+        await map.addLayer(mbx.LineLayer(
+          id: 'tuktuk-client-assigned-route-blue',
+          sourceId: _sourceDriverRoute,
+          lineColor: 0xFF2CA4FF,
+          lineWidth: 8,
+          lineEmissiveStrength: 1.0,
+          lineCap: mbx.LineCap.ROUND,
+          lineJoin: mbx.LineJoin.ROUND,
+        ));
+        await map.addLayer(mbx.LineLayer(
+          id: 'tuktuk-client-assigned-route-highlight',
+          sourceId: _sourceDriverRoute,
+          lineColor: 0xFF85D7FF,
+          lineWidth: 2,
+          lineEmissiveStrength: 1.0,
+          lineCap: mbx.LineCap.ROUND,
+          lineJoin: mbx.LineJoin.ROUND,
+        ));
+      }
       // Iconos premium propios, anclados al punto exacto del mapa.
       // Primero registramos ambos PNG en el estilo Mapbox Web/Android/iOS.
       final pickup = await assets.load('assets/map_markers/pickup_green.png');
@@ -472,16 +574,26 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
           slot: 'top',
         ),
       );
-      await map.addLayer(
-        mbx.CircleLayer(
+      if (widget.enableDriverNavigation) {
+        // Keep the assigned driver above the fleet, route and place symbols.
+        await map.addImage(_driverArrow, 2.0,
+            await _assignedDriverIcon(directional: true));
+        await map.addImage(_driverNeutral, 2.0,
+            await _assignedDriverIcon(directional: false));
+        await map.addLayer(mbx.SymbolLayer(
           id: 'tuktuk-client-driver-live-position',
           sourceId: _sourceDriver,
-          circleColor: 0xFF28C7FF,
-          circleRadius: 10,
-          circleStrokeColor: 0xFFFFFFFF,
-          circleStrokeWidth: 3,
-        ),
-      );
+          iconImageExpression: ['case', ['get', 'has_heading'], _driverArrow, _driverNeutral],
+          iconRotateExpression: ['get', 'heading'],
+          iconRotationAlignment: mbx.IconRotationAlignment.MAP,
+          iconAnchor: mbx.IconAnchor.CENTER,
+          iconSize: 1.0,
+          iconEmissiveStrength: 1.0,
+          iconAllowOverlap: true,
+          iconIgnorePlacement: true,
+          slot: 'top',
+        ));
+      }
       if (!mounted || map != _map) return;
       setState(() {
         _layersReady = true;
@@ -511,7 +623,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
       // Actualización ligera, sin recrear mapa, estilo ni ruta.
       await _updateSource(
         _sourceDriver,
-        marketplaceVectorPointGeoJson(widget.driverPoint),
+        marketplaceVectorDriverGeoJson(widget.driverPoint, widget.driverHeading),
       );
     } catch (_) {
       // Si falla la actualización GPS, preservar el mapa de la carrera.
@@ -533,6 +645,10 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
         _sourceRoute,
         marketplaceVectorLineGeoJson(widget.routePoints),
       );
+      if (widget.enableDriverNavigation) {
+        await _updateSource(_sourceDriverRoute,
+            marketplaceVectorLineGeoJson(widget.driverRoutePoints));
+      }
     } catch (_) {
       if (mounted) {
         setState(() => _loadError = 'No se pudo actualizar la ruta.');

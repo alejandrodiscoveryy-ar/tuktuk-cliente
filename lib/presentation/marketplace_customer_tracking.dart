@@ -1,5 +1,51 @@
 part of '../main.dart';
 
+/// Heading based on a valid sensor value or meaningful measured movement.
+double marketplaceTrackingDistanceMeters(
+  MarketplaceDriverLiveLocation a, MarketplaceDriverLiveLocation b,
+) {
+  const radians = pi / 180;
+  final lat1 = a.latitude * radians;
+  final lat2 = b.latitude * radians;
+  final dLat = lat2 - lat1;
+  final dLon = (b.longitude - a.longitude) * radians;
+  final h = pow(sin(dLat / 2), 2) +
+      cos(lat1) * cos(lat2) * pow(sin(dLon / 2), 2);
+  return 12742000 * asin(sqrt(h.clamp(0.0, 1.0)));
+}
+
+double? marketplaceTrackingHeading(
+  MarketplaceDriverLiveLocation current,
+  MarketplaceDriverLiveLocation? previous,
+) {
+  final reported = current.headingDegrees;
+  final speed = current.speedMps;
+  if (reported != null && reported.isFinite && reported >= 0 && reported < 360 &&
+      (speed == null || speed >= 1.0)) return reported;
+  final time = current.capturedAt;
+  final priorTime = previous?.capturedAt;
+  if (previous == null || time == null || priorTime == null ||
+      !time.isAfter(priorTime) || time.difference(priorTime) > const Duration(minutes: 2) ||
+      previous.accuracyM == null || current.accuracyM == null ||
+      previous.accuracyM! < 0 || previous.accuracyM! > 50 ||
+      current.accuracyM! < 0 || current.accuracyM! > 50 ||
+      marketplaceTrackingDistanceMeters(previous, current) <
+          max(25.0, previous.accuracyM! + current.accuracyM!)) return null;
+  const radians = pi / 180;
+  final lat1 = previous.latitude * radians;
+  final lat2 = current.latitude * radians;
+  final dLon = (current.longitude - previous.longitude) * radians;
+  final y = sin(dLon) * cos(lat2);
+  final x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon);
+  return (atan2(y, x) / radians + 360) % 360;
+}
+
+String? marketplaceTrackingRouteStage(String? status) => switch (status) {
+  'accepted' || 'en_route' => 'pickup',
+  'in_progress' => 'destination',
+  _ => null,
+};
+
 class MarketplaceCustomerTrackingScreen extends StatefulWidget {
   const MarketplaceCustomerTrackingScreen({
     required this.service,
@@ -44,6 +90,16 @@ class _MarketplaceCustomerTrackingScreenState
       ValueNotifier<LatLng?>(null);
   bool _followDriver = true;
   DateTime? _lastDriverPositionTime;
+  MarketplaceDriverLiveLocation? _previousDriverGps;
+  double? _driverHeading;
+  String? _driverAssignmentKey;
+  String? _navigationStage;
+  List<MarketplaceMapPoint> _navigationPoints = const [];
+  MarketplaceDriverLiveLocation? _lastRouteGps;
+  DateTime? _lastRouteAttempt;
+  bool _navigationPending = false;
+  bool _trackingForeground = true;
+  int _navigationRevision = 0;
   double _trackingSheetFraction = .32;
 
   String? _error;
@@ -60,6 +116,8 @@ class _MarketplaceCustomerTrackingScreenState
       _arrivalNotified = false;
     }
     WidgetsBinding.instance.addObserver(this);
+    _trackingForeground = WidgetsBinding.instance.lifecycleState == null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     _refresh();
     _startPolling();
   }
@@ -72,6 +130,7 @@ class _MarketplaceCustomerTrackingScreenState
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _trackingForeground = state == AppLifecycleState.resumed;
     if (state == AppLifecycleState.resumed) {
       _startPolling();
       _refresh();
@@ -110,6 +169,7 @@ class _MarketplaceCustomerTrackingScreenState
         _error = null;
       });
       _observeArrival(job);
+      _observeDriverNavigation(job);
       _updateDriverCamera(job);
 
       final mediaSignature =
@@ -194,6 +254,84 @@ class _MarketplaceCustomerTrackingScreenState
           _loading = false;
         });
       }
+    }
+  }
+
+  void _observeDriverNavigation(MarketplaceCustomerJob job) {
+    final gps = job.driverLocation;
+    final stage = marketplaceTrackingRouteStage(job.status);
+    final assignment = '${job.vehicleId ?? ''}:${job.driverDisplayName ?? ''}';
+    if (_driverAssignmentKey != assignment) {
+      _driverAssignmentKey = assignment;
+      _previousDriverGps = null;
+      _driverHeading = null;
+      _navigationRevision++;
+      _navigationPoints = const [];
+      _lastRouteGps = null;
+      _lastRouteAttempt = null;
+    }
+    if (_navigationStage != stage) {
+      _navigationStage = stage;
+      _navigationRevision++;
+      _navigationPoints = const [];
+      _lastRouteGps = null;
+      _lastRouteAttempt = null;
+    }
+    if (gps == null || !gps.isFresh) {
+      if (_navigationPoints.isNotEmpty || _previousDriverGps != null) {
+        _navigationRevision++;
+        _navigationPoints = const [];
+        _previousDriverGps = null;
+        _driverHeading = null;
+        _lastRouteGps = null;
+        _lastRouteAttempt = null;
+      }
+      return;
+    }
+    if (_previousDriverGps?.capturedAt != gps.capturedAt) {
+      _driverHeading = marketplaceTrackingHeading(gps, _previousDriverGps) ?? _driverHeading;
+      _previousDriverGps = gps;
+    }
+    if (stage != null && _trackingForeground) {
+      unawaited(_refreshNavigationRoute(gps, stage));
+    }
+  }
+
+  Future<void> _refreshNavigationRoute(
+    MarketplaceDriverLiveLocation gps, String stage,
+  ) async {
+    if (!mounted || !_trackingForeground || _navigationPending) return;
+    final now = DateTime.now();
+    final attempted = _lastRouteAttempt;
+    if (attempted != null && now.difference(attempted) < const Duration(seconds: 60)) return;
+    final last = _lastRouteGps;
+    if (_navigationPoints.isNotEmpty && last != null &&
+        marketplaceTrackingDistanceMeters(last, gps) < 80) return;
+    _lastRouteAttempt = now;
+    _navigationPending = true;
+    final revision = _navigationRevision;
+    try {
+      final route = await MarketplaceMapService(widget.service._client).trackingRoute(
+        sessionId: widget.session.sessionId,
+        sessionToken: widget.session.token,
+        jobId: widget.jobId,
+      ).timeout(const Duration(seconds: 15));
+      final latest = _job?.driverLocation;
+      if (!mounted || !_trackingForeground || revision != _navigationRevision ||
+          stage != _navigationStage || latest == null || !latest.isFresh) return;
+      if (route.stage != stage || route.points.length < 2) {
+        setState(() => _navigationPoints = const []);
+        return;
+      }
+      setState(() {
+        _navigationPoints = route.points;
+        _lastRouteGps = gps;
+      });
+    } catch (_) {
+      // Never replace verified street geometry with a straight-line guess.
+      // Booking/ride status and the last valid map remain usable.
+    } finally {
+      _navigationPending = false;
     }
   }
 
@@ -757,6 +895,9 @@ class _MarketplaceCustomerTrackingScreenState
               : distance <= 8
                   ? 11.3
                   : 10.3;
+          final navigationPoints = driverPoint == null ||
+                  _navigationStage != marketplaceTrackingRouteStage(_job?.status)
+              ? const <MarketplaceMapPoint>[] : _navigationPoints;
           return MarketplaceVectorMap(
             initialCenter: LatLng(
               (origin.lat + destination.lat) / 2,
@@ -768,9 +909,13 @@ class _MarketplaceCustomerTrackingScreenState
             requestedZoom: 14.0,
             onCenterMoved: _onCustomerMapMoved,
             driverPoint: driverPoint,
+            driverHeading: driverPoint == null ? null : _driverHeading,
+            enableDriverNavigation: true,
+            driverRoutePoints: navigationPoints,
             originPoint: origin,
             destinationPoint: destination,
-            routePoints: points,
+            // Preserve the original booked itinerary when live directions are unavailable.
+            routePoints: navigationPoints.isEmpty ? points : const <MarketplaceMapPoint>[],
           );
         } catch (_) {
           // Probar la siguiente fuente sin inventar coordenadas ni rutas.
