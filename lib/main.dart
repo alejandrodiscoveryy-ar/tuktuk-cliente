@@ -27,6 +27,7 @@ part 'data/marketplace_customer_service.dart';
 part 'data/marketplace_customer_request.dart';
 part 'data/marketplace_map_service.dart';
 part 'presentation/marketplace_customer.dart';
+part 'presentation/marketplace_promo_entry.dart';
 part 'presentation/marketplace_customer_booking_flow.dart';
 part 'presentation/marketplace_booking_visual_primitives.dart';
 part 'presentation/marketplace_customer_tracking.dart';

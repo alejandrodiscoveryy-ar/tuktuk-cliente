@@ -403,6 +403,41 @@ class MarketplaceCustomerSessionStore {
   }
 }
 
+/// Public, consented identity only. No driver IDs, contact or GPS.
+class MarketplacePromoProfile {
+  const MarketplacePromoProfile({
+    required this.code, required this.name, required this.category,
+    required this.services, this.photoUrl, this.location, this.verified = false,
+  });
+  final String code;
+  final String name;
+  final String category;
+  final List<String> services;
+  final String? photoUrl;
+  final String? location;
+  final bool verified;
+
+  static MarketplacePromoProfile? parse(String code, Object? raw) {
+    if (raw is! Map) return null;
+    final name = _marketText(raw['public_name']);
+    final category = _marketText(raw['category_code']);
+    final supported = raw['service_codes'];
+    if (name == null || category == null || supported is! List) return null;
+    final services = supported.whereType<String>()
+        .where((s) => const ['passenger', 'cargo', 'courier'].contains(s))
+        .toSet().toList(growable: false);
+    if (services.isEmpty) return null;
+    final photo = Uri.tryParse(_marketText(raw['photo_url']) ?? '');
+    return MarketplacePromoProfile(
+      code: code, name: name, category: category, services: services,
+      photoUrl: photo != null && photo.scheme == 'https' && photo.host.isNotEmpty
+          ? photo.toString() : null,
+      location: _marketText(raw['location']),
+      verified: raw['verified'] == true,
+    );
+  }
+}
+
 class MarketplaceCustomerService {
   MarketplaceCustomerService(this._client);
 
@@ -436,6 +471,159 @@ class MarketplaceCustomerService {
       return Map<String, dynamic>.from(value.first as Map);
     }
     return <String, dynamic>{};
+  }
+
+  Future<MarketplacePromoProfile?> promoProfile(String code) async {
+    if (!RegExp(r'^[0-9a-f]{32}
+  Future<List<MarketplaceMapPoint>> workingFleet({
+    required String sessionId,
+    required String sessionToken,
+  }) async {
+    final value = await _gateway('fleet_presence_v2', {
+      'target_session_id': sessionId,
+      'target_session_token': sessionToken,
+    });
+    if (value is! List) throw StateError('FLEET_RESPONSE_INVALID');
+    final points = <MarketplaceMapPoint>[];
+    for (final raw in value) {
+      if (raw is! Map) throw StateError('FLEET_RESPONSE_INVALID');
+      final lat = double.tryParse('${raw['latitude']}');
+      final lon = double.tryParse('${raw['longitude']}');
+      if (lat == null || lon == null || !lat.isFinite || !lon.isFinite ||
+          lat < 18 || lat > 24.5 || lon < -85.5 || lon > -73) {
+        throw StateError('FLEET_RESPONSE_INVALID');
+      }
+      // An older gateway without the flag must never imply live availability.
+      points.add(MarketplaceMapPoint(
+        label: '',
+        lat: lat,
+        lon: lon,
+        source: raw['available_now'] == true ? 'fleet_live' : 'fleet_coverage',
+      ));
+    }
+    return List.unmodifiable(points);
+  }
+
+  Future<List<MarketplaceCustomerJob>> history({
+    required String sessionId,
+    required String sessionToken,
+    MarketplaceCustomerJob? before,
+  }) async {
+    final value = await _gateway('history', {
+      'target_session_id': sessionId,
+      'target_session_token': sessionToken,
+      'target_limit': 50,
+      if (before != null) ...{
+        'target_before_created_at': before.createdAt?.toUtc().toIso8601String(),
+        'target_before_job_id': before.id,
+      },
+    });
+    if (value is! List) throw StateError('HISTORY_RESPONSE_INVALID');
+    return value
+        .map((item) => MarketplaceCustomerJob.fromMap(item as Map))
+        .toList();
+  }
+
+  Future<MarketplaceCustomerSession> startSession({
+    required String displayName,
+    required String whatsappPhone,
+    required String sessionToken,
+    required String idempotencyKey,
+    String? email,
+  }) =>
+      _gatewayOne('start_session', {
+        'target_display_name': displayName,
+        'target_whatsapp_phone': whatsappPhone,
+        'target_email': email,
+        'target_session_token': sessionToken,
+        'target_idempotency_key': idempotencyKey,
+      }).then(MarketplaceCustomerSession.fromMap);
+  Future<MarketplaceCustomerJob> getJob({
+    required String sessionId,
+    required String sessionToken,
+    required String jobId,
+  }) =>
+      _gatewayOne('get_job', {
+        'target_session_id': sessionId,
+        'target_session_token': sessionToken,
+        'target_job_id': jobId,
+      }).then(MarketplaceCustomerJob.fromMap);
+
+  Future<MarketplaceCustomerCancellation> cancelJob({
+    required String sessionId,
+    required String sessionToken,
+    required String jobId,
+    required String reason,
+    required String idempotencyKey,
+  }) =>
+      _gatewayOne('cancel', {
+        'target_session_id': sessionId,
+        'target_session_token': sessionToken,
+        'target_job_id': jobId,
+        'target_reason': reason,
+        'target_idempotency_key': idempotencyKey,
+      }).then(MarketplaceCustomerCancellation.fromMap);
+
+  Future<MarketplaceCustomerFinish> finishJob({
+    required String sessionId,
+    required String sessionToken,
+    required String jobId,
+    required String idempotencyKey,
+  }) =>
+      _gatewayOne('finish', {
+        'target_session_id': sessionId,
+        'target_session_token': sessionToken,
+        'target_job_id': jobId,
+        'target_idempotency_key': idempotencyKey,
+      }).then(MarketplaceCustomerFinish.fromMap);
+  Future<MarketplaceCustomerRating?> getRating({
+    required String sessionId,
+    required String sessionToken,
+    required String jobId,
+  }) async {
+    final value = await _gateway('get_rating', {
+      'target_session_id': sessionId,
+      'target_session_token': sessionToken,
+      'target_job_id': jobId,
+    });
+    if (value is List && value.isNotEmpty && value.first is Map) {
+      return MarketplaceCustomerRating.fromMap(value.first as Map);
+    }
+    return null;
+  }
+
+  Future<MarketplaceCustomerRating> createRating({
+    required String sessionId,
+    required String sessionToken,
+    required String jobId,
+    required int stars,
+    required String idempotencyKey,
+    String? comment,
+  }) =>
+      _gatewayOne('create_rating', {
+        'target_session_id': sessionId,
+        'target_session_token': sessionToken,
+        'target_job_id': jobId,
+        'target_stars': stars,
+        'target_comment': comment,
+        'target_idempotency_key': idempotencyKey,
+      }).then(MarketplaceCustomerRating.fromMap);
+
+  Future<MarketplaceCustomerJobMedia> getJobMedia({
+    required String sessionId,
+    required String sessionToken,
+    required String jobId,
+  }) =>
+      _gatewayOne('media', {
+        'target_session_id': sessionId,
+        'target_session_token': sessionToken,
+        'target_job_id': jobId,
+      }).then(MarketplaceCustomerJobMedia.fromMap);
+}
+).hasMatch(code)) return null;
+    final raw = await _gateway('promo_profile', {'target_code': code})
+        .timeout(const Duration(seconds: 8));
+    return MarketplacePromoProfile.parse(code, raw);
   }
 
   /// Only approximate, anonymous positions from the authenticated gateway.
