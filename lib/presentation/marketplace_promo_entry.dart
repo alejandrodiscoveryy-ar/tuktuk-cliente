@@ -161,6 +161,7 @@ class _PromoAddressInputState extends State<_PromoAddressInput> {
     _debounce?.cancel();
     final revision = ++_revision;
     final query = value.trim();
+    if (widget.point?.label == query) return;
     if (widget.point != null) widget.onSelected(null);
     setState(() {
       _results = const [];
@@ -203,6 +204,8 @@ class _PromoAddressInputState extends State<_PromoAddressInput> {
   Future<void> _useGps() async {
     _debounce?.cancel();
     final revision = ++_revision;
+    if (widget.point != null) widget.onSelected(null);
+    _controller.clear();
     setState(() {
       _busy = true;
       _results = const [];
