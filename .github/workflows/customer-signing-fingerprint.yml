@@ -1,6 +1,9 @@
 name: Cliente - huella pública de firma (sin compilación)
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/customer-signing-fingerprint.yml']
 permissions:
   contents: read
 jobs:
