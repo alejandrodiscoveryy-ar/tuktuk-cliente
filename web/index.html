@@ -56,6 +56,12 @@
     link.setAttribute('fetchpriority', 'high');
     document.head.appendChild(link);
   }
+  // Un enlace personal de Impulsa debe conservar el conductor incluso en red lenta.
+  // Lite no puede resolver el perfil ni conservar la preferencia de conductor.
+  if (/^[0-9a-f]{32}$/.test(params.get('conductor') || '')) {
+    startFullPreload();
+    return;
+  }
   if (params.get('preview') === 'lite') {
     window.location.replace(new URL('lite/?preview=1', document.baseURI).href);
     return;
