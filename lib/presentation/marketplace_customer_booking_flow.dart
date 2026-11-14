@@ -123,7 +123,7 @@ class CustomerBookingFlowController extends ChangeNotifier {
     MarketplacePromoProfile? promo,
   }) : _promo = promo {
     if (promo != null) {
-      serviceCode = promo.services.first;
+      serviceCode = promo.defaultService;
       passengerVehicleCategoryCode = promo.category;
       cargoVehicleCategoryCode = promo.category;
       courierVehicleCategoryCode = promo.category;
