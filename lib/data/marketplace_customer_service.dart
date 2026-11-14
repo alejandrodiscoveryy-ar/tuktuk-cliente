@@ -413,6 +413,8 @@ class MarketplacePromoProfile {
   final String? photoUrl, city;
   final bool verified;
 
+  String get defaultService => services.contains('passenger') ? 'passenger' : services.first;
+
   static String? codeFromUri(Uri uri) {
     final code = uri.queryParameters['conductor'];
     return code != null && RegExp(r'^[0-9a-f]{32}$').hasMatch(code)
