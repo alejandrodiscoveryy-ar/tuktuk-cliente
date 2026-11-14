@@ -141,7 +141,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
     if (!mounted || revision != _promoRevision) return;
     setState(() {
       _promoProfile = profile;
-      _promoService = profile?.services.first;
+      _promoService = profile?.defaultService;
       _promoLoading = false;
       _promoLookupFailed = lookupFailed;
     });
@@ -173,7 +173,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
     final profile = _promoEntryCompleted ? _promoProfile : null;
     final flow = CustomerBookingFlowController(MarketplaceMapService(widget.client), _service, session, promo: profile);
     if (profile != null) {
-      flow.serviceCode = _promoService ?? profile.services.first;
+      flow.serviceCode = _promoService ?? profile.defaultService;
       flow.origin = _promoOrigin;
       flow.destination = _promoDestination;
       flow.step = MarketplaceBookingStep.quote;
@@ -184,11 +184,11 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
 
   void _continuePromo() {
     if (_promoOrigin == null) {
-      unawaited(_pickPromoAddress(true));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selecciona el punto de recogida o usa tu GPS.')));
       return;
     }
     if (_promoDestination == null) {
-      unawaited(_pickPromoAddress(false));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Escribe y selecciona un destino.')));
       return;
     }
     setState(() {
@@ -508,8 +508,11 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
       ))));
     }
     if (_activeJobId == null && promo != null && !_promoEntryCompleted) {
-      return MarketplacePromoEntry(profile: promo, origin: _promoOrigin, destination: _promoDestination,
-        serviceCode: _promoService ?? promo.services.first,
+      return MarketplacePromoEntry(key: ValueKey(promo.code), profile: promo, origin: _promoOrigin, destination: _promoDestination,
+        mapService: MarketplaceMapService(widget.client),
+        onOriginSelected: (point) => setState(() => _promoOrigin = point),
+        onDestinationSelected: (point) => setState(() => _promoDestination = point),
+        serviceCode: _promoService ?? promo.defaultService,
         onOrigin: () => unawaited(_pickPromoAddress(true)),
         onDestination: () => unawaited(_pickPromoAddress(false)),
         onContinue: _continuePromo,
