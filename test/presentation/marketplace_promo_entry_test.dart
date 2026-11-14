@@ -46,7 +46,9 @@ void main() {
   testWidgets('approved entry has both address fields, single CTA and honest badge', (tester) async {
     var pickup = 0, dropoff = 0, continuation = 0;
     MarketplaceMapPoint? selected;
-    final map = _PromoSearchMap(SupabaseClient('https://example.supabase.co', 'test-key'));
+    final client = SupabaseClient('https://example.supabase.co', 'test-key',
+      authOptions: const AuthClientOptions(autoRefreshToken: false));
+    final map = _PromoSearchMap(client);
     await tester.pumpWidget(MaterialApp(home: MarketplacePromoEntry(
       profile: profile, origin: null, destination: null, serviceCode: 'passenger',
       mapService: map, autoLocate: false, onOriginSelected: (_) {}, onDestinationSelected: (value) => selected = value,
