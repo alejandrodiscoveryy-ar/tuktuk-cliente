@@ -3,6 +3,9 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'lib/presentation/marketplace_customer.dart'
+      - 'lib/presentation/marketplace_promo_entry.dart'
+      - 'lib/data/marketplace_customer_service.dart'
       - 'lib/presentation/marketplace_customer_tracking.dart'
       - 'lib/presentation/marketplace_customer_booking_flow.dart'
       - 'lib/presentation/customer_eltoque_banner.dart'

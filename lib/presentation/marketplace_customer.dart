@@ -56,6 +56,8 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
   bool _showFirstTimeForm = false;
   MarketplacePromoProfile? _promoProfile;
   bool _promoLoading = false;
+  String? _pendingPromoCode;
+  bool _promoLookupFailed = false;
   int _promoRevision = 0;
   static const _promoChannel = MethodChannel('tuktuk/customer_promo_link');
   bool _promoEntryCompleted = false;
@@ -93,6 +95,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
       unawaited(_takeNativePromo());
     }
     final promoCode = kIsWeb ? MarketplacePromoProfile.codeFromUri(Uri.base) : null;
+    _pendingPromoCode = promoCode;
     if (promoCode != null && _activeJobId == null) {
       _promoLoading = true;
       unawaited(_resolvePromo(promoCode));
@@ -127,19 +130,21 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
 
   Future<void> _resolvePromo(String code) async {
     final revision = ++_promoRevision;
+    _pendingPromoCode = code;
     MarketplacePromoProfile? profile;
+    bool lookupFailed = false;
     try {
       profile = await _service.promoProfile(code).timeout(const Duration(seconds: 8));
     } catch (_) {
-      // A stale link or an unavailable gateway must not block normal booking.
+      lookupFailed = true;
     }
     if (!mounted || revision != _promoRevision) return;
     setState(() {
       _promoProfile = profile;
       _promoService = profile?.services.first;
       _promoLoading = false;
+      _promoLookupFailed = lookupFailed;
     });
-    if (profile == null) customer_promo_link.clearCustomerPromoLink();
   }
 
   Future<void> _pickPromoAddress(bool origin) async {
@@ -482,6 +487,26 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final promo = _promoProfile;
+    final pendingCode = _pendingPromoCode;
+    if (_activeJobId == null && pendingCode != null && promo == null && !_promoEntryCompleted) {
+      return Scaffold(body: SafeArea(child: Center(child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.person_search, size: 48),
+          const SizedBox(height: 16),
+          Text(_promoLookupFailed ? 'No pudimos conectar con el perfil del conductor.' : 'Este perfil promocional no está disponible.', textAlign: TextAlign.center),
+          const SizedBox(height: 16),
+          FilledButton(onPressed: () {
+            setState(() => _promoLoading = true);
+            unawaited(_resolvePromo(pendingCode));
+          }, child: const Text('Reintentar')),
+          TextButton(onPressed: () {
+            setState(() { _pendingPromoCode = null; _promoLookupFailed = false; });
+            customer_promo_link.clearCustomerPromoLink();
+          }, child: const Text('Continuar sin conductor preferido')),
+        ]),
+      ))));
+    }
     if (_activeJobId == null && promo != null && !_promoEntryCompleted) {
       return MarketplacePromoEntry(profile: promo, origin: _promoOrigin, destination: _promoDestination,
         serviceCode: _promoService ?? promo.services.first,
