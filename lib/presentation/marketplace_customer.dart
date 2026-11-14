@@ -56,6 +56,8 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
   bool _showFirstTimeForm = false;
   MarketplacePromoProfile? _promoProfile;
   bool _promoLoading = false;
+  int _promoRevision = 0;
+  static const _promoChannel = MethodChannel('tuktuk/customer_promo_link');
   bool _promoEntryCompleted = false;
   MarketplaceMapPoint? _promoOrigin, _promoDestination;
   String? _promoService;
@@ -84,6 +86,12 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
 
     _sessionToken = marketplaceCustomerSessionToken();
     _startIdempotencyKey = _marketplaceUuid();
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      _promoChannel.setMethodCallHandler((call) async {
+        if (call.method == 'linkAvailable') await _takeNativePromo();
+      });
+      unawaited(_takeNativePromo());
+    }
     final promoCode = kIsWeb ? MarketplacePromoProfile.codeFromUri(Uri.base) : null;
     if (promoCode != null && _activeJobId == null) {
       _promoLoading = true;
@@ -97,14 +105,35 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
     }
   }
 
+  Future<void> _takeNativePromo() async {
+    try {
+      final raw = await _promoChannel.invokeMethod<String>('takeLink');
+      if (!mounted || raw == null || _activeJobId != null || _bookingFlow != null || _promoEntryCompleted) return;
+      final uri = Uri.tryParse(raw);
+      if (uri == null || uri.scheme != 'https' || uri.host != 'www.vrixora.com' || uri.path != '/cliente/tuk/') return;
+      final code = MarketplacePromoProfile.codeFromUri(uri);
+      if (code == null) return;
+      setState(() {
+        _promoLoading = true;
+        _promoOrigin = null;
+        _promoDestination = null;
+        _promoProfile = null;
+      });
+      await _resolvePromo(code);
+    } catch (_) {
+      // Native link support is optional on unsupported platforms.
+    }
+  }
+
   Future<void> _resolvePromo(String code) async {
+    final revision = ++_promoRevision;
     MarketplacePromoProfile? profile;
     try {
       profile = await _service.promoProfile(code).timeout(const Duration(seconds: 8));
     } catch (_) {
       // A stale link or an unavailable gateway must not block normal booking.
     }
-    if (!mounted) return;
+    if (!mounted || revision != _promoRevision) return;
     setState(() {
       _promoProfile = profile;
       _promoService = profile?.services.first;
@@ -169,6 +198,10 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
 
   @override
   void dispose() {
+    _promoRevision++;
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      _promoChannel.setMethodCallHandler(null);
+    }
     _bookingFlow?.dispose();
     _welcomeMapCenter.dispose();
     _nameController.dispose();
