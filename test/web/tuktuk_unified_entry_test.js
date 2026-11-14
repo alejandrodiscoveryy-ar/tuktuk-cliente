@@ -33,6 +33,28 @@ test('entrada comun: red lenta entra a Lite antes de precargar Flutter', () => {
   assert.deepEqual(v.redirects, ['http://127.0.0.1:8765/lite/']);
   assert.equal(v.preloads.length, 0);
 });
+test('Impulsa conserva el conductor en red lenta y ahorro de datos', () => {
+  const code = 'c309610c7b8e41a8bd805a07574e54bd';
+  for (const connection of [
+    { effectiveType:'2g', downlink:0.3 },
+    { saveData:true, effectiveType:'4g' },
+    { effectiveType:'3g', rtt:900 }
+  ]) {
+    const v = run('?conductor=' + code, connection);
+    assert.equal(v.redirects.length, 0);
+    assert.equal(v.preloads.length, 1);
+  }
+});
+test('Impulsa tiene prioridad sobre preview Lite y conserva enlaces existentes', () => {
+  const v = run('?conductor=0123456789abcdef0123456789abcdef&preview=lite', { effectiveType:'2g' });
+  assert.equal(v.redirects.length, 0);
+  assert.equal(v.preloads.length, 1);
+});
+test('un conductor invalido no altera la entrada comun Lite', () => {
+  const v = run('?conductor=invalid', { effectiveType:'2g' });
+  assert.deepEqual(v.redirects, ['http://127.0.0.1:8765/lite/']);
+  assert.equal(v.preloads.length, 0);
+});
 test('sin API de red, conserva Cliente completo por seguridad', () => {
   const v = run('', null);
   assert.equal(v.redirects.length, 0);
