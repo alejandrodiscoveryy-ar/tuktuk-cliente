@@ -49,14 +49,14 @@ void main() {
     final map = _PromoSearchMap(SupabaseClient('https://example.supabase.co', 'test-key'));
     await tester.pumpWidget(MaterialApp(home: MarketplacePromoEntry(
       profile: profile, origin: null, destination: null, serviceCode: 'passenger',
-      mapService: map, onOriginSelected: (_) {}, onDestinationSelected: (value) => selected = value,
+      mapService: map, autoLocate: false, onOriginSelected: (_) {}, onDestinationSelected: (value) => selected = value,
       onOrigin: () => pickup++, onDestination: () => dropoff++, onContinue: () => continuation++,
     )));
     expect(find.text('Viaja con Gerson'), findsOneWidget);
     expect(find.text('Conductor verificado'), findsOneWidget);
     expect(find.text('¿A dónde vamos hoy?'), findsOneWidget);
     expect(find.text('Buscar en toda la flota'), findsNothing);
-    expect(find.text('Usar mi ubicación GPS'), findsOneWidget);
+    expect(find.byTooltip('Usar mi ubicación GPS'), findsOneWidget);
     await tester.ensureVisible(find.text('Origen en el mapa'));
     await tester.tap(find.text('Origen en el mapa'));
     await tester.ensureVisible(find.text('Destino en el mapa'));
