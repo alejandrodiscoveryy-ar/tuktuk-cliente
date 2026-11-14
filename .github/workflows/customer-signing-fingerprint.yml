@@ -1,0 +1,32 @@
+name: Cliente - huella pública de firma (sin compilación)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/customer-signing-fingerprint.yml']
+permissions:
+  contents: read
+jobs:
+  fingerprint:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Obtener SHA256 del certificado de carga
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          umask 077
+          store="$(mktemp)"
+          cert="$(mktemp)"
+          trap 'rm -f "$store" "$cert"' EXIT
+          test "$ANDROID_KEY_ALIAS" = tuktuk_cliente_upload
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$store"
+          keytool -exportcert -storetype PKCS12 -keystore "$store" -alias "$ANDROID_KEY_ALIAS" -storepass:env ANDROID_KEYSTORE_PASSWORD -file "$cert"
+          fingerprint="$(openssl x509 -inform DER -in "$cert" -noout -fingerprint -sha256 | cut -d= -f2)"
+          [[ "$fingerprint" =~ ^([0-9A-F]{2}:){31}[0-9A-F]{2}$ ]]
+          echo "CLIENT_UPLOAD_CERT_SHA256=$fingerprint"
+          echo "This is the upload certificate; Google Play app signing may use a different certificate."
