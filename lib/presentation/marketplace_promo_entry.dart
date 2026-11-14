@@ -8,38 +8,42 @@ class MarketplacePromoEntry extends StatelessWidget {
     required this.profile, required this.origin, required this.destination,
     required this.onOrigin, required this.onDestination, required this.onContinue,
     this.onServiceChanged, required this.serviceCode, required this.mapService,
-    required this.onOriginSelected, required this.onDestinationSelected, super.key,
+    required this.onOriginSelected, required this.onDestinationSelected,
+    this.autoLocate = true, super.key,
   });
   final MarketplacePromoProfile profile;
   final MarketplaceMapPoint? origin, destination;
   final VoidCallback onOrigin, onDestination, onContinue;
   final ValueChanged<String>? onServiceChanged;
   final String serviceCode;
+  final bool autoLocate;
   final MarketplaceMapService mapService;
   final ValueChanged<MarketplaceMapPoint?> onOriginSelected, onDestinationSelected;
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFF101923),
+    backgroundColor: TuktukTheme.background,
     body: SafeArea(
       child: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(12),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
             child: Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF141D29),
-                borderRadius: BorderRadius.circular(26),
+                gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
+                  colors: [TuktukTheme.surfaceStrong, TuktukTheme.backgroundSoft]),
+                border: Border.all(color: TuktukTheme.border),
+                borderRadius: BorderRadius.circular(24),
               ),
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  Text('TukTuk', style: TextStyle(color: Color(0xFFFB923C), fontSize: 30, fontWeight: FontWeight.w900)),
-                  Text('Mi TukTuk', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.w700, fontSize: 16)),
+                  _TuktukBrandLockup(width: 112),
+                  Text('Impulsa', style: TextStyle(color: TuktukTheme.mint, fontWeight: FontWeight.w800, fontSize: 14)),
                 ]),
-                const SizedBox(height: 24),
-                Center(child: ClipOval(child: SizedBox(width: 128, height: 128,
+                const SizedBox(height: 16),
+                Center(child: ClipOval(child: SizedBox(width: 96, height: 96,
                   child: profile.photoUrl == null
                     ? const ColoredBox(color: Color(0xFF1E293B), child: Icon(Icons.person_outline, size: 64, color: Color(0xFF94A3B8)))
                     : Image.network(profile.photoUrl!, fit: BoxFit.cover,
@@ -47,9 +51,9 @@ class MarketplacePromoEntry extends StatelessWidget {
                         loadingBuilder: (_, child, progress) => progress == null ? child : const ColoredBox(color: Color(0xFF1E293B), child: Center(child: CircularProgressIndicator())),
                       ),
                 ))),
-                const SizedBox(height: 16),
+                const SizedBox(height: 10),
                 Text('Viaja con ${profile.name}', textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.white)),
+                  style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900, color: Colors.white)),
                 const SizedBox(height: 8),
                 Text([marketplacePassengerVehicleLabel(profile.category), marketplaceServiceLabel(serviceCode), if (profile.city != null) profile.city!].join(' · '),
                   textAlign: TextAlign.center, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFFCBD5E1))),
@@ -61,8 +65,8 @@ class MarketplacePromoEntry extends StatelessWidget {
                     Flexible(child: Text('Conductor verificado', style: TextStyle(color: Color(0xFF86EFAC), fontWeight: FontWeight.w700, fontSize: 16))),
                   ]),
                 ],
-                const SizedBox(height: 22),
-                const Divider(color: Color(0xFF475569)),
+                const SizedBox(height: 14),
+                const Divider(color: TuktukTheme.border),
                 const SizedBox(height: 12),
                 const Text('¿A dónde vamos hoy?', textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900, color: Colors.white)),
@@ -76,7 +80,7 @@ class MarketplacePromoEntry extends StatelessWidget {
                 ],
                 const SizedBox(height: 16),
                 _PromoAddressInput(service: mapService, label: 'Punto de recogida', point: origin,
-                  color: const Color(0xFF22D3EE), onSelected: onOriginSelected, onMap: onOrigin, allowGps: true),
+                  color: const Color(0xFF22D3EE), onSelected: onOriginSelected, onMap: onOrigin, allowGps: true, autoLocate: autoLocate),
                 const SizedBox(height: 12),
                 _PromoAddressInput(service: mapService, label: '¿Cuál es tu destino?', point: destination,
                   proximity: origin, color: const Color(0xFFFB923C), onSelected: onDestinationSelected, onMap: onDestination),
@@ -107,7 +111,7 @@ class MarketplacePromoEntry extends StatelessWidget {
 class _PromoAddressInput extends StatefulWidget {
   const _PromoAddressInput({required this.service, required this.label,
     required this.point, required this.color, required this.onSelected,
-    required this.onMap, this.proximity, this.allowGps = false});
+    required this.onMap, this.proximity, this.allowGps = false, this.autoLocate = false});
 
   final MarketplaceMapService service;
   final String label;
@@ -115,7 +119,7 @@ class _PromoAddressInput extends StatefulWidget {
   final Color color;
   final ValueChanged<MarketplaceMapPoint?> onSelected;
   final VoidCallback onMap;
-  final bool allowGps;
+  final bool allowGps, autoLocate;
 
   @override
   State<_PromoAddressInput> createState() => _PromoAddressInputState();
@@ -133,6 +137,11 @@ class _PromoAddressInputState extends State<_PromoAddressInput> {
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.point?.label ?? '');
+    if (widget.allowGps && widget.autoLocate && widget.point == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _revision == 0 && widget.point == null) unawaited(_useGps());
+      });
+    }
   }
 
   @override
@@ -258,16 +267,15 @@ class _PromoAddressInputState extends State<_PromoAddressInput> {
           labelText: widget.label,
           hintText: 'Escribe una dirección',
           prefixIcon: Icon(Icons.location_on_outlined, color: widget.color),
-          suffixIcon: widget.point != null ? Icon(Icons.check_circle_outline, color: widget.color) : null,
-          filled: true,
-          fillColor: const Color(0xFF1E293B),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+          suffixIcon: widget.allowGps ? IconButton(
+            tooltip: 'Usar mi ubicación GPS',
+            onPressed: _busy ? null : () => unawaited(_useGps()),
+            icon: Icon(Icons.my_location, color: TuktukTheme.mint),
+          ) : (widget.point != null ? Icon(Icons.check_circle_outline, color: widget.color) : null),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         ),
       ),
       Wrap(spacing: 8, children: [
-        if (widget.allowGps)
-          TextButton.icon(onPressed: _busy ? null : () => unawaited(_useGps()),
-            icon: const Icon(Icons.my_location), label: const Text('Usar mi ubicación GPS')),
         TextButton.icon(onPressed: () {
           _revision++;
           _debounce?.cancel();
@@ -275,7 +283,7 @@ class _PromoAddressInputState extends State<_PromoAddressInput> {
           widget.onMap();
         }, icon: const Icon(Icons.map_outlined), label: Text(widget.allowGps ? 'Origen en el mapa' : 'Destino en el mapa')),
       ]),
-      if (_busy) const LinearProgressIndicator(),
+      if (_busy) const LinearProgressIndicator(minHeight: 2),
       if (_message != null)
         Padding(padding: const EdgeInsets.only(bottom: 6), child: Text(_message!,
           style: const TextStyle(color: Color(0xFFCBD5E1)))),
