@@ -12,6 +12,7 @@ class _Service extends MarketplaceCustomerService {
   int finishCalls = 0;
   int ratingCalls = 0;
   int historyCalls = 0;
+  int recoveryCalls = 0;
   MarketplaceCustomerRating? rating;
   final keys = <String>[];
 
@@ -24,6 +25,14 @@ class _Service extends MarketplaceCustomerService {
   @override
   Future<MarketplaceCustomerJob> getJob({required String sessionId,
     required String sessionToken, required String jobId}) async => job;
+
+  @override
+  Future<String> recoverCancelledJob({required String sessionId,
+    required String sessionToken, required String jobId}) async {
+    recoveryCalls++;
+    if (offline) throw const SocketException('offline');
+    return 'replacement-job';
+  }
 
   @override
   Future<MarketplaceCustomerRating?> getRating({required String sessionId,
@@ -82,6 +91,34 @@ void main() {
     )));
     await _pump(tester);
   }
+
+  testWidgets('cancelled driver ride can recover without reentering booking', (tester) async {
+    service.status = 'cancelled_by_driver';
+    String? replacement;
+    await tester.pumpWidget(MaterialApp(home: MarketplaceCustomerTrackingScreen(
+      service: service, session: _session, jobId: 'job-test',
+      onDone: () async {},
+      onReplacement: (id) async { replacement = id; },
+    )));
+    await _pump(tester);
+    final recover = find.text('Buscar otro conductor');
+    expect(recover, findsOneWidget);
+    await tester.ensureVisible(recover);
+    await tester.tap(recover);
+    await _pump(tester);
+    expect(service.recoveryCalls, 1);
+    expect(replacement, 'replacement-job');
+    expect(service.finishCalls, 0);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('old history does not expose an automatic replacement action', (tester) async {
+    service.status = 'cancelled_by_driver';
+    await open(tester);
+    expect(find.text('Buscar otro conductor'), findsNothing);
+    expect(find.text('Solicitar otro transporte'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
 
   testWidgets('durante recogida no ofrece finalizar prematuramente', (tester) async {
     service.status = 'en_route';
