@@ -560,6 +560,21 @@ class MarketplaceCustomerService {
         'target_job_id': jobId,
       }).then(MarketplaceCustomerJob.fromMap);
 
+  Future<String> recoverCancelledJob({
+    required String sessionId,
+    required String sessionToken,
+    required String jobId,
+  }) async {
+    final result = await _gatewayOne('recover_cancelled', {
+      'target_session_id': sessionId,
+      'target_session_token': sessionToken,
+      'target_job_id': jobId,
+    });
+    final id = _marketText(result['job_id']);
+    if (id == null || id.isEmpty) throw StateError('RECOVERY_RESULT_MISSING');
+    return id;
+  }
+
   Future<MarketplaceCustomerCancellation> cancelJob({
     required String sessionId,
     required String sessionToken,
