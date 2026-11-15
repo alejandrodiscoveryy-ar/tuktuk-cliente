@@ -7,6 +7,7 @@ class MarketplaceCustomerTrackingScreen extends StatefulWidget {
     required this.jobId,
     required this.onDone,
     this.onReplacement,
+    this.allowRecovery = false,
     this.initialMapData,
     super.key,
   });
@@ -16,6 +17,7 @@ class MarketplaceCustomerTrackingScreen extends StatefulWidget {
   final String jobId;
   final Future<void> Function() onDone;
   final Future<void> Function(String)? onReplacement;
+  final bool allowRecovery;
   // Geometria de la ruta durante la transicion. Respaldo si falla Hive.
   // Solo se usa para este jobId; nunca incluye GPS del conductor.
   final Map<String, dynamic>? initialMapData;
@@ -571,7 +573,7 @@ class _MarketplaceCustomerTrackingScreenState
 
   Future<void> _recoverCancelledJob() async {
     if (_recovering || _job?.status != 'cancelled_by_driver' ||
-        widget.onReplacement == null) return;
+        (!widget.allowRecovery && widget.onReplacement == null)) return;
     setState(() { _recovering = true; _error = null; });
     try {
       final replacementId = await widget.service.recoverCancelledJob(
@@ -580,7 +582,24 @@ class _MarketplaceCustomerTrackingScreenState
         jobId: widget.jobId,
       );
       if (!mounted) return;
-      await widget.onReplacement!(replacementId);
+      if (widget.onReplacement != null) {
+        await widget.onReplacement!(replacementId);
+      } else {
+        final store = MarketplaceCustomerSessionStore(Hive.box(_metaBox));
+        await store.replaceActiveJobId(replacementId);
+        if (!mounted) return;
+        final mapData = widget.initialMapData;
+        Navigator.of(context).pushReplacement(MaterialPageRoute<void>(
+          builder: (_) => MarketplaceCustomerTrackingScreen(
+            service: widget.service,
+            session: widget.session,
+            jobId: replacementId,
+            onDone: widget.onDone,
+            allowRecovery: true,
+            initialMapData: mapData == null ? null : {...mapData, 'job_id': replacementId},
+          ),
+        ));
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error.toString().contains('MARKETPLACE_RECOVERY_NOT_AVAILABLE')
@@ -949,7 +968,7 @@ class _MarketplaceCustomerTrackingScreenState
               label: 'Calificar transportista',
               icon: Icons.star_outline_rounded,
             ),
-          if (job.status == 'cancelled_by_driver' && widget.onReplacement != null) ...[
+          if (job.status == 'cancelled_by_driver' && (widget.allowRecovery || widget.onReplacement != null)) ...[
             TuktukPrimaryButton(
               onPressed: _recovering ? null : _recoverCancelledJob,
               label: _recovering ? 'Buscando...' : 'Buscar otro conductor',
