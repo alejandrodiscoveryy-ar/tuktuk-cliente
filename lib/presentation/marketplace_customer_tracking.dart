@@ -108,10 +108,16 @@ class _MarketplaceCustomerTrackingScreenState
 
       if (!mounted) return;
 
+      final previousStatus = _job?.status;
       setState(() {
         _job = job;
         _error = null;
       });
+      if (job.status == 'cancelled_by_driver' && previousStatus != 'cancelled_by_driver' && previousStatus != null) {
+        customerPushMessengerKey.currentState?.showSnackBar(
+          const SnackBar(content: Text('El conductor canceló. Puedes buscar otro conductor.')),
+        );
+      }
       _observeArrival(job);
       _updateDriverCamera(job);
 
