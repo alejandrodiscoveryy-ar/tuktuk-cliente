@@ -355,6 +355,20 @@ class MarketplaceCustomerSessionStore {
     await _box.put(_activeJobIdKey, jobId);
   }
 
+  Future<void> replaceActiveJobId(String replacementId) async {
+    final oldId = readActiveJobId();
+    final oldMap = oldId == null ? null : readActiveJobMap(oldId);
+    // Persist the new job first; mismatching map data is ignored by readers.
+    await saveActiveJobId(replacementId);
+    if (oldMap != null) {
+      try {
+        await _box.put(_activeJobMapKey, {...oldMap, 'job_id': replacementId});
+      } catch (_) {
+        // The authoritative job and its new ID remain saved.
+      }
+    }
+  }
+
   // Geometría SOLO para la carrera activa del dispositivo. No contiene GPS del
   // transportista y no se expone a otros clientes. Se limpia al salir.
   Future<void> saveActiveJobMap({
