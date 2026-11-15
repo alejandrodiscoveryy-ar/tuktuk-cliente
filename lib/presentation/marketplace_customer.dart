@@ -470,6 +470,12 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
     }
   }
 
+  Future<void> _replaceActiveJob(String replacementId) async {
+    await _sessionStore.replaceActiveJobId(replacementId);
+    if (!mounted) return;
+    setState(() => _activeJobId = replacementId);
+  }
+
   Future<void> _clearActiveJob() async {
     await _sessionStore.clearActiveJobId();
 
@@ -524,10 +530,12 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
 
       if (activeJobId != null) {
         return MarketplaceCustomerTrackingScreen(
+          key: ValueKey(activeJobId),
           service: _service,
           session: existingSession,
           jobId: activeJobId,
           onDone: _clearActiveJob,
+          onReplacement: _replaceActiveJob,
         );
       }
 
