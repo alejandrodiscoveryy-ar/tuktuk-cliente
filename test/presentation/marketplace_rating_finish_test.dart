@@ -12,6 +12,8 @@ class _Service extends MarketplaceCustomerService {
   int finishCalls = 0;
   int ratingCalls = 0;
   int historyCalls = 0;
+  int replacementCalls = 0;
+  String? replacedJobId;
   MarketplaceCustomerRating? rating;
   final keys = <String>[];
 
@@ -34,6 +36,14 @@ class _Service extends MarketplaceCustomerService {
     required String sessionToken, MarketplaceCustomerJob? before}) async {
     historyCalls++;
     return [job];
+  }
+
+  @override
+  Future<String> replaceCancelledJob({required String sessionId,
+    required String sessionToken, required String jobId}) async {
+    replacementCalls++;
+    replacedJobId = jobId;
+    throw const SocketException('offline');
   }
 
   @override
@@ -82,6 +92,22 @@ void main() {
     )));
     await _pump(tester);
   }
+
+  testWidgets('driver cancellation offers recovery without recreating request', (tester) async {
+    service.status = 'cancelled_by_driver';
+    await open(tester);
+    final action = find.text('Buscar otro conductor');
+    expect(action, findsOneWidget);
+    expect(find.text('No, volver al inicio'), findsOneWidget);
+    expect(find.text('Solicitar otro transporte'), findsNothing);
+    await tester.ensureVisible(action);
+    await tester.tap(action);
+    await _pump(tester);
+    expect(service.replacementCalls, 1);
+    expect(service.replacedJobId, 'job-test');
+    expect(find.text('Buscar otro conductor'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
 
   testWidgets('durante recogida no ofrece finalizar prematuramente', (tester) async {
     service.status = 'en_route';

@@ -39,6 +39,7 @@ class _MarketplaceCustomerTrackingScreenState
   bool _refreshing = false;
   bool _cancelling = false;
   bool _finishing = false;
+  bool _replacing = false;
   final ValueNotifier<double> _trackingMapInset = ValueNotifier<double>(0);
   final ValueNotifier<LatLng?> _driverCameraTarget =
       ValueNotifier<LatLng?>(null);
@@ -560,6 +561,33 @@ class _MarketplaceCustomerTrackingScreenState
     _returnToCustomerShell();
   }
 
+  Future<void> _replaceCancelledJob() async {
+    if (_replacing || _job?.status != 'cancelled_by_driver') return;
+    setState(() {
+      _replacing = true;
+      _error = null;
+    });
+    try {
+      final replacement = await widget.service.replaceCancelledJob(
+        sessionId: widget.session.sessionId,
+        sessionToken: widget.session.token,
+        jobId: widget.jobId,
+      );
+      final sessionStore = MarketplaceCustomerSessionStore(Hive.box(_metaBox));
+      await sessionStore.saveActiveJobId(replacement);
+      if (!mounted) return;
+      _returnToCustomerShell();
+    } catch (error) {
+      if (!mounted) return;
+      final disabled = error.toString().contains('REPLACEMENT_DISABLED');
+      setState(() => _error = disabled
+          ? 'La búsqueda de reemplazo no está disponible. Contacta con la agencia.'
+          : 'No pudimos buscar otro conductor. Reintenta sin crear una solicitud nueva.');
+    } finally {
+      if (mounted) setState(() => _replacing = false);
+    }
+  }
+
   Future<void> _finish() async {
     await widget.onDone();
 
@@ -918,7 +946,22 @@ class _MarketplaceCustomerTrackingScreenState
               label: 'Calificar transportista',
               icon: Icons.star_outline_rounded,
             ),
-          if (job.isTerminal && !pendingRating)
+          if (job.status == 'cancelled_by_driver') ...[
+            const Text(
+              'Tu conductor no podrá realizar el servicio. Podemos buscar otro conservando tu recorrido, precio y especificaciones.',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            TuktukPrimaryButton(
+              onPressed: _replacing ? null : _replaceCancelledJob,
+              label: _replacing ? 'Buscando...' : 'Buscar otro conductor',
+              icon: Icons.search_rounded,
+            ),
+            TextButton(
+              onPressed: _replacing ? null : _finish,
+              child: const Text('No, volver al inicio'),
+            ),
+          ] else if (job.isTerminal && !pendingRating)
             TuktukPrimaryButton(
               onPressed: _finish,
               label: 'Solicitar otro transporte',
