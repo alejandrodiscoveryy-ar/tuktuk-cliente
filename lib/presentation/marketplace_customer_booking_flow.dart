@@ -2991,6 +2991,7 @@ class _MarketplaceCustomerBookingFlowState
             jobId: publication.jobId,
             initialMapData: transitionMap,
             onDone: sessionStore.clearActiveJobId,
+            allowRecovery: true,
           ),
         ),
       );

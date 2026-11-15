@@ -6,6 +6,8 @@ class MarketplaceCustomerTrackingScreen extends StatefulWidget {
     required this.session,
     required this.jobId,
     required this.onDone,
+    this.onReplacement,
+    this.allowRecovery = false,
     this.initialMapData,
     super.key,
   });
@@ -14,6 +16,8 @@ class MarketplaceCustomerTrackingScreen extends StatefulWidget {
   final MarketplaceCustomerSessionSnapshot session;
   final String jobId;
   final Future<void> Function() onDone;
+  final Future<void> Function(String)? onReplacement;
+  final bool allowRecovery;
   // Geometria de la ruta durante la transicion. Respaldo si falla Hive.
   // Solo se usa para este jobId; nunca incluye GPS del conductor.
   final Map<String, dynamic>? initialMapData;
@@ -38,6 +42,7 @@ class _MarketplaceCustomerTrackingScreenState
   bool _loading = true;
   bool _refreshing = false;
   bool _cancelling = false;
+  bool _recovering = false;
   bool _finishing = false;
   final ValueNotifier<double> _trackingMapInset = ValueNotifier<double>(0);
   final ValueNotifier<LatLng?> _driverCameraTarget =
@@ -105,10 +110,16 @@ class _MarketplaceCustomerTrackingScreenState
 
       if (!mounted) return;
 
+      final previousStatus = _job?.status;
       setState(() {
         _job = job;
         _error = null;
       });
+      if (job.status == 'cancelled_by_driver' && previousStatus != 'cancelled_by_driver' && previousStatus != null) {
+        customerPushMessengerKey.currentState?.showSnackBar(
+          const SnackBar(content: Text('El conductor canceló. Puedes buscar otro conductor.')),
+        );
+      }
       _observeArrival(job);
       _updateDriverCamera(job);
 
@@ -264,7 +275,7 @@ class _MarketplaceCustomerTrackingScreenState
         'completed' => 'El transportista marcó el servicio como completado.',
         'settled' => 'El servicio quedó cerrado correctamente.',
         'cancelled_by_customer' => 'Cancelaste esta solicitud.',
-        'cancelled_by_driver' => 'El transportista canceló el servicio.',
+        'cancelled_by_driver' => 'El transportista canceló el servicio. Puedes buscar otro sin volver a introducir los datos.',
         'expired' => 'Ningún transportista aceptó antes del vencimiento.',
         'incident' => 'El servicio requiere revisión.',
         _ => 'El estado se actualizará automáticamente.',
@@ -558,6 +569,45 @@ class _MarketplaceCustomerTrackingScreenState
     if (!mounted) return;
 
     _returnToCustomerShell();
+  }
+
+  Future<void> _recoverCancelledJob() async {
+    if (_recovering || _job?.status != 'cancelled_by_driver' ||
+        (!widget.allowRecovery && widget.onReplacement == null)) return;
+    setState(() { _recovering = true; _error = null; });
+    try {
+      final replacementId = await widget.service.recoverCancelledJob(
+        sessionId: widget.session.sessionId,
+        sessionToken: widget.session.token,
+        jobId: widget.jobId,
+      );
+      if (!mounted) return;
+      if (widget.onReplacement != null) {
+        await widget.onReplacement!(replacementId);
+      } else {
+        final store = MarketplaceCustomerSessionStore(Hive.box(_metaBox));
+        await store.replaceActiveJobId(replacementId);
+        if (!mounted) return;
+        final mapData = widget.initialMapData;
+        Navigator.of(context).pushReplacement(MaterialPageRoute<void>(
+          builder: (_) => MarketplaceCustomerTrackingScreen(
+            service: widget.service,
+            session: widget.session,
+            jobId: replacementId,
+            onDone: widget.onDone,
+            allowRecovery: true,
+            initialMapData: mapData == null ? null : {...mapData, 'job_id': replacementId},
+          ),
+        ));
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString().contains('MARKETPLACE_RECOVERY_NOT_AVAILABLE')
+          ? 'Este servicio ya no admite un reemplazo. Puedes solicitar otro transporte.'
+          : 'No pudimos buscar otro conductor. Revisa tu conexión e inténtalo de nuevo.');
+    } finally {
+      if (mounted) setState(() => _recovering = false);
+    }
   }
 
   Future<void> _finish() async {
@@ -918,7 +968,17 @@ class _MarketplaceCustomerTrackingScreenState
               label: 'Calificar transportista',
               icon: Icons.star_outline_rounded,
             ),
-          if (job.isTerminal && !pendingRating)
+          if (job.status == 'cancelled_by_driver' && (widget.allowRecovery || widget.onReplacement != null)) ...[
+            TuktukPrimaryButton(
+              onPressed: _recovering ? null : _recoverCancelledJob,
+              label: _recovering ? 'Buscando...' : 'Buscar otro conductor',
+              icon: Icons.search_rounded,
+            ),
+            TextButton(
+              onPressed: _recovering ? null : _finish,
+              child: const Text('No continuar'),
+            ),
+          ] else if (job.isTerminal && !pendingRating)
             TuktukPrimaryButton(
               onPressed: _finish,
               label: 'Solicitar otro transporte',

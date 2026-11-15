@@ -355,6 +355,20 @@ class MarketplaceCustomerSessionStore {
     await _box.put(_activeJobIdKey, jobId);
   }
 
+  Future<void> replaceActiveJobId(String replacementId) async {
+    final oldId = readActiveJobId();
+    final oldMap = oldId == null ? null : readActiveJobMap(oldId);
+    // Persist the new job first; mismatching map data is ignored by readers.
+    await saveActiveJobId(replacementId);
+    if (oldMap != null) {
+      try {
+        await _box.put(_activeJobMapKey, {...oldMap, 'job_id': replacementId});
+      } catch (_) {
+        // The authoritative job and its new ID remain saved.
+      }
+    }
+  }
+
   // Geometría SOLO para la carrera activa del dispositivo. No contiene GPS del
   // transportista y no se expone a otros clientes. Se limpia al salir.
   Future<void> saveActiveJobMap({
@@ -559,6 +573,21 @@ class MarketplaceCustomerService {
         'target_session_token': sessionToken,
         'target_job_id': jobId,
       }).then(MarketplaceCustomerJob.fromMap);
+
+  Future<String> recoverCancelledJob({
+    required String sessionId,
+    required String sessionToken,
+    required String jobId,
+  }) async {
+    final result = await _gatewayOne('recover_cancelled', {
+      'target_session_id': sessionId,
+      'target_session_token': sessionToken,
+      'target_job_id': jobId,
+    });
+    final id = _marketText(result['job_id']);
+    if (id == null || id.isEmpty) throw StateError('RECOVERY_RESULT_MISSING');
+    return id;
+  }
 
   Future<MarketplaceCustomerCancellation> cancelJob({
     required String sessionId,
