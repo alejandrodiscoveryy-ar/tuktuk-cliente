@@ -25,8 +25,9 @@ void main() {
     expect(map, contains("point.source != 'fleet_live'"));
     expect(map, contains("source: 'fleet_coverage'"));
     expect(service, contains("raw['available_now'] == true"));
-    expect(booking, contains('Cobertura TukTuk'));
-    expect(booking, contains('Disponibles ahora'));
+    // Keep both anonymous fleet layers without a floating legend over the map.
+    expect(booking, isNot(contains('Cobertura TukTuk')));
+    expect(booking, isNot(contains('Disponibles ahora')));
     expect(map, contains("tuktuk-client-working-fleet-points"));
     expect(map, contains('circleColor: 0xFF329BFF'));
     expect(map, contains('circleRadius: 5.5'));
