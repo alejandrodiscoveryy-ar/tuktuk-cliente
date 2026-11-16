@@ -83,6 +83,7 @@ const marketplacePassengerVehicleCategories = <String>[
   'bicitaxi',
   'tricycle',
   'light_car',
+  'comfort',
 ];
 
 @visibleForTesting
@@ -92,6 +93,7 @@ String marketplacePassengerVehicleLabel(String code) => switch (code) {
       'bicitaxi' => 'Bicitaxi',
       'tricycle' => 'Triciclo',
       'light_car' => 'Auto',
+      'comfort' => 'Confort',
       'van' => 'Furgoneta',
       'truck' => 'Camión',
       'other' => 'Otro',
@@ -3029,6 +3031,7 @@ Color marketplaceVehicleAccent(String category) => switch (category) {
       'bicitaxi' => const Color(0xFF63D7AF),
       'tricycle' => const Color(0xFF60BDD0),
       'light_car' => const Color(0xFFA9A3E0),
+      'comfort' => const Color(0xFFD1B06A),
       _ => TuktukTheme.mint,
     };
 
@@ -3164,6 +3167,7 @@ IconData _marineVehicleIcon(String category) => switch (category) {
       'bicitaxi' => Icons.pedal_bike_rounded,
       'tricycle' => Icons.electric_rickshaw_rounded,
       'light_car' => Icons.directions_car_filled_outlined,
+      'comfort' => Icons.airline_seat_recline_extra_rounded,
       'van' => Icons.airport_shuttle_rounded,
       'truck' => Icons.local_shipping_outlined,
       _ => Icons.directions_car_outlined,
