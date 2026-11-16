@@ -16,7 +16,8 @@ void main() {
     double width,
     ValueChanged<String> select, {
     String selected = 'motorcycle',
-    List<String> categories = marketplacePassengerVehicleCategories,
+    // Cuatro opciones actualmente publicadas; Confort sigue oculto en servidor.
+    List<String> categories = const ['motorcycle', 'bicitaxi', 'tricycle', 'light_car'],
   }) => MaterialApp(
     home: Scaffold(
       body: Center(
@@ -60,7 +61,7 @@ void main() {
 
   testWidgets('fichas horizontales compactas con precio visible', (tester) async {
     await tester.pumpWidget(preview(350, (_) {}));
-    for (final category in marketplacePassengerVehicleCategories) {
+    for (final category in const ['motorcycle', 'bicitaxi', 'tricycle', 'light_car']) {
       final tile = find.byKey(Key('vehicle-$category'));
       final icon = find.descendant(of: tile, matching: find.byType(Icon));
       final name = find.descendant(
@@ -102,7 +103,7 @@ void main() {
         ),
       ),
     );
-    for (final category in marketplacePassengerVehicleCategories) {
+    for (final category in const ['motorcycle', 'bicitaxi', 'tricycle', 'light_car']) {
       final tile = find.byKey(Key('vehicle-$category'));
       final price = find.descendant(of: tile, matching: find.text(prices[category]!));
       expect(tile, findsOneWidget);
@@ -121,7 +122,7 @@ void main() {
   });
 
   testWidgets('cada vehÃ­culo tiene tinte distinto y conserva el precio y la selecciÃ³n', (tester) async {
-    final colors = marketplacePassengerVehicleCategories
+    final colors = const ['motorcycle', 'bicitaxi', 'tricycle', 'light_car']
         .map(marketplaceVehicleAccent)
         .toSet();
     expect(colors.length, 4);
@@ -131,7 +132,7 @@ void main() {
     expect(marketplaceVehicleAccent('light_car'), const Color(0xFFA9A3E0));
 
     await tester.pumpWidget(preview(350, (_) {}, selected: 'motorcycle'));
-    for (final category in marketplacePassengerVehicleCategories) {
+    for (final category in const ['motorcycle', 'bicitaxi', 'tricycle', 'light_car']) {
       final finder = find.descendant(
         of: find.byKey(Key('vehicle-$category')),
         matching: find.byType(AnimatedContainer),
@@ -145,6 +146,33 @@ void main() {
     }
     expect(find.text('1.600 CUP'), findsOneWidget);
     expect(find.text('3.500 CUP'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Confort dorado solo aparece al incluirlo en modalidades publicadas', (tester) async {
+    await tester.pumpWidget(preview(350, (_) {}, categories: const ['light_car']));
+    expect(find.byKey(const Key('vehicle-comfort')), findsNothing);
+
+    String? selected;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: 350,
+          child: MarketplaceCompactVehicleSelector(
+            selectedCategory: 'light_car',
+            categories: const ['light_car', 'comfort'],
+            priceLabel: (category) => category == 'light_car' ? '3.500 CUP' : 'Tarifa pendiente',
+            onSelected: (value) => selected = value,
+          ),
+        ),
+      ),
+    ));
+    expect(find.byKey(const Key('vehicle-comfort')), findsOneWidget);
+    expect(find.text('Confort'), findsOneWidget);
+    expect(find.byIcon(Icons.workspace_premium_rounded), findsOneWidget);
+    expect(marketplaceVehicleAccent('comfort'), const Color(0xFFD5AD50));
+    await tester.tap(find.byKey(const Key('vehicle-comfort')));
+    expect(selected, 'comfort');
     expect(tester.takeException(), isNull);
   });
 
