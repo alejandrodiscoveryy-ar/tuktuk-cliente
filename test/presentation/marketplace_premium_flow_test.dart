@@ -49,19 +49,36 @@ void main() {
     expect(marketplaceServiceLabel('cargo'), 'Carga');
   });
 
-  test('passenger smart pricing supports the four production categories', () {
+  test('passenger selector has Confort prepared behind server publication', () {
     expect(marketplacePassengerVehicleCategories,
-        ['motorcycle', 'bicitaxi', 'tricycle', 'light_car']);
+        ['motorcycle', 'bicitaxi', 'tricycle', 'light_car', 'comfort']);
     expect(marketplacePassengerVehicleLabel('motorcycle'), 'Moto');
     expect(marketplacePassengerVehicleLabel('bicitaxi'), 'Bicitaxi');
     expect(marketplacePassengerVehicleLabel('tricycle'), 'Triciclo');
     expect(marketplacePassengerVehicleLabel('light_car'), 'Auto');
+    expect(marketplacePassengerVehicleLabel('comfort'), 'Confort');
+    expect(marketplaceVehicleAccent('comfort'), isNot(marketplaceVehicleAccent('light_car')));
 
     final source =
         File('lib/presentation/marketplace_customer_booking_flow.dart')
             .readAsStringSync();
     expect(source, contains("'passenger_by_category'"));
     expect(source, contains("'target_vehicle_category_code'"));
+    expect(source, contains('list_marketplace_published_modalities'));
+    expect(source, contains("r['vehicle_category_code'] == category"));
+  });
+
+  test('Confort is not selectable when the server only published standard Auto', () {
+    final client = SupabaseClient('https://example.supabase.co', 'test-key');
+    final flow = CustomerBookingFlowController(
+      MarketplaceMapService(client),
+      MarketplaceCustomerService(client),
+      const MarketplaceCustomerSessionSnapshot(sessionId: 's', customerId: 'c', token: 't'),
+    );
+    flow.publicationReady = true;
+    flow.publishedPassengerCategories = const ['light_car'];
+    flow.setPassengerVehicleCategory('comfort');
+    expect(flow.passengerVehicleCategoryCode, isNot('comfort'));
   });
 
   test('passenger category selection changes the requested quote category', () {
