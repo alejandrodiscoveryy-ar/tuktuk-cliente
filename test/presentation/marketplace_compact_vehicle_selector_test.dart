@@ -94,6 +94,8 @@ void main() {
                 width: 285,
                 child: MarketplaceCompactVehicleSelector(
                   selectedCategory: 'motorcycle',
+                  // Simula el catálogo actualmente publicado, sin Confort.
+                  categories: const ['motorcycle', 'bicitaxi', 'tricycle', 'light_car'],
                   priceLabel: (category) => prices[category]!,
                   onSelected: (_) {},
                 ),
