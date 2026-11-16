@@ -10,6 +10,7 @@ void main() {
     'bicitaxi': '800 CUP',
     'tricycle': '2.700 CUP',
     'light_car': '3.500 CUP',
+    'comfort': '3.500 CUP',
   };
 
   Widget preview(
@@ -124,7 +125,7 @@ void main() {
     final colors = marketplacePassengerVehicleCategories
         .map(marketplaceVehicleAccent)
         .toSet();
-    expect(colors.length, 4);
+    expect(colors.length, 5);
     expect(marketplaceVehicleAccent('motorcycle'), const Color(0xFFE5A84E));
     expect(marketplaceVehicleAccent('bicitaxi'), const Color(0xFF63D7AF));
     expect(marketplaceVehicleAccent('tricycle'), const Color(0xFF60BDD0));
