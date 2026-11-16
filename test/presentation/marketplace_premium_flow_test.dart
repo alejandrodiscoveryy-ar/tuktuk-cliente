@@ -51,11 +51,12 @@ void main() {
 
   test('passenger smart pricing supports the four production categories', () {
     expect(marketplacePassengerVehicleCategories,
-        ['motorcycle', 'bicitaxi', 'tricycle', 'light_car']);
+        ['motorcycle', 'bicitaxi', 'tricycle', 'light_car', 'comfort']);
     expect(marketplacePassengerVehicleLabel('motorcycle'), 'Moto');
     expect(marketplacePassengerVehicleLabel('bicitaxi'), 'Bicitaxi');
     expect(marketplacePassengerVehicleLabel('tricycle'), 'Triciclo');
     expect(marketplacePassengerVehicleLabel('light_car'), 'Auto');
+    expect(marketplacePassengerVehicleLabel('comfort'), 'Confort');
 
     final source =
         File('lib/presentation/marketplace_customer_booking_flow.dart')
