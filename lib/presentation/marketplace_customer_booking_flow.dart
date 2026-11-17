@@ -792,6 +792,7 @@ class _MarketplaceCustomerBookingFlowState
   bool _locatingPickup = false;
   int _pickupLocationRevision = 0;
   bool _bookingResetRequested = false;
+  bool _askedExitSurvey = false;
   final ValueNotifier<LatLng?> _mapCenter = ValueNotifier<LatLng?>(null);
   final ValueNotifier<double> _mapPanelInset = ValueNotifier<double>(0);
   String? _mapPanelLayoutKey;
@@ -971,8 +972,51 @@ class _MarketplaceCustomerBookingFlowState
         ),
       );
 
-  void _returnToStart() {
+  Future<void> _returnToStart() async {
     if (_publishing) return;
+    // Only ask on an intentional exit after a displayed quote, once per visit.
+    // Skipping is always allowed; the dialog never creates a ride.
+    if (kIsWeb && !_askedExitSurvey && flow.route != null &&
+        flow.selectedPrice != null) {
+      _askedExitSurvey = true;
+      final answer = await showModalBottomSheet<String>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        backgroundColor: TuktukTheme.backgroundSoft,
+        builder: (sheetContext) => SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(sheetContext).height * .78),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Padding(padding: EdgeInsets.symmetric(horizontal: 20,vertical: 6),
+                child: Text('¿Qué te hizo detenerte?',style: TextStyle(fontSize:17,fontWeight:FontWeight.w800))),
+              const Padding(padding: EdgeInsets.symmetric(horizontal: 20),
+                child: Text('Respuesta opcional. Nos ayuda a mejorar TukTuk.',
+                  textAlign:TextAlign.center,style:TextStyle(fontSize:12,color:TuktukTheme.muted))),
+              Flexible(child: ListView(shrinkWrap:true,padding:const EdgeInsets.symmetric(vertical:8,horizontal:12),
+                children: [
+                  for (final entry in const <MapEntry<String,String>>[
+                    MapEntry('price','El precio me pareció alto'),
+                    MapEntry('comparing','Solo estaba consultando'),
+                    MapEntry('no_driver','No encontré transporte adecuado'),
+                    MapEntry('difficult','Me resultó difícil solicitarlo'),
+                    MapEntry('later','Lo solicitaré más tarde'),
+                    MapEntry('other','Otro motivo'),
+                  ])
+                    ListTile(dense:true,minTileHeight:44,
+                      title:Text(entry.value,style:const TextStyle(fontSize:13)),
+                      onTap:()=>Navigator.of(sheetContext).pop(entry.key)),
+                ])),
+              TextButton(onPressed:()=>Navigator.of(sheetContext).pop(),
+                child:const Text('Omitir y volver al inicio')),
+              const SizedBox(height:8),
+            ]),
+          ),
+        ),
+      );
+      if (answer != null) customer_impulsa_analytics.track('survey_answer',reason:answer);
+      if (!mounted) return;
+    }
     _pickupLocationRevision++;
     _bookingResetRequested = true;
     pricingDebounce?.cancel();
