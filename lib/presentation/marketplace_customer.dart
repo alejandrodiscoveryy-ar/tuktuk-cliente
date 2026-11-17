@@ -160,6 +160,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
       )),
     );
     if (!mounted || point == null) return;
+    customer_impulsa_analytics.track(origin ? "origin_selected" : "destination_selected");
     setState(() {
       if (origin) {
         _promoOrigin = point;
@@ -516,8 +517,8 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
     if (_activeJobId == null && promo != null && !_promoEntryCompleted) {
       return MarketplacePromoEntry(key: ValueKey(promo.code), profile: promo, origin: _promoOrigin, destination: _promoDestination,
         mapService: MarketplaceMapService(widget.client),
-        onOriginSelected: (point) => setState(() => _promoOrigin = point),
-        onDestinationSelected: (point) => setState(() => _promoDestination = point),
+        onOriginSelected: (point) { customer_impulsa_analytics.track("origin_selected"); setState(() => _promoOrigin = point); },
+        onDestinationSelected: (point) { customer_impulsa_analytics.track("destination_selected"); setState(() => _promoDestination = point); },
         serviceCode: _promoService ?? promo.defaultService,
         onOrigin: () => unawaited(_pickPromoAddress(true)),
         onDestination: () => unawaited(_pickPromoAddress(false)),
