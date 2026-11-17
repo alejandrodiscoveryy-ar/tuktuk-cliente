@@ -9,6 +9,9 @@ import 'services/customer_arrival_sound_stub.dart'
     if (dart.library.html) 'services/customer_arrival_sound_web.dart'
     as customer_arrival_sound;
 import 'package:flutter/foundation.dart';
+import 'services/customer_impulsa_analytics_stub.dart'
+    if (dart.library.js_interop) 'services/customer_impulsa_analytics_web.dart'
+    as customer_impulsa_analytics;
 import 'services/customer_promo_link_stub.dart'
     if (dart.library.html) 'services/customer_promo_link_web.dart'
     as customer_promo_link;

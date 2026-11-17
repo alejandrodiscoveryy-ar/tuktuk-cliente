@@ -66,6 +66,7 @@ jobs:
           node --check web/lite/lite.js
           node --test test/web/tuktuk_lite_contract_test.js
           node --test test/web/tuktuk_unified_entry_test.js
+          node --test test/web/impulsa_analytics_web_test.js
           node --test test/web/tuktuk_cache_network_test.js
           node --check web/install-prompt.js
           node --test test/web/tuktuk_install_prompt_test.js
