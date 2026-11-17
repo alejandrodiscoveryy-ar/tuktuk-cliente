@@ -34,7 +34,61 @@
   <link rel="manifest" href="manifest.json">
   <script src="install-prompt.js" defer></script>
   <link rel="preconnect" href="https://api.mapbox.com" crossorigin>
-  <!-- TUKTUK_UNIFIED_ENTRY_BEGIN -->
+  <!-- IMPULSA_COMMUNICATION_ANALYTICS_V1 -->
+<script>
+(function () {
+  "use strict";
+  // Best effort, no cookies and no IP/device/contact stored by the client.
+  // All events are optional telemetry: never await them to open TukTuk.
+  try {
+    if (navigator.doNotTrack === "1" || navigator.globalPrivacyControl === true) return;
+    const endpoint = "https://vvxvnywzgtqhlaqpxyqh.supabase.co/functions/v1/marketplace-impulsa-analytics";
+    const params = new URLSearchParams(window.location.search);
+    const codeParam = params.get("conductor");
+    const code = codeParam && /^[0-9a-f]{32}$/.test(codeParam) ? codeParam : null;
+    const sourceParam = params.get("utm_source") || "";
+    const channel = /^(unknown|direct|whatsapp_private|whatsapp_groups|whatsapp_status|facebook|instagram|qr|other)$/.test(sourceParam)
+      ? sourceParam : "unknown";
+    const campaignParam = params.get("utm_campaign") || "";
+    const campaign = /^[a-z0-9_-]{1,32}$/.test(campaignParam) ? campaignParam : null;
+    let sessionId = null;
+    try {
+      sessionId = window.sessionStorage.getItem("tuktuk_impulsa_session_v1");
+      if (!sessionId || !/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(sessionId)) {
+        sessionId = window.crypto.randomUUID();
+        window.sessionStorage.setItem("tuktuk_impulsa_session_v1", sessionId);
+      }
+    } catch (_) {
+      sessionId = window.crypto && typeof window.crypto.randomUUID === "function"
+        ? window.crypto.randomUUID() : null;
+    }
+    if (!sessionId || typeof window.fetch !== "function") return;
+    const known = new Set(["link_open","app_open","origin_selected","destination_selected",
+      "quote_ready","request_started","request_created","survey_answer"]);
+    window.tuktukImpulsaTrack = function(event,price,reason) {
+      if (!known.has(event)) return;
+      const body = {event, session_id:sessionId,promo_code:code,channel,campaign};
+      if(event === "quote_ready" && typeof price === "number" && Number.isFinite(price))
+        body.price_cup=price;
+      if(event === "survey_answer" && /^(price|comparing|no_driver|difficult|later|other)$/.test(reason || ""))
+        body.reason=reason;
+      if(event === "survey_answer" && !body.reason) return;
+      // No PII, coordinates, IPs, contact data, notes or exact destination.
+      try {
+        window.fetch(endpoint,{method:"POST",mode:"cors",credentials:"omit",cache:"no-store",
+          headers:{"Content-Type":"text/plain"},keepalive:true,
+          body:JSON.stringify(body)}).catch(function(){});
+      } catch (_) {}
+    };
+    // Official TukTuk campaigns are tracked even without a personal driver code.
+    // Untagged users remain organic, never attributed to official promotion.
+    if (code || (campaign && /^tuktuk($|_[a-z0-9_]{1,22}$)/.test(campaign)))
+      window.tuktukImpulsaTrack("link_open");
+  } catch (_) {}
+})();
+</script>
+<!-- IMPULSA_COMMUNICATION_ANALYTICS_V1_END -->
+<!-- TUKTUK_UNIFIED_ENTRY_BEGIN -->
 <script>
 (function () {
   'use strict';
@@ -81,57 +135,7 @@
 })();
 </script>
 <!-- TUKTUK_UNIFIED_ENTRY_END -->
-<!-- IMPULSA_COMMUNICATION_ANALYTICS_V1 -->
-<script>
-(function () {
-  "use strict";
-  // Best effort, no cookies and no IP/device/contact stored by the client.
-  // All events are optional telemetry: never await them to open TukTuk.
-  try {
-    if (navigator.doNotTrack === "1" || navigator.globalPrivacyControl === true) return;
-    const endpoint = "https://vvxvnywzgtqhlaqpxyqh.supabase.co/functions/v1/marketplace-impulsa-analytics";
-    const params = new URLSearchParams(window.location.search);
-    const codeParam = params.get("conductor");
-    const code = codeParam && /^[0-9a-f]{32}$/.test(codeParam) ? codeParam : null;
-    const sourceParam = params.get("utm_source") || "";
-    const channel = /^(unknown|direct|whatsapp_private|whatsapp_groups|whatsapp_status|facebook|instagram|qr|other)$/.test(sourceParam)
-      ? sourceParam : "unknown";
-    const campaignParam = params.get("utm_campaign") || "";
-    const campaign = /^[a-z0-9_-]{1,32}$/.test(campaignParam) ? campaignParam : null;
-    let sessionId = null;
-    try {
-      sessionId = window.sessionStorage.getItem("tuktuk_impulsa_session_v1");
-      if (!sessionId || !/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(sessionId)) {
-        sessionId = window.crypto.randomUUID();
-        window.sessionStorage.setItem("tuktuk_impulsa_session_v1", sessionId);
-      }
-    } catch (_) {
-      sessionId = window.crypto && typeof window.crypto.randomUUID === "function"
-        ? window.crypto.randomUUID() : null;
-    }
-    if (!sessionId || typeof window.fetch !== "function") return;
-    const known = new Set(["link_open","app_open","origin_selected","destination_selected",
-      "quote_ready","request_started","request_created","survey_answer"]);
-    window.tuktukImpulsaTrack = function(event,price,reason) {
-      if (!known.has(event)) return;
-      const body = {event, session_id:sessionId,promo_code:code,channel,campaign};
-      if(event === "quote_ready" && typeof price === "number" && Number.isFinite(price))
-        body.price_cup=price;
-      if(event === "survey_answer" && /^(price|comparing|no_driver|difficult|later|other)$/.test(reason || ""))
-        body.reason=reason;
-      if(event === "survey_answer" && !body.reason) return;
-      // No PII, coordinates, IPs, contact data, notes or exact destination.
-      try {
-        window.fetch(endpoint,{method:"POST",mode:"cors",credentials:"omit",cache:"no-store",
-          headers:{"Content-Type":"text/plain"},keepalive:true,
-          body:JSON.stringify(body)}).catch(function(){});
-      } catch (_) {}
-    };
-    if (code) window.tuktukImpulsaTrack("link_open");
-  } catch (_) {}
-})();
-</script>
-<!-- IMPULSA_COMMUNICATION_ANALYTICS_V1_END -->
+
 
   <meta name="theme-color" content="#050B10">
   <style>
