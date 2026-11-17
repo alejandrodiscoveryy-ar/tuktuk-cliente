@@ -449,6 +449,7 @@ class CustomerBookingFlowController extends ChangeNotifier {
   }
 
   void setOrigin(MarketplaceMapPoint value) {
+    customer_impulsa_analytics.track('origin_selected');
     _pricingRevision++;
     origin = value;
     route = null;
@@ -459,6 +460,7 @@ class CustomerBookingFlowController extends ChangeNotifier {
 
   // En la pantalla principal cambiar el origen no debe borrar el destino.
   void setPickupForQuote(MarketplaceMapPoint value) {
+    customer_impulsa_analytics.track('origin_selected');
     _pricingRevision++;
     origin = value;
     route = null;
@@ -471,6 +473,7 @@ class CustomerBookingFlowController extends ChangeNotifier {
   }
 
   void setDestination(MarketplaceMapPoint value) {
+    customer_impulsa_analytics.track('destination_selected');
     _pricingRevision++;
     destination = value;
     route = null;
@@ -525,6 +528,17 @@ class CustomerBookingFlowController extends ChangeNotifier {
     reprice();
   }
 
+  double? _analyticsRecommendedPrice(MarketplaceRouteQuote quote) {
+    final Object? priceRow = serviceCode == 'passenger'
+      ? (quote.prices['passenger_by_category'] is Map
+          ? (quote.prices['passenger_by_category'] as Map)[passengerVehicleCategoryCode] : null)
+      : quote.prices[serviceCode];
+    if (priceRow is! Map) return null;
+    final raw = priceRow['recommended_price'];
+    final price = raw is num ? raw.toDouble() : double.tryParse(raw?.toString() ?? '');
+    return price != null && price.isFinite && price >= 0 ? price : null;
+  }
+
   Future<void> refreshRoute() async {
     final start = origin, end = destination;
     if (start == null || end == null) return;
@@ -543,6 +557,7 @@ class CustomerBookingFlowController extends ChangeNotifier {
           : await pendingRoute.timeout(const Duration(seconds: 22));
       if (revision == _pricingRevision) {
         route = result;
+        customer_impulsa_analytics.track('quote_ready', priceCup: _analyticsRecommendedPrice(result));
         unawaited(loadCategoryComparisons());
       }
     } catch (_) {
@@ -615,8 +630,9 @@ class CustomerBookingFlowController extends ChangeNotifier {
     _ridePaymentMethodLocked = true;
     loading = true;
     notifyListeners();
+    customer_impulsa_analytics.track('request_started');
     try {
-      return await mapService.create(
+      final draft = await mapService.create(
         origin: start,
         destination: end,
         routeToken: current.routeToken,
@@ -648,6 +664,8 @@ class CustomerBookingFlowController extends ChangeNotifier {
           if (_promo != null) 'target_promo_code': _promo!.code,
         },
       );
+      customer_impulsa_analytics.track('request_created');
+      return draft;
     } finally {
       loading = false;
       notifyListeners();
