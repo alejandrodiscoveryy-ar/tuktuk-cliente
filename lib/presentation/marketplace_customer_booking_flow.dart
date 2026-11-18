@@ -632,6 +632,10 @@ class CustomerBookingFlowController extends ChangeNotifier {
     notifyListeners();
     customer_impulsa_analytics.track('request_started');
     try {
+      final allySlug = kIsWeb ? Uri.base.queryParameters['aliado'] : null;
+      final validAlly = allySlug != null &&
+          RegExp(r'^[a-z0-9][a-z0-9-]{1,23}$').hasMatch(allySlug) &&
+          !allySlug.endsWith('-');
       final draft = await mapService.create(
         origin: start,
         destination: end,
@@ -662,6 +666,7 @@ class CustomerBookingFlowController extends ChangeNotifier {
           },
           'target_idempotency_key': idempotencyKey,
           if (_promo != null) 'target_promo_code': _promo!.code,
+          if (_promo == null && validAlly) 'target_ally_slug': allySlug,
         },
       );
       customer_impulsa_analytics.track('request_created');
