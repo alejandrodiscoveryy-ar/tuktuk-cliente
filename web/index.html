@@ -50,7 +50,10 @@
     const channel = /^(unknown|direct|whatsapp_private|whatsapp_groups|whatsapp_status|facebook|instagram|qr|other)$/.test(sourceParam)
       ? sourceParam : "unknown";
     const campaignParam = params.get("utm_campaign") || "";
-    const campaign = /^[a-z0-9_-]{1,32}$/.test(campaignParam) ? campaignParam : null;
+    const allyParam = params.get("aliado") || "";
+    const ally = /^[a-z0-9][a-z0-9-]{1,23}$/.test(allyParam) && !allyParam.endsWith("-") ? allyParam : null;
+    // Personal ally links take precedence over generic campaign tags.
+    const campaign = ally ? "aliado_" + ally : /^[a-z0-9_-]{1,32}$/.test(campaignParam) ? campaignParam : null;
     let sessionId = null;
     try {
       sessionId = window.sessionStorage.getItem("tuktuk_impulsa_session_v1");
@@ -82,7 +85,7 @@
     };
     // Official TukTuk campaigns are tracked even without a personal driver code.
     // Untagged users remain organic, never attributed to official promotion.
-    if (code || (campaign && /^tuktuk($|_[a-z0-9_]{1,22}$)/.test(campaign)))
+    if (code || (campaign && (/^tuktuk($|_[a-z0-9_]{1,22}$)/.test(campaign) || /^aliado_[a-z0-9-]{2,24}$/.test(campaign))))
       window.tuktukImpulsaTrack("link_open");
   } catch (_) {}
 })();
@@ -112,7 +115,8 @@
   }
   // Un enlace personal de Impulsa debe conservar el conductor incluso en red lenta.
   // Lite no puede resolver el perfil ni conservar la preferencia de conductor.
-  if (/^[0-9a-f]{32}$/.test(params.get('conductor') || '')) {
+  if (/^[0-9a-f]{32}$/.test(params.get('conductor') || '') ||
+      (/^[a-z0-9][a-z0-9-]{1,23}$/.test(params.get('aliado') || '') && !(params.get('aliado') || '').endsWith('-'))) {
     startFullPreload();
     return;
   }
