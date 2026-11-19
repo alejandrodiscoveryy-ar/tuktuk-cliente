@@ -55,7 +55,7 @@ void main() {
     expect(map, contains("tuktuk-client-fleet-coverage-count"));
     expect(map, contains("tuktuk-client-working-fleet-count"));
     expect(map, contains("textField: '{count}'"));
-    expect(map, contains("circleOpacity: 0.92"));
+    expect(map, contains("circleOpacity: 0.80"));
     expect(map, contains("circleStrokeWidth: 1.1"));
     expect(map, contains("point.source == 'fleet_live'"));
     expect(map, contains("point.source != 'fleet_live'"));
