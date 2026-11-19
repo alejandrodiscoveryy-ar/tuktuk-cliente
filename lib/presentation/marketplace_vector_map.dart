@@ -53,6 +53,42 @@ String marketplaceVectorFleetGeoJson(List<MarketplaceMapPoint> points) =>
       ],
     });
 
+
+//// The public API uses coarse, anonymous fleet coordinates. Several
+//// drivers can share the same 300 m cell, hiding one another on the map.
+//// Fan out only identical cells within that coarse cell (< 140 m).
+//// No identities or precise GPS are introduced, and each driver is counted.
+List<MarketplaceMapPoint> marketplaceSpreadCoincidentFleetPoints(
+  List<MarketplaceMapPoint> points,
+) {
+  final grouped = <String, List<int>>{};
+  for (var index = 0; index < points.length; index++) {
+    final point = points[index];
+    final key =
+        '${point.lat.toStringAsFixed(6)}:${point.lon.toStringAsFixed(6)}';
+    (grouped[key] ??= <int>[]).add(index);
+  }
+  final separated = List<MarketplaceMapPoint>.from(points);
+  for (final group in grouped.values) {
+    if (group.length < 2) continue;
+    // Positions remain approximate; different points show the number of
+    // vehicles in a shared grid cell rather than falsely merging their dots.
+    final radius = group.length < 4 ? 0.00078 : 0.00118;
+    for (var offset = 0; offset < group.length; offset++) {
+      final index = group[offset];
+      final point = points[index];
+      final angle = 2 * pi * offset / group.length;
+      separated[index] = MarketplaceMapPoint(
+        label: '',
+        lat: point.lat + radius * sin(angle),
+        lon: point.lon + radius * cos(angle),
+        source: point.source,
+      );
+    }
+  }
+  return List<MarketplaceMapPoint>.unmodifiable(separated);
+}
+
 class MarketplaceVectorMap extends StatefulWidget {
   const MarketplaceVectorMap({
     required this.initialCenter,
@@ -185,7 +221,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
       if (!mounted || widget.loadFleetPoints == null) return;
       // A successful snapshot replaces coverage and real availability.
       // Historical coverage is not a claim that a vehicle is ready.
-      _fleetPoints = points;
+      _fleetPoints = marketplaceSpreadCoincidentFleetPoints(points);
       await _refreshFleetSource();
     } catch (_) {
       // Retain coverage on weak networks, but do not advertise cached live status.
@@ -360,12 +396,27 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
           _fleetPoints.where((point) => point.source != 'fleet_live').toList(),
         ),
       ));
+      // Historic public coverage is approximate and NOT proof that a
+      // driver is currently accepting requests. Use a smaller, softer halo
+      // than the live layer, without hiding it on the dark Havana map.
+      await map.addLayer(mbx.CircleLayer(
+        id: 'tuktuk-client-fleet-coverage-white-halo',
+        sourceId: _sourceCoverage,
+        circleColor: 0xFFFFFFFF,
+        circleRadius: 7.2,
+        circleOpacity: 0.31,
+        circleBlur: 0.22,
+        circleEmissiveStrength: 1.0,
+      ));
       await map.addLayer(mbx.CircleLayer(
         id: 'tuktuk-client-fleet-coverage-points',
         sourceId: _sourceCoverage,
         circleColor: 0xFF329BFF,
-        circleRadius: 4,
-        circleOpacity: 0.45,
+        circleRadius: 4.5,
+        circleOpacity: 0.92,
+        circleStrokeColor: 0xFFFFFFFF,
+        circleStrokeWidth: 1.1,
+        circleStrokeOpacity: 0.86,
         circleEmissiveStrength: 1.0,
       ));
       await map.addSource(mbx.GeoJsonSource(
