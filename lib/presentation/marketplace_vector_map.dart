@@ -37,57 +37,35 @@ String marketplaceVectorLineGeoJson(List<MarketplaceMapPoint> points) =>
             ],
     });
 
-String marketplaceVectorFleetGeoJson(List<MarketplaceMapPoint> points) =>
-    jsonEncode({
-      'type': 'FeatureCollection',
-      'features': [
-        for (final point in points)
-          {
-            'type': 'Feature',
-            'geometry': {
-              'type': 'Point',
-              'coordinates': [point.lon, point.lat],
-            },
-            'properties': <String, Object>{},
-          },
-      ],
-    });
-
-
-//// The public API uses coarse, anonymous fleet coordinates. Several
-//// drivers can share the same 300 m cell, hiding one another on the map.
-//// Fan out only identical cells within that coarse cell (< 140 m).
-//// No identities or precise GPS are introduced, and each driver is counted.
-List<MarketplaceMapPoint> marketplaceSpreadCoincidentFleetPoints(
-  List<MarketplaceMapPoint> points,
-) {
-  final grouped = <String, List<int>>{};
-  for (var index = 0; index < points.length; index++) {
-    final point = points[index];
+// Public locations are approximate GPS positions supplied by the gateway.
+// Preserve every supplied coordinate; never fabricate visual offsets.
+// Coincident vehicles are shown at their shared position with a numeric count.
+String marketplaceVectorFleetGeoJson(List<MarketplaceMapPoint> points) {
+  final grouped = <String, (MarketplaceMapPoint, int)>{};
+  for (final point in points) {
     final key =
         '${point.lat.toStringAsFixed(6)}:${point.lon.toStringAsFixed(6)}';
-    (grouped[key] ??= <int>[]).add(index);
+    final previous = grouped[key];
+    grouped[key] = (previous?.$1 ?? point, (previous?.$2 ?? 0) + 1);
   }
-  final separated = List<MarketplaceMapPoint>.from(points);
-  for (final group in grouped.values) {
-    if (group.length < 2) continue;
-    // Positions remain approximate; different points show the number of
-    // vehicles in a shared grid cell rather than falsely merging their dots.
-    final radius = group.length < 4 ? 0.00078 : 0.00118;
-    for (var offset = 0; offset < group.length; offset++) {
-      final index = group[offset];
-      final point = points[index];
-      final angle = 2 * pi * offset / group.length;
-      separated[index] = MarketplaceMapPoint(
-        label: '',
-        lat: point.lat + radius * sin(angle),
-        lon: point.lon + radius * cos(angle),
-        source: point.source,
-      );
-    }
-  }
-  return List<MarketplaceMapPoint>.unmodifiable(separated);
+  return jsonEncode({
+    'type': 'FeatureCollection',
+    'features': [
+      for (final entry in grouped.values)
+        {
+          'type': 'Feature',
+          'geometry': {
+            'type': 'Point',
+            'coordinates': [entry.$1.lon, entry.$1.lat],
+          },
+          'properties': entry.$2 == 1
+              ? <String, Object>{}
+              : <String, Object>{'count': entry.$2},
+        },
+    ],
+  });
 }
+
 
 class MarketplaceVectorMap extends StatefulWidget {
   const MarketplaceVectorMap({
@@ -221,7 +199,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
       if (!mounted || widget.loadFleetPoints == null) return;
       // A successful snapshot replaces coverage and real availability.
       // Historical coverage is not a claim that a vehicle is ready.
-      _fleetPoints = marketplaceSpreadCoincidentFleetPoints(points);
+      _fleetPoints = points;
       await _refreshFleetSource();
     } catch (_) {
       // Retain coverage on weak networks, but do not advertise cached live status.
@@ -403,8 +381,8 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
         id: 'tuktuk-client-fleet-coverage-white-halo',
         sourceId: _sourceCoverage,
         circleColor: 0xFFFFFFFF,
-        circleRadius: 7.2,
-        circleOpacity: 0.31,
+        circleRadius: 11.0,
+        circleOpacity: 0.26,
         circleBlur: 0.22,
         circleEmissiveStrength: 1.0,
       ));
@@ -412,12 +390,20 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
         id: 'tuktuk-client-fleet-coverage-points',
         sourceId: _sourceCoverage,
         circleColor: 0xFF329BFF,
-        circleRadius: 4.5,
-        circleOpacity: 0.92,
+        circleRadius: 8.0,
+        circleOpacity: 0.80,
         circleStrokeColor: 0xFFFFFFFF,
         circleStrokeWidth: 1.1,
         circleStrokeOpacity: 0.86,
         circleEmissiveStrength: 1.0,
+      ));
+      await map.addLayer(mbx.SymbolLayer(
+        id: 'tuktuk-client-fleet-coverage-count',
+        sourceId: _sourceCoverage,
+        textField: '{count}',
+        textColor: 0xFFFFFFFF,
+        textSize: 10.0,
+        textAllowOverlap: true,
       ));
       await map.addSource(mbx.GeoJsonSource(
         id: _sourceFleet,
@@ -441,13 +427,21 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
         id: 'tuktuk-client-working-fleet-points',
         sourceId: _sourceFleet,
         circleColor: 0xFF329BFF,
-        circleRadius: 5.5,
+        circleRadius: 10.0,
         circleOpacity: 1.0,
         // Preserve the specified blue and white in the night basemap.
         circleEmissiveStrength: 1.0,
         circleStrokeColor: 0xFFFFFFFF,
         circleStrokeWidth: 2.2,
         circleStrokeOpacity: 1.0,
+      ));
+      await map.addLayer(mbx.SymbolLayer(
+        id: 'tuktuk-client-working-fleet-count',
+        sourceId: _sourceFleet,
+        textField: '{count}',
+        textColor: 0xFFFFFFFF,
+        textSize: 11.0,
+        textAllowOverlap: true,
       ));
       // La geometria vial verificada se representa siempre en dorado.
       // Sin slot: sobre el mapa base dark-v11 y estilos privados por igual.
