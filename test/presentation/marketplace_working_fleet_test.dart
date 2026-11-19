@@ -46,21 +46,37 @@ void main() {
     expect(twice.single['properties'], {'count': 2});
   });
 
+  test('only actual live availability can appear; no month-old coverage', () {
+    final points = marketplaceOnlyLiveFleetPoints([
+      {'latitude': 23.124, 'longitude': -82.347, 'available_now': false},
+      {'latitude': 23.125, 'longitude': -82.346},
+      {'latitude': 23.126, 'longitude': -82.345, 'available_now': true},
+    ]);
+    expect(points, hasLength(1));
+    expect(points.single.lat, 23.126);
+    expect(points.single.lon, -82.345);
+    expect(points.single.source, 'fleet_live');
+    expect(points.single.label, isEmpty);
+    expect(marketplaceOnlyLiveFleetPoints([
+      {'latitude': 23.124, 'longitude': -82.347, 'available_now': false},
+    ]), isEmpty);
+    expect(() => marketplaceOnlyLiveFleetPoints([
+      {'latitude': 0, 'longitude': -82.34, 'available_now': true},
+    ]), throwsStateError);
+  });
+
   test('fleet is optional, anonymous, visible before route and separate from assigned GPS', () {
     final map = File('lib/presentation/marketplace_vector_map.dart').readAsStringSync();
     final booking = File('lib/presentation/marketplace_customer_booking_flow.dart').readAsStringSync();
     final service = File('lib/data/marketplace_customer_service.dart').readAsStringSync();
-    expect(map, contains("tuktuk-client-fleet-coverage-points"));
-    expect(map, contains("tuktuk-client-fleet-coverage-white-halo"));
-    expect(map, contains("tuktuk-client-fleet-coverage-count"));
+    expect(map, isNot(contains("tuktuk-client-fleet-coverage-points")));
+    expect(map, isNot(contains("tuktuk-client-fleet-coverage-white-halo")));
+    expect(map, isNot(contains("tuktuk-client-fleet-coverage-count")));
     expect(map, contains("tuktuk-client-working-fleet-count"));
     expect(map, contains("textField: '{count}'"));
-    expect(map, contains("circleOpacity: 0.80"));
-    expect(map, contains("circleStrokeWidth: 1.1"));
-    expect(map, contains("point.source == 'fleet_live'"));
-    expect(map, contains("point.source != 'fleet_live'"));
-    expect(map, contains("source: 'fleet_coverage'"));
-    expect(service, contains("raw['available_now'] == true"));
+    expect(map, contains("p.source == 'fleet_live'"));
+    expect(map, isNot(contains("_sourceCoverage")));
+    expect(service, contains("raw['available_now'] != true"));
     // Keep both anonymous fleet layers without a floating legend over the map.
     expect(booking, isNot(contains('Cobertura TukTuk')));
     expect(booking, isNot(contains('Disponibles ahora')));
@@ -85,7 +101,8 @@ void main() {
     expect(map, contains('Timer.periodic(const Duration(seconds: 30)'));
     expect(map, contains('if (!mounted || !_fleetForeground || loader == null || _fleetRequestPending) return;'));
     expect(map, contains('_fleetTimer?.cancel();'));
-    expect(map, contains('_fleetPoints = points;'));
+    expect(map, contains("_fleetPoints = const [];"));
+    expect(map, contains("points.where((p) => p.source == 'fleet_live')"));
     expect(map, contains('await _refreshFleetSource();'));
     expect(map, isNot(contains('marketplaceSpreadCoincidentFleetPoints')));
     expect(map, contains('tuktuk-client-driver-live-position'));

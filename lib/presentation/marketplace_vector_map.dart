@@ -112,7 +112,6 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
   static const _sourceDriver = 'tuktuk-client-vector-driver';
   static const _sourceRoute = 'tuktuk-client-vector-route';
   static const _sourceFleet = 'tuktuk-client-vector-working-fleet';
-  static const _sourceCoverage = 'tuktuk-client-vector-fleet-coverage';
   Timer? _fleetTimer;
   bool _fleetRequestPending = false;
   bool _fleetForeground = true;
@@ -179,6 +178,9 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
     } else {
       _fleetTimer?.cancel();
       _fleetTimer = null;
+      // A paused map must not retain positions claiming current availability.
+      _fleetPoints = const [];
+      unawaited(_refreshFleetSource());
     }
   }
 
@@ -197,16 +199,15 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
     try {
       final points = await loader().timeout(const Duration(seconds: 12));
       if (!mounted || widget.loadFleetPoints == null) return;
-      // A successful snapshot replaces coverage and real availability.
-      // Historical coverage is not a claim that a vehicle is ready.
-      _fleetPoints = points;
+      // The gateway may return historical coverage, but the loader only
+      // passes genuine live availability to this public map.
+      _fleetPoints = points.where((p) => p.source == 'fleet_live')
+          .toList(growable: false);
       await _refreshFleetSource();
     } catch (_) {
-      // Retain coverage on weak networks, but do not advertise cached live status.
+      // If the connection fails, never keep dots that can become stale.
       if (mounted && widget.loadFleetPoints != null) {
-        _fleetPoints = _fleetPoints.map((point) => MarketplaceMapPoint(
-          label: '', lat: point.lat, lon: point.lon, source: 'fleet_coverage',
-        )).toList(growable: false);
+        _fleetPoints = const [];
         await _refreshFleetSource();
       }
     } finally {
@@ -219,9 +220,6 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
     try {
       await _updateSource(_sourceFleet, marketplaceVectorFleetGeoJson(
         _fleetPoints.where((point) => point.source == 'fleet_live').toList(),
-      ));
-      await _updateSource(_sourceCoverage, marketplaceVectorFleetGeoJson(
-        _fleetPoints.where((point) => point.source != 'fleet_live').toList(),
       ));
     } catch (_) {
       // Map/style can be disposed while the snapshot is in flight.
@@ -367,44 +365,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
           data: marketplaceVectorPointGeoJson(widget.driverPoint),
         ),
       );
-      // Coverage and live availability are independent anonymous layers.
-      await map.addSource(mbx.GeoJsonSource(
-        id: _sourceCoverage,
-        data: marketplaceVectorFleetGeoJson(
-          _fleetPoints.where((point) => point.source != 'fleet_live').toList(),
-        ),
-      ));
-      // Historic public coverage is approximate and NOT proof that a
-      // driver is currently accepting requests. Use a smaller, softer halo
-      // than the live layer, without hiding it on the dark Havana map.
-      await map.addLayer(mbx.CircleLayer(
-        id: 'tuktuk-client-fleet-coverage-white-halo',
-        sourceId: _sourceCoverage,
-        circleColor: 0xFFFFFFFF,
-        circleRadius: 11.0,
-        circleOpacity: 0.26,
-        circleBlur: 0.22,
-        circleEmissiveStrength: 1.0,
-      ));
-      await map.addLayer(mbx.CircleLayer(
-        id: 'tuktuk-client-fleet-coverage-points',
-        sourceId: _sourceCoverage,
-        circleColor: 0xFF329BFF,
-        circleRadius: 8.0,
-        circleOpacity: 0.80,
-        circleStrokeColor: 0xFFFFFFFF,
-        circleStrokeWidth: 1.1,
-        circleStrokeOpacity: 0.86,
-        circleEmissiveStrength: 1.0,
-      ));
-      await map.addLayer(mbx.SymbolLayer(
-        id: 'tuktuk-client-fleet-coverage-count',
-        sourceId: _sourceCoverage,
-        textField: '{count}',
-        textColor: 0xFFFFFFFF,
-        textSize: 10.0,
-        textAllowOverlap: true,
-      ));
+      // Only verified live drivers; no historic fleet-coverage layer.
       await map.addSource(mbx.GeoJsonSource(
         id: _sourceFleet,
         data: marketplaceVectorFleetGeoJson(
