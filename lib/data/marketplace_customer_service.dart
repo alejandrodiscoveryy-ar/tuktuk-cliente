@@ -459,6 +459,28 @@ class MarketplacePromoProfile {
   }
 }
 
+// The trusted gateway marks available_now only when the driver's assignment
+// is active and the received/captured GPS is at most five minutes old.
+// Never imply that month-old coverage or an unknown flag means "available".
+List<MarketplaceMapPoint> marketplaceOnlyLiveFleetPoints(Object? value) {
+  if (value is! List) throw StateError('FLEET_RESPONSE_INVALID');
+  final points = <MarketplaceMapPoint>[];
+  for (final raw in value) {
+    if (raw is! Map) throw StateError('FLEET_RESPONSE_INVALID');
+    if (raw['available_now'] != true) continue;
+    final lat = double.tryParse('${raw['latitude']}');
+    final lon = double.tryParse('${raw['longitude']}');
+    if (lat == null || lon == null || !lat.isFinite || !lon.isFinite ||
+        lat < 18 || lat > 24.5 || lon < -85.5 || lon > -73) {
+      throw StateError('FLEET_RESPONSE_INVALID');
+    }
+    points.add(MarketplaceMapPoint(
+      label: '', lat: lat, lon: lon, source: 'fleet_live',
+    ));
+  }
+  return List<MarketplaceMapPoint>.unmodifiable(points);
+}
+
 class MarketplaceCustomerService {
   MarketplaceCustomerService(this._client);
 
@@ -499,7 +521,8 @@ class MarketplaceCustomerService {
     return MarketplacePromoProfile.fromMap(code, value);
   }
 
-  /// Only approximate, anonymous positions from the authenticated gateway.
+  /// Only drivers with a fresh, genuine availability signal can appear on
+  /// the customer's map. Historic coverage is for internal operations only.
   Future<List<MarketplaceMapPoint>> workingFleet({
     required String sessionId,
     required String sessionToken,
@@ -508,25 +531,7 @@ class MarketplaceCustomerService {
       'target_session_id': sessionId,
       'target_session_token': sessionToken,
     });
-    if (value is! List) throw StateError('FLEET_RESPONSE_INVALID');
-    final points = <MarketplaceMapPoint>[];
-    for (final raw in value) {
-      if (raw is! Map) throw StateError('FLEET_RESPONSE_INVALID');
-      final lat = double.tryParse('${raw['latitude']}');
-      final lon = double.tryParse('${raw['longitude']}');
-      if (lat == null || lon == null || !lat.isFinite || !lon.isFinite ||
-          lat < 18 || lat > 24.5 || lon < -85.5 || lon > -73) {
-        throw StateError('FLEET_RESPONSE_INVALID');
-      }
-      // An older gateway without the flag must never imply live availability.
-      points.add(MarketplaceMapPoint(
-        label: '',
-        lat: lat,
-        lon: lon,
-        source: raw['available_now'] == true ? 'fleet_live' : 'fleet_coverage',
-      ));
-    }
-    return List.unmodifiable(points);
+    return marketplaceOnlyLiveFleetPoints(value);
   }
 
   Future<List<MarketplaceCustomerJob>> history({
