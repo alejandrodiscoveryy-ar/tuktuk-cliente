@@ -16,11 +16,43 @@ void main() {
     expect(jsonEncode(raw), isNot(contains('private')));
     expect((jsonDecode(marketplaceVectorFleetGeoJson(const [])) as Map)['features'], isEmpty);
   });
+
+  test('un punto por conductor con posición aproximada, sin superposición', () {
+    final raw = const <MarketplaceMapPoint>[
+      MarketplaceMapPoint(
+        label: '', lat: 23.124, lon: -82.347, source: 'fleet_coverage'),
+      MarketplaceMapPoint(
+        label: '', lat: 23.124, lon: -82.347, source: 'fleet_coverage'),
+      MarketplaceMapPoint(
+        label: '', lat: 23.124, lon: -82.347, source: 'fleet_live'),
+      MarketplaceMapPoint(
+        label: '', lat: 23.127, lon: -82.350, source: 'fleet_coverage'),
+    ];
+    final separated = marketplaceSpreadCoincidentFleetPoints(raw);
+    expect(separated.length, 4);
+    expect(
+      separated.take(3).map((p) => '${p.lat}:${p.lon}').toSet().length, 3);
+    for (var i = 0; i < 3; i++) {
+      expect((separated[i].lat - raw[i].lat).abs(), lessThan(.0012));
+      expect((separated[i].lon - raw[i].lon).abs(), lessThan(.0012));
+      expect(separated[i].source, raw[i].source);
+      expect(separated[i].label, isEmpty);
+    }
+    expect(separated[3].lat, raw[3].lat);
+    expect(separated[3].lon, raw[3].lon);
+    final geojson = marketplaceVectorFleetGeoJson(separated);
+    expect((jsonDecode(geojson) as Map)['features'], hasLength(4));
+    expect(geojson, isNot(contains('driver_user_id')));
+  });
+
   test('fleet is optional, anonymous, visible before route and separate from assigned GPS', () {
     final map = File('lib/presentation/marketplace_vector_map.dart').readAsStringSync();
     final booking = File('lib/presentation/marketplace_customer_booking_flow.dart').readAsStringSync();
     final service = File('lib/data/marketplace_customer_service.dart').readAsStringSync();
     expect(map, contains("tuktuk-client-fleet-coverage-points"));
+    expect(map, contains("tuktuk-client-fleet-coverage-white-halo"));
+    expect(map, contains("circleOpacity: 0.92"));
+    expect(map, contains("circleStrokeWidth: 1.1"));
     expect(map, contains("point.source == 'fleet_live'"));
     expect(map, contains("point.source != 'fleet_live'"));
     expect(map, contains("source: 'fleet_coverage'"));
@@ -49,7 +81,7 @@ void main() {
     expect(map, contains('Timer.periodic(const Duration(seconds: 30)'));
     expect(map, contains('if (!mounted || !_fleetForeground || loader == null || _fleetRequestPending) return;'));
     expect(map, contains('_fleetTimer?.cancel();'));
-    expect(map, contains('_fleetPoints = points;'));
+    expect(map, contains('_fleetPoints = marketplaceSpreadCoincidentFleetPoints(points);'));
     expect(map, contains('await _refreshFleetSource();'));
     expect(map, contains('tuktuk-client-driver-live-position'));
     expect(booking, contains('loadFleetPoints: () => widget.service.workingFleet('));
