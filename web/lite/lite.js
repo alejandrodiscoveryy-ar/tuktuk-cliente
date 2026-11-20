@@ -31,6 +31,42 @@
     return '../?' + target.toString();
   }
 
+
+  // La entrada Lite también es una apertura real de la app.
+  // No atribuirla a una solicitud ni a una carrera: WhatsApp/SMS se confirman fuera de Lite.
+  // Solo telemetría anónima; nunca bloquea o retrasa el formulario de transporte.
+  function trackLiteOpen(host) {
+    try {
+      const nav = host.navigator || {};
+      if (nav.doNotTrack === '1' || nav.globalPrivacyControl === true ||
+          typeof host.fetch !== 'function' || !host.crypto ||
+          typeof host.crypto.randomUUID !== 'function') return false;
+      const params = new URLSearchParams(host.location?.search || '');
+      const source = params.get('utm_source') || '';
+      const channel = /^(unknown|direct|whatsapp_private|whatsapp_groups|whatsapp_status|facebook|instagram|qr|other)$/.test(source)
+        ? source : 'unknown';
+      const value = params.get('utm_campaign') || '';
+      const campaign = /^[a-z0-9_-]{1,32}$/.test(value) ? value : null;
+      // El enlace desde Cliente a Lite conserva sesión si el navegador lo permite.
+      // Así se evita contar dos veces una misma etapa en la misma sesión.
+      const key = 'tuktuk_impulsa_session_v1';
+      let sessionId = null;
+      try { sessionId = host.sessionStorage?.getItem(key); } catch (_) {}
+      if (!UUID.test(sessionId || '')) {
+        sessionId = host.crypto.randomUUID();
+        if (!UUID.test(sessionId)) return false;
+        try { host.sessionStorage?.setItem(key, sessionId); } catch (_) {}
+      }
+      const body = {event:'app_open',session_id:sessionId,promo_code:null,channel,campaign};
+      const request = host.fetch('https://vvxvnywzgtqhlaqpxyqh.supabase.co/functions/v1/marketplace-impulsa-analytics', {
+        method:'POST',mode:'cors',credentials:'omit',cache:'no-store',
+        headers:{'Content-Type':'text/plain'},keepalive:true,body:JSON.stringify(body),
+      });
+      if (request && typeof request.catch === 'function') request.catch(() => {});
+      return true;
+    } catch (_) { return false; }
+  }
+
   function validateForm(fields) {
     const name = String(fields.name || '').trim();
     const phone = String(fields.phone || '').trim();
@@ -248,7 +284,7 @@
 
   const core = { slowNetwork, validateForm, messageFor, whatsappUrl, smsMessageFor, smsUrl, parseConfig,
     currentSupportNumber, requestJson, loadConfig, fetchCurrentSupport, fetchSupportState,
-    saveCachedSupport, readCachedSupport, clearCachedSupport, supportHoursOpen, originGps, addressMapSearch, fullAppUrl };
+    saveCachedSupport, readCachedSupport, clearCachedSupport, supportHoursOpen, originGps, addressMapSearch, fullAppUrl, trackLiteOpen };
   if (typeof module === 'object' && module.exports) module.exports = core;
   if (typeof document === 'undefined') return;
 
@@ -287,6 +323,9 @@
     root.location.replace(fullModeUrl);
     return;
   }
+
+  // Registrar solo cuando Lite permanece visible; no durante la redirección a Completa.
+  trackLiteOpen(root);
 
   let busy = false;
   let enabled = false;
