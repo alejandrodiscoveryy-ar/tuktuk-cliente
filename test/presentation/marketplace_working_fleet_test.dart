@@ -5,12 +5,12 @@ import 'package:tuktuk_cliente/main.dart';
 
 void main() {
   test('vehicle icons have dedicated, never-numeric modality keys', () {
-    expect(marketplaceFleetIconKey('light_car'), 'tuktuk-fleet-auto-v1');
-    expect(marketplaceFleetIconKey('motorcycle'), 'tuktuk-fleet-moto-v1');
-    expect(marketplaceFleetIconKey('tricycle'), 'tuktuk-fleet-triciclo-v1');
-    expect(marketplaceFleetIconKey('bicitaxi'), 'tuktuk-fleet-bicitaxi-v1');
-    expect(marketplaceFleetIconKey('bicycle'), 'tuktuk-fleet-bici-v1');
-    expect(marketplaceFleetIconKey(null), 'tuktuk-fleet-otro-v1');
+    expect(marketplaceFleetIconKey('light_car'), 'tuktuk-fleet-auto-v2');
+    expect(marketplaceFleetIconKey('motorcycle'), 'tuktuk-fleet-moto-v2');
+    expect(marketplaceFleetIconKey('tricycle'), 'tuktuk-fleet-triciclo-v2');
+    expect(marketplaceFleetIconKey('bicitaxi'), 'tuktuk-fleet-bicitaxi-v2');
+    expect(marketplaceFleetIconKey('bicycle'), 'tuktuk-fleet-bici-v2');
+    expect(marketplaceFleetIconKey(null), 'tuktuk-fleet-otro-v2');
   });
 
   test('every anonymous vehicle is rendered; GPS coordinates never shift', () {
@@ -75,6 +75,13 @@ void main() {
     final service = File('lib/data/marketplace_customer_service.dart').readAsStringSync();
     expect(map, contains("tuktuk-client-fleet-vehicle-coverage"));
     expect(map, contains("tuktuk-client-fleet-vehicle-live"));
+    expect(map, contains("case 'triciclo':"));
+    expect(map, contains("case 'bicitaxi':"));
+    expect(map, contains("case 'moto':"));
+    expect(map, contains("case 'auto':"));
+    expect(map, isNot(contains("Icons.commute")));
+    expect(map, isNot(contains("Icons.electric_rickshaw")));
+    expect(map, isNot(contains("Rect.fromLTWH(7, 7, 58, 58)")));
     expect(map, contains("iconImageExpression: const ['get', 'icon']"));
     expect(map, contains("iconOffsetExpression: const ['array', 'number', 2, ['get', 'offset']]"));
     expect(map, isNot(contains('tuktuk-client-working-fleet-count')));
