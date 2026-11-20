@@ -1,4 +1,4 @@
-name: Verificar politica de despliegue web automatico (PR)
+name: Verificar politica de despliegue web manual (PR)
 on:
   pull_request:
     branches: [main]
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   verify:
-    name: Contratos de merge seguro y Android manual
+    name: Contratos de publicacion web y Android manual
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
