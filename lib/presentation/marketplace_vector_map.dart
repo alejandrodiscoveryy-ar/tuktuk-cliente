@@ -42,12 +42,12 @@ String marketplaceVectorLineGeoJson(List<MarketplaceMapPoint> points) =>
 // When coordinates coincide, icons fan out in screen pixels via Mapbox
 // icon-offset, never by manufacturing a geographic position.
 String marketplaceFleetIconKey(String? category) => switch (category) {
-  'light_car' => 'tuktuk-fleet-auto-v1',
-  'motorcycle' => 'tuktuk-fleet-moto-v1',
-  'tricycle' => 'tuktuk-fleet-triciclo-v1',
-  'bicitaxi' => 'tuktuk-fleet-bicitaxi-v1',
-  'bicycle' => 'tuktuk-fleet-bici-v1',
-  _ => 'tuktuk-fleet-otro-v1',
+  'light_car' => 'tuktuk-fleet-auto-v2',
+  'motorcycle' => 'tuktuk-fleet-moto-v2',
+  'tricycle' => 'tuktuk-fleet-triciclo-v2',
+  'bicitaxi' => 'tuktuk-fleet-bicitaxi-v2',
+  'bicycle' => 'tuktuk-fleet-bici-v2',
+  _ => 'tuktuk-fleet-otro-v2',
 };
 
 String marketplaceVectorFleetGeoJson(List<MarketplaceMapPoint> points) {
@@ -376,71 +376,185 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
     }
   }
 
-  // Small, readable vector vehicle silhouettes are rasterized locally
-  // for Mapbox. No emoji fonts, generated positions or remote icon services.
+  // Compact illustrations drawn with stable Canvas paths, never font glyphs.
+  // No large colored tiles: the vehicle silhouette itself is the marker.
+  // The driver location still comes only from the coarse gateway GeoJSON.
   Future<void> _registerFleetIcons(mbx.MapboxMap map) async {
-    const size = 72;
-    final variants = <(String, IconData, Color)>[
-      ('auto', Icons.directions_car_filled, const Color(0xFFE7A347)),
-      ('moto', Icons.two_wheeler, const Color(0xFF54B4EB)),
-      ('triciclo', Icons.electric_rickshaw, const Color(0xFFFF9449)),
-      ('bicitaxi', Icons.pedal_bike, const Color(0xFF50CDAF)),
-      ('bici', Icons.directions_bike, const Color(0xFFB8A1F2)),
-      ('otro', Icons.commute, const Color(0xFFC1CBD5)),
+    const width = 96;
+    const height = 72;
+    const ink = Color(0xFF071725);
+    const light = Color(0xFFF4FAFF);
+    final variants = <(String, Color)>[
+      ('auto', const Color(0xFF5DBDFA)),
+      ('moto', const Color(0xFFE6BD58)),
+      ('triciclo', const Color(0xFFFF9849)),
+      ('bicitaxi', const Color(0xFF63DBB0)),
+      ('bici', const Color(0xFFB7A3F8)),
+      ('otro', const Color(0xFFB5C7D2)),
     ];
-    for (final (name, glyph, accent) in variants) {
+
+    for (final (name, color) in variants) {
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
-      final shadow = Paint()..color = const Color(0x77000000);
-      final backing = Paint()..color = const Color(0xF1112130);
-      final outline = Paint()
-        ..color = accent
-        ..strokeWidth = 3.0
-        ..style = PaintingStyle.stroke;
-      final plate = RRect.fromRectAndRadius(
-        const Rect.fromLTWH(7, 7, 58, 58),
-        const Radius.circular(18),
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          const Rect.fromLTWH(8, 10, 58, 58),
-          const Radius.circular(18),
-        ),
-        shadow,
-      );
-      canvas.drawRRect(plate, backing);
-      canvas.drawRRect(plate, outline);
-      final painter = TextPainter(
-        text: TextSpan(
-          text: String.fromCharCode(glyph.codePoint),
-          style: TextStyle(
-            fontFamily: glyph.fontFamily,
-            fontFamilyFallback: const ['MaterialIcons'],
-            package: glyph.fontPackage,
-            fontSize: 43,
-            color: const Color(0xFFF8FAFC),
-          ),
-        ),
-        textDirection: ui.TextDirection.ltr,
-      )..layout();
-      painter.paint(
-        canvas,
-        Offset((size - painter.width) / 2, (size - painter.height) / 2),
-      );
-      painter.dispose();
+      final fill = Paint()..color = color;
+      final darkFill = Paint()..color = ink;
+      final glass = Paint()..color = const Color(0xFFE0F4FF);
+      final rim = Paint()
+        ..color = ink
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4.5
+        ..strokeJoin = StrokeJoin.round
+        ..strokeCap = StrokeCap.round;
+
+      void shell(ui.Path path) {
+        canvas.drawPath(path, rim);
+        canvas.drawPath(path, fill);
+      }
+
+      void stroke(List<Offset> points, {double thickness = 6, Color? tone}) {
+        final p = Paint()
+          ..color = ink
+          ..strokeWidth = thickness + 3
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..style = PaintingStyle.stroke;
+        final main = Paint()
+          ..color = tone ?? color
+          ..strokeWidth = thickness
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..style = PaintingStyle.stroke;
+        final path = ui.Path()..moveTo(points.first.dx, points.first.dy);
+        for (final point in points.skip(1)) {
+          path.lineTo(point.dx, point.dy);
+        }
+        canvas.drawPath(path, p);
+        canvas.drawPath(path, main);
+      }
+
+      void wheel(double x, double y, double radius) {
+        canvas.drawCircle(Offset(x, y), radius + 2, darkFill);
+        canvas.drawCircle(Offset(x, y), radius - 2, Paint()..color = light);
+        canvas.drawCircle(Offset(x, y), max(2, radius * .32), darkFill);
+      }
+
+      switch (name) {
+        case 'auto':
+          shell(ui.Path()
+            ..moveTo(8, 42)
+            ..lineTo(21, 40)
+            ..lineTo(31, 27)
+            ..quadraticBezierTo(34, 23, 40, 23)
+            ..lineTo(62, 23)
+            ..quadraticBezierTo(68, 23, 71, 28)
+            ..lineTo(79, 39)
+            ..lineTo(87, 43)
+            ..lineTo(87, 53)
+            ..lineTo(9, 53)
+            ..close());
+          canvas.drawPath(ui.Path()
+            ..moveTo(35, 29)
+            ..lineTo(46, 29)
+            ..lineTo(46, 40)
+            ..lineTo(26, 40)
+            ..close(), glass);
+          canvas.drawPath(ui.Path()
+            ..moveTo(50, 29)
+            ..lineTo(63, 29)
+            ..lineTo(72, 40)
+            ..lineTo(50, 40)
+            ..close(), glass);
+          wheel(25, 54, 9);
+          wheel(72, 54, 9);
+        case 'moto':
+          wheel(20, 54, 12);
+          wheel(77, 54, 12);
+          stroke([const Offset(20, 54), const Offset(39, 38),
+            const Offset(54, 54), const Offset(20, 54)], thickness: 5);
+          stroke([const Offset(39, 38), const Offset(65, 38),
+            const Offset(77, 54)], thickness: 5);
+          stroke([const Offset(65, 38), const Offset(69, 26),
+            const Offset(78, 26)], thickness: 4);
+          stroke([const Offset(31, 31), const Offset(51, 31)], thickness: 7);
+          canvas.drawCircle(const Offset(55, 48), 7, darkFill);
+          canvas.drawCircle(const Offset(55, 48), 4, fill);
+        case 'triciclo':
+          // Three distinct wheels, a closed passenger cabin and a motor nose.
+          shell(ui.Path()
+            ..moveTo(11, 44)
+            ..lineTo(14, 25)
+            ..quadraticBezierTo(19, 18, 29, 18)
+            ..lineTo(53, 18)
+            ..quadraticBezierTo(63, 18, 66, 27)
+            ..lineTo(70, 43)
+            ..lineTo(83, 46)
+            ..lineTo(86, 54)
+            ..lineTo(10, 54)
+            ..close());
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(const Rect.fromLTWH(25, 24, 32, 20),
+              const Radius.circular(4)), glass);
+          stroke([const Offset(41, 25), const Offset(41, 43)],
+            thickness: 2.5, tone: ink);
+          canvas.drawCircle(const Offset(77, 43), 3, glass);
+          wheel(21, 55, 8);
+          wheel(44, 55, 8);
+          wheel(78, 55, 8);
+        case 'bicitaxi':
+          // Passenger canopy behind a visibly open bicycle cockpit.
+          shell(ui.Path()
+            ..moveTo(9, 46)
+            ..lineTo(12, 25)
+            ..quadraticBezierTo(17, 17, 24, 17)
+            ..lineTo(45, 17)
+            ..quadraticBezierTo(52, 17, 56, 25)
+            ..lineTo(56, 46)
+            ..close());
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(const Rect.fromLTWH(20, 25, 26, 15),
+              const Radius.circular(3)), glass);
+          stroke([const Offset(56, 40), const Offset(69, 33),
+            const Offset(78, 53), const Offset(58, 53)], thickness: 4);
+          stroke([const Offset(67, 31), const Offset(76, 29)], thickness: 3);
+          wheel(20, 54, 9);
+          wheel(45, 54, 9);
+          wheel(79, 54, 10);
+        case 'bici':
+          wheel(18, 54, 13);
+          wheel(79, 54, 13);
+          stroke([const Offset(18, 54), const Offset(37, 34),
+            const Offset(54, 54), const Offset(18, 54)], thickness: 4);
+          stroke([const Offset(37, 34), const Offset(71, 34),
+            const Offset(79, 54), const Offset(54, 54)], thickness: 4);
+          stroke([const Offset(31, 30), const Offset(44, 30)], thickness: 3);
+          stroke([const Offset(70, 34), const Offset(72, 25),
+            const Offset(81, 25)], thickness: 3);
+        default:
+          shell(ui.Path()
+            ..moveTo(13, 47)
+            ..lineTo(24, 34)
+            ..lineTo(71, 34)
+            ..lineTo(84, 47)
+            ..lineTo(84, 54)
+            ..lineTo(13, 54)
+            ..close());
+          wheel(25, 54, 9);
+          wheel(70, 54, 9);
+      }
+
       final picture = recorder.endRecording();
-      final icon = await picture.toImage(size, size);
-      final bytes = await icon.toByteData(format: ui.ImageByteFormat.png);
-      icon.dispose();
+      final image = await picture.toImage(width, height);
+      final png = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
       picture.dispose();
-      if (bytes == null) throw StateError('FLEET_ICON_RENDER_FAILED');
+      if (png == null) throw StateError('FLEET_ICON_RENDER_FAILED');
       if (!mounted || _map != map) return;
       await map.addImage(
-        'tuktuk-fleet-$name-v1',
-        2.0,
-        mbx.StyleImage.bytes(bytes.buffer.asUint8List(
-          bytes.offsetInBytes,
-          bytes.lengthInBytes,
+        'tuktuk-fleet-$name-v2',
+        3.0,
+        mbx.StyleImage.bytes(png.buffer.asUint8List(
+          png.offsetInBytes,
+          png.lengthInBytes,
         )),
       );
     }
@@ -490,8 +604,8 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
         sourceId: _sourceCoverage,
         iconImageExpression: const ['get', 'icon'],
         iconOffsetExpression: const ['array', 'number', 2, ['get', 'offset']],
-        iconSize: 0.88,
-        iconOpacity: 0.70,
+        iconSize: 0.92,
+        iconOpacity: 0.82,
         iconEmissiveStrength: 1.0,
         iconAllowOverlap: true,
         iconIgnorePlacement: true,
@@ -509,7 +623,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
         sourceId: _sourceFleet,
         iconImageExpression: const ['get', 'icon'],
         iconOffsetExpression: const ['array', 'number', 2, ['get', 'offset']],
-        iconSize: 0.94,
+        iconSize: 1.00,
         iconOpacity: 1.0,
         iconEmissiveStrength: 1.0,
         iconAllowOverlap: true,
