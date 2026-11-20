@@ -39,8 +39,8 @@ String marketplaceVectorLineGeoJson(List<MarketplaceMapPoint> points) =>
 
 // Only the vehicle modality is published with coarse, anonymous GPS.
 // Every feature retains the exact coordinate returned by the gateway.
-// When coordinates coincide, icons fan out in screen pixels via Mapbox
-// icon-offset, never by manufacturing a geographic position.
+// When approximate coordinates coincide, compact icons separate only in
+// screen pixels around that anchor; no rows, columns or invented GPS.
 String marketplaceFleetIconKey(String? category) => switch (category) {
   'light_car' => 'tuktuk-fleet-auto-v2',
   'motorcycle' => 'tuktuk-fleet-moto-v2',
@@ -50,6 +50,10 @@ String marketplaceFleetIconKey(String? category) => switch (category) {
   _ => 'tuktuk-fleet-otro-v2',
 };
 
+// No city-wide grid or fabricated driver positions.
+// Each vehicle keeps the approximate, authenticated server coordinate.
+// At the rare exact collision, icons can separate by a few SCREEN pixels
+// around that same anchor without altering geographic coordinates.
 String marketplaceVectorFleetGeoJson(List<MarketplaceMapPoint> points) {
   final grouped = <String, List<MarketplaceMapPoint>>{};
   for (final point in points) {
@@ -60,19 +64,12 @@ String marketplaceVectorFleetGeoJson(List<MarketplaceMapPoint> points) {
 
   final features = <Map<String, Object>>[];
   for (final group in grouped.values) {
-    // Modalities remain stable between refreshes even if gateway row order
-    // changes. The two coordinates are unchanged for every icon.
     group.sort((a, b) => marketplaceFleetIconKey(a.category)
         .compareTo(marketplaceFleetIconKey(b.category)));
-    final columns = sqrt(group.length).ceil();
-    final rows = (group.length / columns).ceil();
     for (var i = 0; i < group.length; i++) {
-      final row = i ~/ columns;
-      final currentRowLength = min(columns, group.length - row * columns);
-      final column = i % columns;
-      final dx = (column - (currentRowLength - 1) / 2) * 1.14;
-      final dy = (row - (rows - 1) / 2) * 1.14;
       final point = group[i];
+      final angle = 2 * pi * i / group.length + 0.29;
+      final radial = group.length == 1 ? 0.0 : min(0.36, 0.24 + group.length * 0.02);
       features.add({
         'type': 'Feature',
         'geometry': <String, Object>{
@@ -81,7 +78,10 @@ String marketplaceVectorFleetGeoJson(List<MarketplaceMapPoint> points) {
         },
         'properties': <String, Object>{
           'icon': marketplaceFleetIconKey(point.category),
-          'offset': <double>[dx, dy],
+          'offset': <double>[
+            radial * cos(angle),
+            radial * sin(angle),
+          ],
         },
       });
     }
