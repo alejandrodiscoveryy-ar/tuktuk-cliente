@@ -1,6 +1,6 @@
 'use strict';
 // Cachea solo HTML/JS publicos de Lite. Configuracion de Admin NO se guarda aqui.
-const CACHE = 'tuktuk-lite-static-v1';
+const CACHE = 'tuktuk-lite-static-v2';
 const SCOPE = new URL(self.registration.scope);
 const SHELL = [new URL('./', SCOPE).href, new URL('lite.js', SCOPE).href];
 self.addEventListener('install', event => {
