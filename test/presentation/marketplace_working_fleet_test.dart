@@ -46,37 +46,46 @@ void main() {
     expect(twice.single['properties'], {'count': 2});
   });
 
-  test('only actual live availability can appear; no month-old coverage', () {
-    final points = marketplaceOnlyLiveFleetPoints([
+  test('live and historic coverage are kept separate and anonymous', () {
+    final points = marketplaceFleetPresencePoints([
       {'latitude': 23.124, 'longitude': -82.347, 'available_now': false},
       {'latitude': 23.125, 'longitude': -82.346},
       {'latitude': 23.126, 'longitude': -82.345, 'available_now': true},
     ]);
-    expect(points, hasLength(1));
-    expect(points.single.lat, 23.126);
-    expect(points.single.lon, -82.345);
-    expect(points.single.source, 'fleet_live');
-    expect(points.single.label, isEmpty);
-    expect(marketplaceOnlyLiveFleetPoints([
-      {'latitude': 23.124, 'longitude': -82.347, 'available_now': false},
-    ]), isEmpty);
-    expect(() => marketplaceOnlyLiveFleetPoints([
+    expect(points, hasLength(3));
+    expect(points.map((point) => point.source).toList(),
+      ['fleet_coverage', 'fleet_coverage', 'fleet_live']);
+    expect(points.every((point) => point.label.isEmpty), isTrue);
+    expect(() => marketplaceFleetPresencePoints([
       {'latitude': 0, 'longitude': -82.34, 'available_now': true},
     ]), throwsStateError);
+  });
+
+  test('lost network downgrades old live positions but preserves coverage', () {
+    const points = [
+      MarketplaceMapPoint(label: '', lat: 23.124, lon: -82.347, source: 'fleet_live'),
+      MarketplaceMapPoint(label: '', lat: 23.125, lon: -82.346, source: 'fleet_coverage'),
+    ];
+    final fallback = marketplaceFleetAsCoverage(points);
+    expect(fallback, hasLength(2));
+    expect(fallback.every((point) => point.source == 'fleet_coverage'), isTrue);
+    expect(fallback.first.lat, points.first.lat);
+    expect(fallback.first.lon, points.first.lon);
   });
 
   test('fleet is optional, anonymous, visible before route and separate from assigned GPS', () {
     final map = File('lib/presentation/marketplace_vector_map.dart').readAsStringSync();
     final booking = File('lib/presentation/marketplace_customer_booking_flow.dart').readAsStringSync();
     final service = File('lib/data/marketplace_customer_service.dart').readAsStringSync();
-    expect(map, isNot(contains("tuktuk-client-fleet-coverage-points")));
-    expect(map, isNot(contains("tuktuk-client-fleet-coverage-white-halo")));
-    expect(map, isNot(contains("tuktuk-client-fleet-coverage-count")));
+    expect(map, contains("tuktuk-client-fleet-coverage-points"));
+    expect(map, contains("tuktuk-client-fleet-coverage-white-halo"));
+    expect(map, contains("tuktuk-client-fleet-coverage-count"));
     expect(map, contains("tuktuk-client-working-fleet-count"));
     expect(map, contains("textField: '{count}'"));
-    expect(map, contains("p.source == 'fleet_live'"));
-    expect(map, isNot(contains("_sourceCoverage")));
-    expect(service, contains("raw['available_now'] != true"));
+    expect(map, contains("point.source == 'fleet_live'"));
+    expect(map, contains("point.source != 'fleet_live'"));
+    expect(map, contains("_sourceCoverage"));
+    expect(service, contains("raw['available_now'] == true"));
     // Keep both anonymous fleet layers without a floating legend over the map.
     expect(booking, isNot(contains('Cobertura TukTuk')));
     expect(booking, isNot(contains('Disponibles ahora')));
@@ -101,8 +110,8 @@ void main() {
     expect(map, contains('Timer.periodic(const Duration(seconds: 30)'));
     expect(map, contains('if (!mounted || !_fleetForeground || loader == null || _fleetRequestPending) return;'));
     expect(map, contains('_fleetTimer?.cancel();'));
-    expect(map, contains("_fleetPoints = const [];"));
-    expect(map, contains("points.where((p) => p.source == 'fleet_live')"));
+    expect(map, contains("_fleetPoints = points;"));
+    expect(map, contains("marketplaceFleetAsCoverage(_fleetPoints)"));
     expect(map, contains('await _refreshFleetSource();'));
     expect(map, isNot(contains('marketplaceSpreadCoincidentFleetPoints')));
     expect(map, contains('tuktuk-client-driver-live-position'));
