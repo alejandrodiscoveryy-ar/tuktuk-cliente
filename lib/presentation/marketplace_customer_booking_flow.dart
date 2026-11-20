@@ -1963,13 +1963,15 @@ class _MarketplaceCustomerBookingFlowState
                       ? null
                       : () => unawaited(_restoreGpsPickup()),
                 ),
-                if (flow.destination != null || _selectingOrigin == false) ...[
+                // Mostrar siempre el segundo paso tras elegir recogida. Antes se ocultaba
+                // hasta entrar en selección, dificultando descubrir el destino.
+                if (flow.origin != null || flow.destination != null || _selectingOrigin == false) ...[
                   const Divider(color: TuktukTheme.border, height: 1),
                   _floatingLocationRow(
                     icon: Icons.location_on_rounded,
                     color: TuktukTheme.destinationOrange,
                     label: 'Destino',
-                    value: flow.destination?.label ?? 'Marcar destino',
+                    value: flow.destination?.label ?? 'Buscar dirección o marcar destino',
                     onTap: flow.origin == null
                         ? null
                         : () => _selectPoint(origin: false),
