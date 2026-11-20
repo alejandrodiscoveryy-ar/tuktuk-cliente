@@ -5,20 +5,17 @@ import { readFileSync } from 'node:fs';
 const deploy = readFileSync('.github/workflows/deploy-web-production.yml', 'utf8');
 const android = readFileSync('.github/workflows/cliente-android-aab.yml', 'utf8');
 
-test('solo push a main o workflow_dispatch confirmado en main', () => {
-  assert.match(deploy, /^on:\r?\n  push:\r?\n    branches: \[main\]\r?\n  workflow_dispatch:/m);
-  assert.match(deploy, /github\.ref == 'refs\/heads\/main' && \(github\.event_name == 'push' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.confirm_production == true\)\)/);
+test('la publicación solo se ejecuta manualmente y con confirmación en main', () => {
+  assert.match(deploy, /^on:\\r?\\n  workflow_dispatch:/m);
+  assert.doesNotMatch(deploy, /^  push:/m);
+  assert.match(deploy, /github\\.ref == 'refs\\/heads\\/main' && github\\.event_name == 'workflow_dispatch' && inputs\\.confirm_production == true/);
+  assert.match(deploy, /confirm_production:/);
 });
 
-test('push a main requiere PR fusionado y permisos minimos', () => {
-  assert.match(deploy, /^  pull-requests: read$/m);
-  assert.match(deploy, /if: \$\{\{ github\.event_name == 'push' \}\}/);
-  assert.match(deploy, /GH_TOKEN: \$\{\{ github\.token \}\}/);
-  assert.match(deploy, /commits\/\$\{GITHUB_SHA\}\/pulls/);
-  assert.match(deploy, /pr\.merged_at/);
-  assert.match(deploy, /pr\.base\?\.ref === 'main'/);
-  assert.match(deploy, /pr\.merge_commit_sha === process\.env\.GITHUB_SHA/);
-  assert.match(deploy, /AUTO_DEPLOY_REJECTED/);
+test('fusionar PR en main no publica automáticamente', () => {
+  assert.doesNotMatch(deploy, /github\\.event_name == 'push'/);
+  assert.doesNotMatch(deploy, /Verify automatic main update comes from a merged PR/);
+  assert.match(deploy, /^  contents: read$/m);
 });
 
 test('no se publica codigo superado y se comprueba el artefacto web', () => {
