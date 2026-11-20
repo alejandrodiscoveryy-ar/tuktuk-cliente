@@ -302,6 +302,7 @@
   const smsButton = document.getElementById('lite-send-sms');
   const thanks = document.getElementById('lite-thanks');
   const another = document.getElementById('lite-another');
+  const returnForm = document.getElementById('lite-return-form');
   const intro = document.getElementById('lite-intro');
   const locate = document.getElementById('lite-locate');
   const geoStatus = document.getElementById('lite-geo-status');
@@ -342,7 +343,7 @@
   function clearExternal() {
     try { root.sessionStorage?.removeItem(RETURN_KEY); } catch (_) {}
   }
-  function showThanks() {
+  function showReturnCheck() {
     externalPending = false;
     leftBrowser = false;
     clearExternal();
@@ -359,14 +360,14 @@
     rememberExternal(true);
   }
   function handleReturn() {
-    if (externalPending && leftBrowser) { showThanks(); return; }
+    if (externalPending && leftBrowser) { showReturnCheck(); return; }
     try {
       const state = JSON.parse(root.sessionStorage?.getItem(RETURN_KEY) || 'null');
-      if (state && state.left === true && Date.now() - state.at < 600000) showThanks();
+      if (state && state.left === true && Date.now() - state.at < 600000) showReturnCheck();
     } catch (_) {}
   }
   // External apps do not disclose whether the message was actually sent.
-  // The thank-you screen is only shown on return from another app.
+  // El regreso a Lite solo prueba que se abrió otra app, NO que se haya enviado el mensaje.
   if (typeof root.addEventListener === 'function') {
     root.addEventListener('pagehide', markLeaving);
     root.addEventListener('pageshow', handleReturn);
@@ -377,6 +378,18 @@
       if (document.visibilityState === 'visible') handleReturn();
     });
   }
+  if (returnForm) returnForm.addEventListener('click', () => {
+    // Retomar la misma solicitud y conservar el trayecto y el teléfono.
+    clearExternal();
+    externalPending = false;
+    leftBrowser = false;
+    thanks.hidden = true;
+    form.hidden = false;
+    status.hidden = false;
+    intro.hidden = false;
+    render('Comprueba si enviaste el mensaje antes de volver a intentarlo.');
+    if (typeof root.scrollTo === 'function') root.scrollTo(0, 0);
+  });
   another.addEventListener('click', () => {
     clearExternal();
     externalPending = false;
