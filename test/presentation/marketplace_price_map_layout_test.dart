@@ -47,6 +47,17 @@ void main() {
     }
   });
 
+  test('destino es visible inmediatamente al seleccionar recogida', () {
+    final source = File('lib/presentation/marketplace_customer_booking_flow.dart').readAsStringSync();
+    final locations = source.split('Widget _floatingOriginDestination()').last.split('Widget _floatingBookingPanel()').first;
+    expect(locations, contains('if (flow.origin != null || flow.destination != null || _selectingOrigin == false)'));
+    expect(locations, contains("value: flow.destination?.label ?? 'Buscar dirección o marcar destino'"));
+    expect(locations, contains("onTap: flow.origin == null"));
+    expect(locations, contains("_selectPoint(origin: false)"));
+    expect(locations, contains("color: TuktukTheme.destinationOrange"));
+    expect(locations, isNot(contains('if (flow.destination != null || _selectingOrigin == false)')));
+  });
+
   test('distancia junto a mas opciones y servicios horizontales sin titulo redundante', () {
     final source = File('lib/presentation/marketplace_customer_booking_flow.dart').readAsStringSync();
     final locations = source.split('Widget _floatingOriginDestination()').last.split('Widget _floatingBookingPanel()').first;
