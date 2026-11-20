@@ -96,5 +96,5 @@ test('Lite nunca se combina con la carga de Flutter en el arranque', () => {
   assert.doesNotMatch(html, /<link rel="preload" href="main\.dart\.js"/);
   const lite = fs.readFileSync('web/lite/lite.js','utf8');
   assert.match(lite, /root\.location\.replace\(fullModeUrl\)/);
-  assert.match(lite, /\?lite=unavailable/);
+  assert.match(lite, /fullAppUrl\(root\.location\.search, 'lite'\)/);
 });
