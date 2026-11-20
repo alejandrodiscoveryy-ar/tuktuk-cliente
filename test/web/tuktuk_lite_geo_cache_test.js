@@ -118,7 +118,7 @@ test('interfaz GPS opcional sin mapa pesado y estado SMS cache',()=>{
   assert.match(js,/readCachedSupport\(root\.localStorage/);
   assert.match(js,/Servicio disponible/);
   assert.match(js,/serviceWorker.register/);
-  assert.match(sw,/tuktuk-lite-static-v1/);
+  assert.match(sw,/tuktuk-lite-static-v2/);
   assert.match(sw,/relative === 'lite.js'/);
   assert.doesNotMatch(sw,/main\.dart\.js|config\.json|firebase/i);
   assert.doesNotMatch(html,/flutter_bootstrap|main\.dart\.js|firebase|mapbox/i);
