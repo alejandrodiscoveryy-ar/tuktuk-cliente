@@ -15,6 +15,22 @@
       (typeof connection.rtt === 'number' && connection.rtt >= 700);
   }
 
+  // Solo transporta etiquetas comerciales permitidas entre Lite y Cliente completo.
+  // Nunca conserva nombres, teléfonos, coordenadas ni parámetros arbitrarios.
+  function fullAppUrl(search, reason = 'mode') {
+    const incoming = new URLSearchParams(search || '');
+    const target = new URLSearchParams();
+    if (reason === 'lite') target.set('lite', 'unavailable');
+    else target.set('mode', 'full');
+    const channel = incoming.get('utm_source') || '';
+    if (/^(unknown|direct|whatsapp_private|whatsapp_groups|whatsapp_status|facebook|instagram|qr|other)$/.test(channel))
+      target.set('utm_source', channel);
+    const campaign = incoming.get('utm_campaign') || '';
+    if (/^[a-z0-9_-]{1,32}$/.test(campaign))
+      target.set('utm_campaign', campaign);
+    return '../?' + target.toString();
+  }
+
   function validateForm(fields) {
     const name = String(fields.name || '').trim();
     const phone = String(fields.phone || '').trim();
@@ -232,7 +248,7 @@
 
   const core = { slowNetwork, validateForm, messageFor, whatsappUrl, smsMessageFor, smsUrl, parseConfig,
     currentSupportNumber, requestJson, loadConfig, fetchCurrentSupport, fetchSupportState,
-    saveCachedSupport, readCachedSupport, clearCachedSupport, supportHoursOpen, originGps, addressMapSearch };
+    saveCachedSupport, readCachedSupport, clearCachedSupport, supportHoursOpen, originGps, addressMapSearch, fullAppUrl };
   if (typeof module === 'object' && module.exports) module.exports = core;
   if (typeof document === 'undefined') return;
 
@@ -257,6 +273,10 @@
       !next || !back || !stepRoute || !stepContact || !feedback || !thanks || !another || !intro) return;
   const connection = root.navigator && (root.navigator.connection || root.navigator.mozConnection || root.navigator.webkitConnection);
   const params = new URLSearchParams(root.location.search);
+  const fullModeUrl = fullAppUrl(root.location.search);
+  const fallbackUrl = fullAppUrl(root.location.search, 'lite');
+  const fullLink = document.getElementById('lite-full');
+  if (fullLink) fullLink.href = fullModeUrl;
   // Permite reabrir Lite desde la carcasa publica previamente cacheada.
   if (root.location.protocol === 'https:' && root.navigator && root.navigator.serviceWorker) {
     root.navigator.serviceWorker.register('./lite-sw.js', { scope: './' }).catch(() => {});
@@ -264,7 +284,7 @@
   // Acceso directo con red claramente buena: se prioriza siempre la app completa.
   // La URL ?preview=1 permite pruebas manuales, sin afectar a usuarios normales.
   if (connection && !slowNetwork(connection) && params.get('preview') !== '1') {
-    root.location.replace('../?mode=full');
+    root.location.replace(fullModeUrl);
     return;
   }
 
@@ -455,7 +475,7 @@
       cachedNumber = null;
       clearCachedSupport(root.localStorage);
       render('Contacto desactivado. Usa TukTuk completo.');
-      root.location.replace('../?lite=unavailable');
+      root.location.replace(fallbackUrl);
     } else {
       liveNumber = null;
       cachedNumber = readCachedSupport(root.localStorage,
@@ -464,7 +484,7 @@
         'Servicio disponible' :
         'Contacto no disponible. Usa TukTuk completo.');
     }
-    if (!liveNumber && !cachedNumber && initial) root.location.replace('../?lite=unavailable');
+    if (!liveNumber && !cachedNumber && initial) root.location.replace(fallbackUrl);
     return liveNumber;
   }
   consent.addEventListener('change', () => render(

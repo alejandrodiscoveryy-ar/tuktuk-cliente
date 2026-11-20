@@ -81,9 +81,18 @@ test('formulario usa consentimiento, datos validos y mensaje sin precio inventad
   assert.match(html,/href="\.\.\/\?mode=full"/);
 });
 
+test('Lite conserva fuente y campaña al volver a completo, no parámetros privados',()=>{
+  assert.equal(core.fullAppUrl('?utm_source=facebook&utm_campaign=tuktuk_hospitales&telefono=1234'),
+    '../?mode=full&utm_source=facebook&utm_campaign=tuktuk_hospitales');
+  assert.equal(core.fullAppUrl('?utm_source=qr&utm_campaign=tuktuk_impresos','lite'),
+    '../?lite=unavailable&utm_source=qr&utm_campaign=tuktuk_impresos');
+  assert.equal(core.fullAppUrl('?utm_source=evil&utm_campaign=a%40b&conductor=1234'),
+    '../?mode=full');
+  assert.equal(core.fullAppUrl(''), '../?mode=full');
+});
 test('Lite es HTML minimo independiente y sin creacion de carreras automatica',()=>{
   assert.doesNotMatch(html,/flutter_bootstrap|main\.dart\.js|firebase|mapbox/i);
-  assert.match(js,/\?lite=unavailable/);
+  assert.match(js,/fullAppUrl\(root\.location\.search, 'lite'\)/);
   assert.match(js,/form\.addEventListener\('submit'/);
   assert.doesNotMatch(js, /create_marketplace_customer_request|publish_marketplace_customer_job|create_request/);
 });
