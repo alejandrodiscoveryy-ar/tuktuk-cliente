@@ -406,7 +406,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
         ..strokeJoin = StrokeJoin.round
         ..strokeCap = StrokeCap.round;
 
-      void shell(Path path) {
+      void shell(ui.Path path) {
         canvas.drawPath(path, rim);
         canvas.drawPath(path, fill);
       }
@@ -424,7 +424,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
           ..strokeCap = StrokeCap.round
           ..strokeJoin = StrokeJoin.round
           ..style = PaintingStyle.stroke;
-        final path = Path()..moveTo(points.first.dx, points.first.dy);
+        final path = ui.Path()..moveTo(points.first.dx, points.first.dy);
         for (final point in points.skip(1)) {
           path.lineTo(point.dx, point.dy);
         }
@@ -440,7 +440,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
 
       switch (name) {
         case 'auto':
-          shell(Path()
+          shell(ui.Path()
             ..moveTo(8, 42)
             ..lineTo(21, 40)
             ..lineTo(31, 27)
@@ -452,13 +452,13 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
             ..lineTo(87, 53)
             ..lineTo(9, 53)
             ..close());
-          canvas.drawPath(Path()
+          canvas.drawPath(ui.Path()
             ..moveTo(35, 29)
             ..lineTo(46, 29)
             ..lineTo(46, 40)
             ..lineTo(26, 40)
             ..close(), glass);
-          canvas.drawPath(Path()
+          canvas.drawPath(ui.Path()
             ..moveTo(50, 29)
             ..lineTo(63, 29)
             ..lineTo(72, 40)
@@ -480,7 +480,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
           canvas.drawCircle(const Offset(55, 48), 4, fill);
         case 'triciclo':
           // Three distinct wheels, a closed passenger cabin and a motor nose.
-          shell(Path()
+          shell(ui.Path()
             ..moveTo(11, 44)
             ..lineTo(14, 25)
             ..quadraticBezierTo(19, 18, 29, 18)
@@ -502,7 +502,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
           wheel(78, 55, 8);
         case 'bicitaxi':
           // Passenger canopy behind a visibly open bicycle cockpit.
-          shell(Path()
+          shell(ui.Path()
             ..moveTo(9, 46)
             ..lineTo(12, 25)
             ..quadraticBezierTo(17, 17, 24, 17)
@@ -530,7 +530,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
           stroke([const Offset(70, 34), const Offset(72, 25),
             const Offset(81, 25)], thickness: 3);
         default:
-          shell(Path()
+          shell(ui.Path()
             ..moveTo(13, 47)
             ..lineTo(24, 34)
             ..lineTo(71, 34)
