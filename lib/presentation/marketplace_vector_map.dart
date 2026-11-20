@@ -421,7 +421,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
             color: const Color(0xFFF8FAFC),
           ),
         ),
-        textDirection: TextDirection.ltr,
+        textDirection: ui.TextDirection.ltr,
       )..layout();
       painter.paint(
         canvas,
