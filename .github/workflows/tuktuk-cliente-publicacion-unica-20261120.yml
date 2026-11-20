@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   iniciar-publicacion-manual:
-    if: ${{ github.ref == 'refs/heads/main' && contains(github.event.head_commit.added, '.github/workflows/tuktuk-cliente-publicacion-unica-20261120.yml') }}
+    if: ${{ github.ref == 'refs/heads/main' && github.event.before == '2a54aa28241e42f249ffe5544bb3b2078558b369' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
