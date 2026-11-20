@@ -32,7 +32,16 @@ void main() {
       expect(feature['properties']['icon'], startsWith('tuktuk-fleet-'));
       expect(feature['properties'], isNot(contains('count')));
     }
+    // Rare coincident markers are placed compactly around ONE real anchor,
+    // never in rows or columns pretending to be street GPS.
     expect(shared.map((v) => jsonEncode(v['properties']['offset'])).toSet(), hasLength(5));
+    for (final feature in shared) {
+      final offset = feature['properties']['offset'] as List;
+      final x = (offset[0] as num).toDouble();
+      final y = (offset[1] as num).toDouble();
+      expect(x.abs(), lessThanOrEqualTo(0.36));
+      expect(y.abs(), lessThanOrEqualTo(0.36));
+    }
     expect(features.last['geometry']['coordinates'], [-82.352, 23.128]);
     expect(features.last['properties']['offset'], [0.0, 0.0]);
     expect(json, isNot(contains('secret')));
@@ -74,6 +83,11 @@ void main() {
     final booking = File('lib/presentation/marketplace_customer_booking_flow.dart').readAsStringSync();
     final service = File('lib/data/marketplace_customer_service.dart').readAsStringSync();
     expect(map, contains("tuktuk-client-fleet-vehicle-coverage"));
+    expect(map, isNot(contains('final columns = sqrt(group.length).ceil()')));
+    expect(map, isNot(contains('final row = i ~/ columns')));
+    expect(map, contains('final angle = 2 * pi * i / group.length + 0.29'));
+    expect(map, contains('radial * cos(angle)'));
+    expect(map, contains('radial * sin(angle)'));
     expect(map, contains("tuktuk-client-fleet-vehicle-live"));
     expect(map, contains("case 'triciclo':"));
     expect(map, contains("case 'bicitaxi':"));
