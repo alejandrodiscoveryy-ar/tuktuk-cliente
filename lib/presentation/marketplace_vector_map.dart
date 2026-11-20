@@ -37,35 +37,57 @@ String marketplaceVectorLineGeoJson(List<MarketplaceMapPoint> points) =>
             ],
     });
 
-// Public locations are approximate GPS positions supplied by the gateway.
-// Preserve every supplied coordinate; never fabricate visual offsets.
-// Coincident vehicles are shown at their shared position with a numeric count.
+// Only the vehicle modality is published with coarse, anonymous GPS.
+// Every feature retains the exact coordinate returned by the gateway.
+// When coordinates coincide, icons fan out in screen pixels via Mapbox
+// icon-offset, never by manufacturing a geographic position.
+String marketplaceFleetIconKey(String? category) => switch (category) {
+  'light_car' => 'tuktuk-fleet-auto-v1',
+  'motorcycle' => 'tuktuk-fleet-moto-v1',
+  'tricycle' => 'tuktuk-fleet-triciclo-v1',
+  'bicitaxi' => 'tuktuk-fleet-bicitaxi-v1',
+  'bicycle' => 'tuktuk-fleet-bici-v1',
+  _ => 'tuktuk-fleet-otro-v1',
+};
+
 String marketplaceVectorFleetGeoJson(List<MarketplaceMapPoint> points) {
-  final grouped = <String, (MarketplaceMapPoint, int)>{};
+  final grouped = <String, List<MarketplaceMapPoint>>{};
   for (final point in points) {
     final key =
         '${point.lat.toStringAsFixed(6)}:${point.lon.toStringAsFixed(6)}';
-    final previous = grouped[key];
-    grouped[key] = (previous?.$1 ?? point, (previous?.$2 ?? 0) + 1);
+    (grouped[key] ??= <MarketplaceMapPoint>[]).add(point);
   }
-  return jsonEncode({
-    'type': 'FeatureCollection',
-    'features': [
-      for (final entry in grouped.values)
-        {
-          'type': 'Feature',
-          'geometry': {
-            'type': 'Point',
-            'coordinates': [entry.$1.lon, entry.$1.lat],
-          },
-          'properties': entry.$2 == 1
-              ? <String, Object>{}
-              : <String, Object>{'count': entry.$2},
-        },
-    ],
-  });
-}
 
+  final features = <Map<String, Object>>[];
+  for (final group in grouped.values) {
+    // Modalities remain stable between refreshes even if gateway row order
+    // changes. The two coordinates are unchanged for every icon.
+    group.sort((a, b) => marketplaceFleetIconKey(a.category)
+        .compareTo(marketplaceFleetIconKey(b.category)));
+    final columns = sqrt(group.length).ceil();
+    final rows = (group.length / columns).ceil();
+    for (var i = 0; i < group.length; i++) {
+      final row = i ~/ columns;
+      final currentRowLength = min(columns, group.length - row * columns);
+      final column = i % columns;
+      final dx = (column - (currentRowLength - 1) / 2) * 1.14;
+      final dy = (row - (rows - 1) / 2) * 1.14;
+      final point = group[i];
+      features.add({
+        'type': 'Feature',
+        'geometry': <String, Object>{
+          'type': 'Point',
+          'coordinates': <double>[point.lon, point.lat],
+        },
+        'properties': <String, Object>{
+          'icon': marketplaceFleetIconKey(point.category),
+          'offset': <double>[dx, dy],
+        },
+      });
+    }
+  }
+  return jsonEncode({'type': 'FeatureCollection', 'features': features});
+}
 
 // Retain the approximate server-provided footprint on weak connections,
  // without continuing to claim that a previously live driver is available.
@@ -77,6 +99,7 @@ List<MarketplaceMapPoint> marketplaceFleetAsCoverage(
     lat: point.lat,
     lon: point.lon,
     source: 'fleet_coverage',
+    category: point.category,
   )),
 );
 
@@ -353,6 +376,76 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
     }
   }
 
+  // Small, readable vector vehicle silhouettes are rasterized locally
+  // for Mapbox. No emoji fonts, generated positions or remote icon services.
+  Future<void> _registerFleetIcons(mbx.MapboxMap map) async {
+    const size = 72;
+    final variants = <(String, IconData, Color)>[
+      ('auto', Icons.directions_car_filled, const Color(0xFFE7A347)),
+      ('moto', Icons.two_wheeler, const Color(0xFF54B4EB)),
+      ('triciclo', Icons.electric_rickshaw, const Color(0xFFFF9449)),
+      ('bicitaxi', Icons.pedal_bike, const Color(0xFF50CDAF)),
+      ('bici', Icons.directions_bike, const Color(0xFFB8A1F2)),
+      ('otro', Icons.commute, const Color(0xFFC1CBD5)),
+    ];
+    for (final (name, glyph, accent) in variants) {
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      final shadow = Paint()..color = const Color(0x77000000);
+      final backing = Paint()..color = const Color(0xF1112130);
+      final outline = Paint()
+        ..color = accent
+        ..strokeWidth = 3.0
+        ..style = PaintingStyle.stroke;
+      final plate = RRect.fromRectAndRadius(
+        const Rect.fromLTWH(7, 7, 58, 58),
+        const Radius.circular(18),
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          const Rect.fromLTWH(8, 10, 58, 58),
+          const Radius.circular(18),
+        ),
+        shadow,
+      );
+      canvas.drawRRect(plate, backing);
+      canvas.drawRRect(plate, outline);
+      final painter = TextPainter(
+        text: TextSpan(
+          text: String.fromCharCode(glyph.codePoint),
+          style: TextStyle(
+            fontFamily: glyph.fontFamily,
+            fontFamilyFallback: const ['MaterialIcons'],
+            package: glyph.fontPackage,
+            fontSize: 43,
+            color: const Color(0xFFF8FAFC),
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      painter.paint(
+        canvas,
+        Offset((size - painter.width) / 2, (size - painter.height) / 2),
+      );
+      painter.dispose();
+      final picture = recorder.endRecording();
+      final icon = await picture.toImage(size, size);
+      final bytes = await icon.toByteData(format: ui.ImageByteFormat.png);
+      icon.dispose();
+      picture.dispose();
+      if (bytes == null) throw StateError('FLEET_ICON_RENDER_FAILED');
+      if (!mounted || _map != map) return;
+      await map.addImage(
+        'tuktuk-fleet-$name-v1',
+        2.0,
+        mbx.StyleImage.bytes(bytes.buffer.asUint8List(
+          bytes.offsetInBytes,
+          bytes.lengthInBytes,
+        )),
+      );
+    }
+  }
+
   Future<void> _onStyleLoaded() async {
     final map = _map;
     if (map == null || _layersReady) return;
@@ -382,80 +475,46 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
           data: marketplaceVectorPointGeoJson(widget.driverPoint),
         ),
       );
-      // Historic coverage: approximate, anonymous and NOT an offer of a
-      // driver ready for pickup. Distinct subdued symbols avoid confusion.
+      await _registerFleetIcons(map);
+      if (!mounted || _map != map) return;
+      // Coverage remains subdued. Each vehicle keeps its own icon at the
+      // gateway coordinate; multiple vehicles use screen-space fan offsets.
       await map.addSource(mbx.GeoJsonSource(
         id: _sourceCoverage,
         data: marketplaceVectorFleetGeoJson(
           _fleetPoints.where((point) => point.source != 'fleet_live').toList(),
         ),
       ));
-      await map.addLayer(mbx.CircleLayer(
-        id: 'tuktuk-client-fleet-coverage-white-halo',
-        sourceId: _sourceCoverage,
-        circleColor: 0xFFFFFFFF,
-        circleRadius: 9.0,
-        circleOpacity: 0.20,
-        circleBlur: 0.28,
-        circleEmissiveStrength: 1.0,
-      ));
-      await map.addLayer(mbx.CircleLayer(
-        id: 'tuktuk-client-fleet-coverage-points',
-        sourceId: _sourceCoverage,
-        circleColor: 0xFF7EA9CA,
-        circleRadius: 6.5,
-        circleOpacity: 0.78,
-        circleStrokeColor: 0xFFFFFFFF,
-        circleStrokeWidth: 1.2,
-        circleStrokeOpacity: 0.82,
-        circleEmissiveStrength: 1.0,
-      ));
       await map.addLayer(mbx.SymbolLayer(
-        id: 'tuktuk-client-fleet-coverage-count',
+        id: 'tuktuk-client-fleet-vehicle-coverage',
         sourceId: _sourceCoverage,
-        textField: '{count}',
-        textColor: 0xFFFFFFFF,
-        textSize: 10.0,
-        textAllowOverlap: true,
+        iconImageExpression: const ['get', 'icon'],
+        iconOffsetExpression: const ['array', 'number', 2, ['get', 'offset']],
+        iconSize: 0.88,
+        iconOpacity: 0.70,
+        iconEmissiveStrength: 1.0,
+        iconAllowOverlap: true,
+        iconIgnorePlacement: true,
+        slot: 'top',
       ));
-      // Real availability stays bright blue with a strong white halo.
+      // Only truly available vehicles receive full-opacity markers.
       await map.addSource(mbx.GeoJsonSource(
         id: _sourceFleet,
         data: marketplaceVectorFleetGeoJson(
           _fleetPoints.where((point) => point.source == 'fleet_live').toList(),
         ),
       ));
-      // Explicit white halo underneath the blue core; both use the same
-      // anonymous snapshot so position and intensity remain identical.
-      await map.addLayer(mbx.CircleLayer(
-        id: 'tuktuk-client-working-fleet-white-halo',
-        sourceId: _sourceFleet,
-        circleColor: 0xFFFFFFFF,
-        circleRadius: 10,
-        circleOpacity: 0.40,
-        circleBlur: 0.30,
-        // Mapbox Standard night lighting must not dim the white halo.
-        circleEmissiveStrength: 1.0,
-      ));
-      await map.addLayer(mbx.CircleLayer(
-        id: 'tuktuk-client-working-fleet-points',
-        sourceId: _sourceFleet,
-        circleColor: 0xFF329BFF,
-        circleRadius: 10.0,
-        circleOpacity: 1.0,
-        // Preserve the specified blue and white in the night basemap.
-        circleEmissiveStrength: 1.0,
-        circleStrokeColor: 0xFFFFFFFF,
-        circleStrokeWidth: 2.2,
-        circleStrokeOpacity: 1.0,
-      ));
       await map.addLayer(mbx.SymbolLayer(
-        id: 'tuktuk-client-working-fleet-count',
+        id: 'tuktuk-client-fleet-vehicle-live',
         sourceId: _sourceFleet,
-        textField: '{count}',
-        textColor: 0xFFFFFFFF,
-        textSize: 11.0,
-        textAllowOverlap: true,
+        iconImageExpression: const ['get', 'icon'],
+        iconOffsetExpression: const ['array', 'number', 2, ['get', 'offset']],
+        iconSize: 0.94,
+        iconOpacity: 1.0,
+        iconEmissiveStrength: 1.0,
+        iconAllowOverlap: true,
+        iconIgnorePlacement: true,
+        slot: 'top',
       ));
       // La geometria vial verificada se representa siempre en dorado.
       // Sin slot: sobre el mapa base dark-v11 y estilos privados por igual.
