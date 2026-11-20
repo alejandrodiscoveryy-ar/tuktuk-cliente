@@ -98,6 +98,18 @@
   // Un mismo acceso de TukTuk; este control corre ANTES de descargar Flutter.
   // Solo detecta red al ingresar, nunca interrumpe una carrera en curso.
   var params = new URLSearchParams(window.location.search);
+  // Al pasar a Lite no perder la atribución comercial ni arrastrar datos personales.
+  function liteTarget(preview) {
+    var url = new URL('lite/', document.baseURI);
+    if (preview) url.searchParams.set('preview', '1');
+    var channel = params.get('utm_source') || '';
+    if (/^(unknown|direct|whatsapp_private|whatsapp_groups|whatsapp_status|facebook|instagram|qr|other)$/.test(channel))
+      url.searchParams.set('utm_source', channel);
+    var campaign = params.get('utm_campaign') || '';
+    if (/^[a-z0-9_-]{1,32}$/.test(campaign))
+      url.searchParams.set('utm_campaign', campaign);
+    return url.href;
+  }
   var connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
   var slow = Boolean(connection && (
     connection.saveData === true || connection.effectiveType === 'slow-2g' ||
@@ -121,7 +133,7 @@
     return;
   }
   if (params.get('preview') === 'lite') {
-    window.location.replace(new URL('lite/?preview=1', document.baseURI).href);
+    window.location.replace(liteTarget(true));
     return;
   }
   // La vuelta desde Lite sin operador, o un cambio manual a Completa,
@@ -131,7 +143,7 @@
     return;
   }
   if (slow) {
-    window.location.replace(new URL('lite/', document.baseURI).href);
+    window.location.replace(liteTarget(false));
     return;
   }
   // Buena red o calidad no verificable: siempre Cliente completo optimizado.
