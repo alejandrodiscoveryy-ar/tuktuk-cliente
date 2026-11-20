@@ -6,14 +6,14 @@ const deploy = readFileSync('.github/workflows/deploy-web-production.yml', 'utf8
 const android = readFileSync('.github/workflows/cliente-android-aab.yml', 'utf8');
 
 test('la publicación solo se ejecuta manualmente y con confirmación en main', () => {
-  assert.match(deploy, /^on:\\r?\\n  workflow_dispatch:/m);
+  assert.match(deploy, /^on:\r?\n  workflow_dispatch:/m);
   assert.doesNotMatch(deploy, /^  push:/m);
-  assert.match(deploy, /github\\.ref == 'refs\\/heads\\/main' && github\\.event_name == 'workflow_dispatch' && inputs\\.confirm_production == true/);
+  assert.match(deploy, /github\.ref == 'refs\/heads\/main' && github\.event_name == 'workflow_dispatch' && inputs\.confirm_production == true/);
   assert.match(deploy, /confirm_production:/);
 });
 
 test('fusionar PR en main no publica automáticamente', () => {
-  assert.doesNotMatch(deploy, /github\\.event_name == 'push'/);
+  assert.doesNotMatch(deploy, /github\.event_name == 'push'/);
   assert.doesNotMatch(deploy, /Verify automatic main update comes from a merged PR/);
   assert.match(deploy, /^  contents: read$/m);
 });
