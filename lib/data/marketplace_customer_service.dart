@@ -459,15 +459,14 @@ class MarketplacePromoProfile {
   }
 }
 
-// The trusted gateway marks available_now only when the driver's assignment
-// is active and the received/captured GPS is at most five minutes old.
-// Never imply that month-old coverage or an unknown flag means "available".
-List<MarketplaceMapPoint> marketplaceOnlyLiveFleetPoints(Object? value) {
+// The authenticated gateway exposes anonymous, coarse fleet coordinates.
+// Real availability is explicit; older locations are coverage only and must
+// never be presented to passengers as a driver ready to accept a job.
+List<MarketplaceMapPoint> marketplaceFleetPresencePoints(Object? value) {
   if (value is! List) throw StateError('FLEET_RESPONSE_INVALID');
   final points = <MarketplaceMapPoint>[];
   for (final raw in value) {
     if (raw is! Map) throw StateError('FLEET_RESPONSE_INVALID');
-    if (raw['available_now'] != true) continue;
     final lat = double.tryParse('${raw['latitude']}');
     final lon = double.tryParse('${raw['longitude']}');
     if (lat == null || lon == null || !lat.isFinite || !lon.isFinite ||
@@ -475,7 +474,10 @@ List<MarketplaceMapPoint> marketplaceOnlyLiveFleetPoints(Object? value) {
       throw StateError('FLEET_RESPONSE_INVALID');
     }
     points.add(MarketplaceMapPoint(
-      label: '', lat: lat, lon: lon, source: 'fleet_live',
+      label: '',
+      lat: lat,
+      lon: lon,
+      source: raw['available_now'] == true ? 'fleet_live' : 'fleet_coverage',
     ));
   }
   return List<MarketplaceMapPoint>.unmodifiable(points);
@@ -521,8 +523,8 @@ class MarketplaceCustomerService {
     return MarketplacePromoProfile.fromMap(code, value);
   }
 
-  /// Only drivers with a fresh, genuine availability signal can appear on
-  /// the customer's map. Historic coverage is for internal operations only.
+  /// The gateway returns anonymous, approximate coverage and verified live
+  /// availability separately. The map must not discard known coverage.
   Future<List<MarketplaceMapPoint>> workingFleet({
     required String sessionId,
     required String sessionToken,
@@ -531,7 +533,7 @@ class MarketplaceCustomerService {
       'target_session_id': sessionId,
       'target_session_token': sessionToken,
     });
-    return marketplaceOnlyLiveFleetPoints(value);
+    return marketplaceFleetPresencePoints(value);
   }
 
   Future<List<MarketplaceCustomerJob>> history({

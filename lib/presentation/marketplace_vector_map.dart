@@ -67,6 +67,19 @@ String marketplaceVectorFleetGeoJson(List<MarketplaceMapPoint> points) {
 }
 
 
+// Retain the approximate server-provided footprint on weak connections,
+ // without continuing to claim that a previously live driver is available.
+List<MarketplaceMapPoint> marketplaceFleetAsCoverage(
+  List<MarketplaceMapPoint> points,
+) => List<MarketplaceMapPoint>.unmodifiable(
+  points.map((point) => MarketplaceMapPoint(
+    label: '',
+    lat: point.lat,
+    lon: point.lon,
+    source: 'fleet_coverage',
+  )),
+);
+
 class MarketplaceVectorMap extends StatefulWidget {
   const MarketplaceVectorMap({
     required this.initialCenter,
@@ -112,6 +125,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
   static const _sourceDriver = 'tuktuk-client-vector-driver';
   static const _sourceRoute = 'tuktuk-client-vector-route';
   static const _sourceFleet = 'tuktuk-client-vector-working-fleet';
+  static const _sourceCoverage = 'tuktuk-client-vector-fleet-coverage';
   Timer? _fleetTimer;
   bool _fleetRequestPending = false;
   bool _fleetForeground = true;
@@ -178,8 +192,9 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
     } else {
       _fleetTimer?.cancel();
       _fleetTimer = null;
-      // A paused map must not retain positions claiming current availability.
-      _fleetPoints = const [];
+      // Keep only an anonymous coverage footprint while inactive; never
+      // retain a stale live-availability assertion.
+      _fleetPoints = marketplaceFleetAsCoverage(_fleetPoints);
       unawaited(_refreshFleetSource());
     }
   }
@@ -199,15 +214,14 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
     try {
       final points = await loader().timeout(const Duration(seconds: 12));
       if (!mounted || widget.loadFleetPoints == null) return;
-      // The gateway may return historical coverage, but the loader only
-      // passes genuine live availability to this public map.
-      _fleetPoints = points.where((p) => p.source == 'fleet_live')
-          .toList(growable: false);
+      // Preserve both anonymous layers; availability is always explicit.
+      _fleetPoints = points;
       await _refreshFleetSource();
     } catch (_) {
-      // If the connection fails, never keep dots that can become stale.
+      // Poor connectivity must not erase known coverage, but it must
+      // immediately downgrade any old live signal to coverage.
       if (mounted && widget.loadFleetPoints != null) {
-        _fleetPoints = const [];
+        _fleetPoints = marketplaceFleetAsCoverage(_fleetPoints);
         await _refreshFleetSource();
       }
     } finally {
@@ -218,6 +232,9 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
   Future<void> _refreshFleetSource() async {
     if (!_layersReady || _map == null) return;
     try {
+      await _updateSource(_sourceCoverage, marketplaceVectorFleetGeoJson(
+        _fleetPoints.where((point) => point.source != 'fleet_live').toList(),
+      ));
       await _updateSource(_sourceFleet, marketplaceVectorFleetGeoJson(
         _fleetPoints.where((point) => point.source == 'fleet_live').toList(),
       ));
@@ -365,7 +382,43 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
           data: marketplaceVectorPointGeoJson(widget.driverPoint),
         ),
       );
-      // Only verified live drivers; no historic fleet-coverage layer.
+      // Historic coverage: approximate, anonymous and NOT an offer of a
+      // driver ready for pickup. Distinct subdued symbols avoid confusion.
+      await map.addSource(mbx.GeoJsonSource(
+        id: _sourceCoverage,
+        data: marketplaceVectorFleetGeoJson(
+          _fleetPoints.where((point) => point.source != 'fleet_live').toList(),
+        ),
+      ));
+      await map.addLayer(mbx.CircleLayer(
+        id: 'tuktuk-client-fleet-coverage-white-halo',
+        sourceId: _sourceCoverage,
+        circleColor: 0xFFFFFFFF,
+        circleRadius: 9.0,
+        circleOpacity: 0.20,
+        circleBlur: 0.28,
+        circleEmissiveStrength: 1.0,
+      ));
+      await map.addLayer(mbx.CircleLayer(
+        id: 'tuktuk-client-fleet-coverage-points',
+        sourceId: _sourceCoverage,
+        circleColor: 0xFF7EA9CA,
+        circleRadius: 6.5,
+        circleOpacity: 0.78,
+        circleStrokeColor: 0xFFFFFFFF,
+        circleStrokeWidth: 1.2,
+        circleStrokeOpacity: 0.82,
+        circleEmissiveStrength: 1.0,
+      ));
+      await map.addLayer(mbx.SymbolLayer(
+        id: 'tuktuk-client-fleet-coverage-count',
+        sourceId: _sourceCoverage,
+        textField: '{count}',
+        textColor: 0xFFFFFFFF,
+        textSize: 10.0,
+        textAllowOverlap: true,
+      ));
+      // Real availability stays bright blue with a strong white halo.
       await map.addSource(mbx.GeoJsonSource(
         id: _sourceFleet,
         data: marketplaceVectorFleetGeoJson(
