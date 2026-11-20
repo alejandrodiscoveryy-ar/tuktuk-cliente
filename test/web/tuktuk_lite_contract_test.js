@@ -90,6 +90,53 @@ test('Lite conserva fuente y campaña al volver a completo, no parámetros priva
     '../?mode=full');
   assert.equal(core.fullAppUrl(''), '../?mode=full');
 });
+test('Lite registra su carga real con fuente comercial, nunca una solicitud confirmada',()=>{
+  const posts=[];
+  const state=new Map();
+  const host={
+    location:{search:'?utm_source=whatsapp_groups&utm_campaign=tuktuk_hospitales&phone=12345678'},
+    navigator:{},
+    crypto:{randomUUID:()=> '12345678-1234-4234-8234-123456789abc'},
+    sessionStorage:{getItem:k=>state.get(k)||null,setItem:(k,v)=>state.set(k,v)},
+    fetch:(url,init)=>{ posts.push({url,init,body:JSON.parse(init.body)});return Promise.resolve({status:204}); },
+  };
+  assert.equal(core.trackLiteOpen(host),true);
+  assert.equal(posts.length,1);
+  assert.equal(posts[0].body.event,'app_open');
+  assert.equal(posts[0].body.channel,'whatsapp_groups');
+  assert.equal(posts[0].body.campaign,'tuktuk_hospitales');
+  assert.equal(posts[0].body.promo_code,null);
+  assert.equal(posts[0].body.session_id,'12345678-1234-4234-8234-123456789abc');
+  assert.ok(!JSON.stringify(posts[0].body).includes('phone'));
+  assert.equal(posts[0].init.keepalive,true);
+  assert.equal(posts[0].init.credentials,'omit');
+  assert.equal(posts[0].init.headers['Content-Type'],'text/plain');
+  // Misma sesión que el acceso completo; el backend evita duplicar la etapa.
+  core.trackLiteOpen(host);
+  assert.equal(state.size,1);
+  assert.equal(posts[1].body.session_id,posts[0].body.session_id);
+  assert.match(js,/trackLiteOpen\(root\);/);
+  assert.ok(js.indexOf('trackLiteOpen(root);') > js.indexOf('root.location.replace(fullModeUrl);'));
+});
+
+test('Lite respeta privacidad y la telemetría nunca interrumpe el servicio',()=>{
+  const body=[];
+  const base={
+    location:{search:'?utm_source=invalid&utm_campaign=nombre%40invalido'},
+    navigator:{},
+    crypto:{randomUUID:()=> '12345678-1234-4234-8234-123456789abc'},
+    sessionStorage:{getItem:()=>null,setItem:()=>{}},
+    fetch:(url,options)=>{body.push(JSON.parse(options.body));throw new Error('sin red');},
+  };
+  assert.equal(core.trackLiteOpen(base),false);
+  assert.equal(body[0].channel,'unknown');
+  assert.equal(body[0].campaign,null);
+  assert.equal(core.trackLiteOpen({...base,navigator:{doNotTrack:'1'}}),false);
+  assert.equal(core.trackLiteOpen({...base,navigator:{globalPrivacyControl:true}}),false);
+  assert.equal(core.trackLiteOpen({...base,fetch:undefined}),false);
+  assert.equal(body.length,1);
+});
+
 test('Lite es HTML minimo independiente y sin creacion de carreras automatica',()=>{
   assert.doesNotMatch(html,/flutter_bootstrap|main\.dart\.js|firebase|mapbox/i);
   assert.match(js,/fullAppUrl\(root\.location\.search, 'lite'\)/);
