@@ -75,11 +75,26 @@ test('prueba manual de Lite conserva una sola URL de entrada', () => {
   assert.deepEqual(v.redirects, ['http://127.0.0.1:8765/lite/?preview=1']);
   assert.equal(v.preloads.length, 0);
 });
+test('red lenta conserva UTM oficial al entrar en Lite, nunca datos privados', () => {
+  const campaign = run('?utm_source=whatsapp_groups&utm_campaign=tuktuk_hospitales&phone=12345678',
+    { effectiveType:'2g', downlink:0.3 });
+  assert.deepEqual(campaign.redirects, [
+    'http://127.0.0.1:8765/lite/?utm_source=whatsapp_groups&utm_campaign=tuktuk_hospitales'
+  ]);
+  const preview = run('?preview=lite&utm_source=qr&utm_campaign=tuktuk_carteles',
+    { effectiveType:'4g', downlink:10 });
+  assert.deepEqual(preview.redirects, [
+    'http://127.0.0.1:8765/lite/?preview=1&utm_source=qr&utm_campaign=tuktuk_carteles'
+  ]);
+  const invalid = run('?utm_source=evil&utm_campaign=mail%40invalid&phone=12345678',
+    { effectiveType:'2g' });
+  assert.deepEqual(invalid.redirects, ['http://127.0.0.1:8765/lite/']);
+});
 test('Lite nunca se combina con la carga de Flutter en el arranque', () => {
   assert.ok(html.indexOf('TUKTUK_UNIFIED_ENTRY_BEGIN') < html.indexOf('{{flutter_bootstrap_js}}'));
   assert.doesNotMatch(html, /id="tuktuk-lite-entry"/);
   assert.doesNotMatch(html, /<link rel="preload" href="main\.dart\.js"/);
   const lite = fs.readFileSync('web/lite/lite.js','utf8');
-  assert.match(lite, /root\.location\.replace\('\.\.\/\?mode=full'\)/);
+  assert.match(lite, /root\.location\.replace\(fullModeUrl\)/);
   assert.match(lite, /\?lite=unavailable/);
 });
