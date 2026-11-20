@@ -137,6 +137,16 @@ test('Lite respeta privacidad y la telemetría nunca interrumpe el servicio',()=
   assert.equal(body.length,1);
 });
 
+test('al regresar de mensajes Lite no asegura una reserva ni obliga a reescribirla',()=>{
+  assert.match(html,/¿Pudiste enviar tu mensaje\?/);
+  assert.match(html,/Todavía no hay viaje confirmado/);
+  assert.match(html,/id="lite-return-form"/);
+  assert.match(html,/Revisar o reenviar mi solicitud/);
+  assert.match(js,/function showReturnCheck\(/);
+  assert.match(js,/if \(returnForm\) returnForm\.addEventListener/);
+  assert.match(js,/form\.hidden = false/);
+  assert.doesNotMatch(html,/En breve, una operadora se pondrá en contacto/);
+});
 test('Lite es HTML minimo independiente y sin creacion de carreras automatica',()=>{
   assert.doesNotMatch(html,/flutter_bootstrap|main\.dart\.js|firebase|mapbox/i);
   assert.match(js,/fullAppUrl\(root\.location\.search, 'lite'\)/);
