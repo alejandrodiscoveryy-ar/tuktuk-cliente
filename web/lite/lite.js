@@ -31,6 +31,42 @@
     return '../?' + target.toString();
   }
 
+
+  // La entrada Lite también es una apertura real de la app.
+  // No atribuirla a una solicitud ni a una carrera: WhatsApp/SMS se confirman fuera de Lite.
+  // Solo telemetría anónima; nunca bloquea o retrasa el formulario de transporte.
+  function trackLiteOpen(host) {
+    try {
+      const nav = host.navigator || {};
+      if (nav.doNotTrack === '1' || nav.globalPrivacyControl === true ||
+          typeof host.fetch !== 'function' || !host.crypto ||
+          typeof host.crypto.randomUUID !== 'function') return false;
+      const params = new URLSearchParams(host.location?.search || '');
+      const source = params.get('utm_source') || '';
+      const channel = /^(unknown|direct|whatsapp_private|whatsapp_groups|whatsapp_status|facebook|instagram|qr|other)$/.test(source)
+        ? source : 'unknown';
+      const value = params.get('utm_campaign') || '';
+      const campaign = /^[a-z0-9_-]{1,32}$/.test(value) ? value : null;
+      // El enlace desde Cliente a Lite conserva sesión si el navegador lo permite.
+      // Así se evita contar dos veces una misma etapa en la misma sesión.
+      const key = 'tuktuk_impulsa_session_v1';
+      let sessionId = null;
+      try { sessionId = host.sessionStorage?.getItem(key); } catch (_) {}
+      if (!UUID.test(sessionId || '')) {
+        sessionId = host.crypto.randomUUID();
+        if (!UUID.test(sessionId)) return false;
+        try { host.sessionStorage?.setItem(key, sessionId); } catch (_) {}
+      }
+      const body = {event:'app_open',session_id:sessionId,promo_code:null,channel,campaign};
+      const request = host.fetch('https://vvxvnywzgtqhlaqpxyqh.supabase.co/functions/v1/marketplace-impulsa-analytics', {
+        method:'POST',mode:'cors',credentials:'omit',cache:'no-store',
+        headers:{'Content-Type':'text/plain'},keepalive:true,body:JSON.stringify(body),
+      });
+      if (request && typeof request.catch === 'function') request.catch(() => {});
+      return true;
+    } catch (_) { return false; }
+  }
+
   function validateForm(fields) {
     const name = String(fields.name || '').trim();
     const phone = String(fields.phone || '').trim();
@@ -248,7 +284,7 @@
 
   const core = { slowNetwork, validateForm, messageFor, whatsappUrl, smsMessageFor, smsUrl, parseConfig,
     currentSupportNumber, requestJson, loadConfig, fetchCurrentSupport, fetchSupportState,
-    saveCachedSupport, readCachedSupport, clearCachedSupport, supportHoursOpen, originGps, addressMapSearch, fullAppUrl };
+    saveCachedSupport, readCachedSupport, clearCachedSupport, supportHoursOpen, originGps, addressMapSearch, fullAppUrl, trackLiteOpen };
   if (typeof module === 'object' && module.exports) module.exports = core;
   if (typeof document === 'undefined') return;
 
@@ -266,6 +302,7 @@
   const smsButton = document.getElementById('lite-send-sms');
   const thanks = document.getElementById('lite-thanks');
   const another = document.getElementById('lite-another');
+  const returnForm = document.getElementById('lite-return-form');
   const intro = document.getElementById('lite-intro');
   const locate = document.getElementById('lite-locate');
   const geoStatus = document.getElementById('lite-geo-status');
@@ -288,6 +325,9 @@
     return;
   }
 
+  // Registrar solo cuando Lite permanece visible; no durante la redirección a Completa.
+  trackLiteOpen(root);
+
   let busy = false;
   let enabled = false;
   let config = null;
@@ -303,7 +343,7 @@
   function clearExternal() {
     try { root.sessionStorage?.removeItem(RETURN_KEY); } catch (_) {}
   }
-  function showThanks() {
+  function showReturnCheck() {
     externalPending = false;
     leftBrowser = false;
     clearExternal();
@@ -320,14 +360,14 @@
     rememberExternal(true);
   }
   function handleReturn() {
-    if (externalPending && leftBrowser) { showThanks(); return; }
+    if (externalPending && leftBrowser) { showReturnCheck(); return; }
     try {
       const state = JSON.parse(root.sessionStorage?.getItem(RETURN_KEY) || 'null');
-      if (state && state.left === true && Date.now() - state.at < 600000) showThanks();
+      if (state && state.left === true && Date.now() - state.at < 600000) showReturnCheck();
     } catch (_) {}
   }
   // External apps do not disclose whether the message was actually sent.
-  // The thank-you screen is only shown on return from another app.
+  // El regreso a Lite solo prueba que se abrió otra app, NO que se haya enviado el mensaje.
   if (typeof root.addEventListener === 'function') {
     root.addEventListener('pagehide', markLeaving);
     root.addEventListener('pageshow', handleReturn);
@@ -338,6 +378,18 @@
       if (document.visibilityState === 'visible') handleReturn();
     });
   }
+  if (returnForm) returnForm.addEventListener('click', () => {
+    // Retomar la misma solicitud y conservar el trayecto y el teléfono.
+    clearExternal();
+    externalPending = false;
+    leftBrowser = false;
+    thanks.hidden = true;
+    form.hidden = false;
+    status.hidden = false;
+    intro.hidden = false;
+    render('Comprueba si enviaste el mensaje antes de volver a intentarlo.');
+    if (typeof root.scrollTo === 'function') root.scrollTo(0, 0);
+  });
   another.addEventListener('click', () => {
     clearExternal();
     externalPending = false;
