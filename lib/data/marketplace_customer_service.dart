@@ -478,6 +478,15 @@ List<MarketplaceMapPoint> marketplaceFleetPresencePoints(Object? value) {
       lat: lat,
       lon: lon,
       source: raw['available_now'] == true ? 'fleet_live' : 'fleet_coverage',
+      // Category comes from the assigned vehicle, never a driver identity.
+      category: switch (raw['category_code']) {
+        'light_car' => 'light_car',
+        'motorcycle' => 'motorcycle',
+        'tricycle' => 'tricycle',
+        'bicitaxi' => 'bicitaxi',
+        'bicycle' => 'bicycle',
+        _ => 'other',
+      },
     ));
   }
   return List<MarketplaceMapPoint>.unmodifiable(points);
