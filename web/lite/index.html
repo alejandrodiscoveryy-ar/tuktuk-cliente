@@ -49,8 +49,8 @@ button.locate:disabled{opacity:.55;cursor:wait}
 .geo-status{font-size:12px;line-height:1.4;color:#9ce5ce;margin:0 0 10px}
 .pickup-title{margin:0 0 9px;color:#dce8e8;font-size:13px;font-weight:650}
 select:invalid{color:#8ca2a7}
-.thanks{background:#123b31;border:1px solid #288e71;border-radius:22px;padding:25px 20px;text-align:center}
-.thanks-icon{height:64px;width:64px;border-radius:50%;background:#28d5a3;color:#053123;display:grid;place-items:center;margin:0 auto 20px;font-size:36px;font-weight:900}
+.thanks{background:#10212a;border:1px solid #365e59;border-radius:22px;padding:25px 20px;text-align:center}
+.thanks-icon{height:64px;width:64px;border-radius:50%;background:#e5a84e;color:#302300;display:grid;place-items:center;margin:0 auto 20px;font-size:36px;font-weight:900}
 .thanks h2{font-size:25px;margin-bottom:16px}
 .thanks p{color:#e0fff2;font-size:16px;line-height:1.5}
 .thanks .thanks-note{font-size:12px;color:#acdccb;margin-top:14px}
@@ -123,11 +123,12 @@ footer a{color:#9ce5ce;text-decoration:underline;text-underline-offset:4px}
     </section>
   </form>
   <section id="lite-thanks" class="thanks" role="status" aria-live="polite" hidden>
-    <div class="thanks-icon" aria-hidden="true">✓</div>
-    <h2>¡Gracias por elegir TukTuk!</h2>
-    <p>En breve, una operadora se pondrá en contacto con usted.</p>
-    <p class="thanks-note">Si confirmó el envío de su mensaje, espere nuestra respuesta.</p>
-    <button type="button" class="primary" id="lite-another">Solicitar otra carrera</button>
+    <div class="thanks-icon" aria-hidden="true">?</div>
+    <h2>¿Pudiste enviar tu mensaje?</h2>
+    <p>TukTuk no puede comprobar desde aquí si pulsaste Enviar en WhatsApp o SMS.</p>
+    <p class="thanks-note">Si lo enviaste, espera la respuesta del operador. Si no, puedes volver al formulario sin escribir todo de nuevo. Todavía no hay viaje confirmado.</p>
+    <button type="button" class="primary" id="lite-return-form">Revisar o reenviar mi solicitud</button>
+    <button type="button" class="sms-button" id="lite-another">Preparar otro recorrido</button>
   </section>
   <footer><a id="lite-full" href="../?mode=full">Usar TukTuk completo</a></footer>
 </main>
