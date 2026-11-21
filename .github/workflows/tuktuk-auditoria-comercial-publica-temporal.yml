@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   comprobar-publicacion:
-    if: ${{ github.event.head_commit.message == 'ops(cliente): verificar captacion comercial publicada - temporal' }}
+    if: ${{ github.event.before == 'c0f737b894ac7c2d59280d97d3d69075b0498b7a' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
