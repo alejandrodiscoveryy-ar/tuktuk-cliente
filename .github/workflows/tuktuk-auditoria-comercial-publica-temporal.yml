@@ -1,0 +1,79 @@
+name: Verificacion puntual de TukTuk comercial (temporal)
+'on':
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tuktuk-auditoria-comercial-publica-temporal.yml'
+permissions:
+  contents: read
+jobs:
+  comprobar-publicacion:
+    if: ${{ github.event.head_commit.message == 'ops(cliente): verificar captacion comercial publicada - temporal' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Comprobar versiones públicas sin escribir datos
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import urllib.request, urllib.parse, urllib.error, re, collections
+          def fetch(url, limit=6500000):
+              req=urllib.request.Request(url,headers={'User-Agent':'TukTukPublicReadOnlySmoke/1.0','Cache-Control':'no-cache'})
+              with urllib.request.urlopen(req,timeout=17) as res:
+                  body=res.read(limit)
+                  return res.status,body
+          live = {}
+          for key,url in [
+              ('cliente','https://www.vrixora.com/cliente/tuk/'),
+              ('lite_html','https://www.vrixora.com/cliente/tuk/lite/'),
+              ('lite_js','https://www.vrixora.com/cliente/tuk/lite/lite.js'),
+              ('admin','https://admin.vrixora.com/'),
+              ('conuco','https://www.vrixora.com/tuk/conuco'),
+              ('karamba','https://www.vrixora.com/tuk/karamba'),
+          ]:
+              status,body=fetch(url)
+              live[key]=body.decode('utf-8','replace')
+              print('PUBLIC_STATUS',key,status,'BYTES',len(body))
+              if status!=200: raise AssertionError('HTTP_FAILURE '+key)
+          assert 'trackLiteOpen' in live['lite_js'], 'LITE_TELEMETRY_NOT_VISIBLE'
+          assert 'showReturnCheck' in live['lite_js'], 'LITE_RETURN_NOT_VISIBLE'
+          assert '¿Pudiste enviar tu mensaje?' in live['lite_html'], 'LITE_TEXT_NOT_VISIBLE'
+          print('CLIENTE_LITE_LIVE=OK')
+          for nick in ['conuco','karamba']:
+              h=live[nick]
+              assert 'TukTuk Aliados' in h and nick in h.lower(), 'ALLY_PREVIEW_NOT_VISIBLE '+nick
+          print('ALIADOS_PREVIEW_LIVE=OK')
+          admin_html=live['admin']
+          sources=set(re.findall(r'''(?:src|href)=["']([^"']+\.js(?:\?[^"']*)?)["']''',admin_html))
+          sources.update(re.findall(r'''(?:/assets/|assets/)[A-Za-z0-9._/-]+\.js''',admin_html))
+          pending=collections.deque(urllib.parse.urljoin('https://admin.vrixora.com/',v) for v in sorted(sources))
+          seen=set()
+          hits={'organic':False,'abandonment':False}
+          fail=0
+          while pending and len(seen)<85 and not all(hits.values()):
+              url=pending.popleft()
+              if url in seen or not url.startswith('https://admin.vrixora.com/'): continue
+              seen.add(url)
+              try:
+                  status,content=fetch(url)
+              except Exception:
+                  fail+=1
+                  continue
+              if status!=200: continue
+              txt=content.decode('utf-8','replace')
+              if ('Sin atribución' in txt or 'Sin atribuci' in txt or 'Orgánico ·' in txt or 'Org\\u00e1nico' in txt):
+                  hits['organic']=True
+              if ('Motivos declarados' in txt or 'Captación de pasajeros' in txt or ('Captaci' in txt and 'pasajeros' in txt)):
+                  hits['abandonment']=True
+              for m in re.findall(r'''(?:/assets/|\./)[A-Za-z0-9._/-]+\.js''',txt):
+                  absolute=urllib.parse.urljoin(url,m)
+                  if absolute not in seen: pending.append(absolute)
+          print('ADMIN_HTML_HEAD',admin_html[:380].replace('\n',' '))
+          print('ADMIN_ASSETS_CHECKED',len(seen),'FAILED_READS',fail)
+          print('ADMIN_ORGANIC_BUILD_VISIBLE',hits['organic'])
+          print('ADMIN_ALIADOS_FUNNEL_BUILD_VISIBLE',hits['abandonment'])
+          if not all(hits.values()):
+              raise AssertionError('ADMIN_BUILD_VERSION_NOT_PROVEN')
+          print('ADMIN_COMERCIAL_LIVE=OK')
+          PY
