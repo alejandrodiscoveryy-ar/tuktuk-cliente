@@ -1,5 +1,18 @@
 part of '../main.dart';
 
+String _trackingExactCupAmount(num value) {
+  final pieces = value.toStringAsFixed(2).split('.');
+  final whole = pieces.first;
+  final grouped = StringBuffer();
+  for (var i = 0; i < whole.length; i++) {
+    if (i > 0 && (whole.length - i) % 3 == 0) grouped.write('.');
+    grouped.write(whole[i]);
+  }
+  return pieces.last == '00'
+      ? grouped.toString()
+      : '${grouped.toString()},${pieces.last}';
+}
+
 class MarketplaceCustomerTrackingScreen extends StatefulWidget {
   const MarketplaceCustomerTrackingScreen({
     required this.service,
@@ -646,7 +659,7 @@ class _MarketplaceCustomerTrackingScreenState
           TuktukSummaryRow(
             icon: Icons.payments_outlined,
             label: 'Precio',
-            value: '${job.finalPrice.toStringAsFixed(0)} ${job.currency}',
+            value: '${_trackingExactCupAmount(job.finalPrice)} ${job.currency}',
             iconColor: TuktukTheme.gold,
           ),
           const Divider(color: TuktukTheme.border, height: 1),
@@ -1160,7 +1173,7 @@ class _MarketplaceCustomerTrackingScreenState
                       ),
                       const SizedBox(width: 10),
                       Text(
-                        '${job.finalPrice.toStringAsFixed(0)} ${job.currency}',
+                        '${_trackingExactCupAmount(job.finalPrice)} ${job.currency}',
                         style: const TextStyle(
                           color: TuktukTheme.gold,
                           fontWeight: FontWeight.w900,
