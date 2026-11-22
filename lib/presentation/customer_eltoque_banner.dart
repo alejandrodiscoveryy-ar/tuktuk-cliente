@@ -103,6 +103,9 @@ class _TuktukCustomerEltoqueBannerState
     extends State<TuktukCustomerEltoqueBanner> with WidgetsBindingObserver {
   Timer? _refreshTimer;
   Timer? _initialRateTimer;
+  Timer? _rateRetryTimer;
+  int _consecutiveRateFailures = 0;
+  bool _initialRateChecked = false;
   bool _appVisible = true;
   StreamSubscription<RemoteMessage>? _pushMessages;
   late final CustomerRatePushClient _pushClient;
@@ -177,6 +180,7 @@ class _TuktukCustomerEltoqueBannerState
   @override
   void dispose() {
     _initialRateTimer?.cancel();
+    _rateRetryTimer?.cancel();
     _refreshTimer?.cancel();
     _pushMessages?.cancel();
     WidgetsBinding.instance.removeObserver(this);
@@ -214,13 +218,43 @@ class _TuktukCustomerEltoqueBannerState
           .rpc('marketplace_public_eltoque_rate')
           .timeout(const Duration(seconds: 10));
       if (!mounted) return;
-      setState(() => _snapshot = MarketplacePublicEltoqueRate.parse(raw));
+      final latest = MarketplacePublicEltoqueRate.parse(raw);
+      setState(() {
+        _initialRateChecked = true;
+        // A failed/invalid optional refresh must not erase a verified snapshot.
+        if (latest?.canDisplay == true) {
+          _snapshot = latest;
+        } else if (!(_snapshot?.canDisplay ?? false)) {
+          _snapshot = latest;
+        }
+      });
+      if (latest?.canDisplay == true) {
+        _consecutiveRateFailures = 0;
+        _rateRetryTimer?.cancel();
+      } else {
+        _scheduleRateRetry();
+      }
     } catch (_) {
       if (!mounted) return;
-      setState(() => _snapshot = null);
+      setState(() {
+        _initialRateChecked = true;
+        if (!(_snapshot?.canDisplay ?? false)) _snapshot = null;
+      });
+      _scheduleRateRetry();
     } finally {
       _loading = false;
     }
+  }
+
+  void _scheduleRateRetry() {
+    // Best effort, at most two short retries; normal refresh continues
+    // every five minutes. Never compete with booking and routing requests.
+    if (_consecutiveRateFailures >= 2 || !mounted) return;
+    _consecutiveRateFailures++;
+    _rateRetryTimer?.cancel();
+    _rateRetryTimer = Timer(const Duration(seconds: 20), () {
+      if (mounted) unawaited(_refresh());
+    });
   }
 
   @override
@@ -243,7 +277,7 @@ class _TuktukCustomerEltoqueBannerState
         : ' $marker${marketplaceEltoqueAmount(delta.abs())}';
     final text = valid
         ? marketplaceEltoqueRateLabel(rate!.rate)
-        : 'Tasa no disponible';
+        : _initialRateChecked ? 'Tasa no disponible' : 'Consultando tasa…';
 
     return Material(
       color: const Color(0xFF101A21),
