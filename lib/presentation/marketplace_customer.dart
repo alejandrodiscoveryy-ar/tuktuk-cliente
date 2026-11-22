@@ -1618,7 +1618,7 @@ class _MarketplaceCustomerQuoteScreenState
     if (draft.isBelowMinimum(price)) {
       setState(() {
         _error = 'El mínimo permitido es '
-            '${draft.minimumPrice.toStringAsFixed(0)} '
+            '${_priceInput(draft.minimumPrice)} '
             '${draft.currency}.';
       });
       return;
@@ -1776,7 +1776,7 @@ class _MarketplaceCustomerQuoteScreenState
                   const SizedBox(height: 8),
                   Text(
                     'Mínimo permitido: '
-                    '${draft.minimumPrice.toStringAsFixed(0)} '
+                    '${_priceInput(draft.minimumPrice)} '
                     '${draft.currency}',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: belowMinimum ? kDanger : kMuted,
