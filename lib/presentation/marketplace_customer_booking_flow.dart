@@ -2635,7 +2635,9 @@ class _MarketplaceCustomerBookingFlowState
       return value?.toString() ?? '-';
     }
 
-    final digits = number.round().toString();
+    // Show the actual server quote to the centavo, never round to whole CUP.
+    final parts = number.toStringAsFixed(2).split('.');
+    final digits = parts.first;
     final buffer = StringBuffer();
 
     for (var i = 0; i < digits.length; i++) {
@@ -2645,7 +2647,7 @@ class _MarketplaceCustomerBookingFlowState
       buffer.write(digits[i]);
     }
 
-    return buffer.toString();
+    return parts.last == '00' ? buffer.toString() : '${buffer.toString()},${parts.last}';
   }
 
   String _priceLabel(Object? value, String code) {
