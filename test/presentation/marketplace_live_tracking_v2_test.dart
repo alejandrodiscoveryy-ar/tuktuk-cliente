@@ -46,6 +46,18 @@ void main() {
     },
   );
 
+  test('reapertura recupera GPS historico del servidor sin inventar tiempo real', () {
+    final source = File(
+      'lib/presentation/marketplace_customer_tracking.dart',
+    ).readAsStringSync();
+    // El gateway puede devolver una posicion de 60-120 s; ya no se desecha.
+    expect(source, contains('gps.isLastKnownUsable &&'));
+    expect(source, contains('driverPointStale: gps != null && !gps.isFresh'));
+    expect(source, contains('Última ubicación conocida hace'));
+    // No persiste GPS exacto en Hive ni lo publica como flota disponible.
+    expect(source, isNot(contains('saveDriverGps(')));
+  });
+
   test('la vista usa estados y mapa, sin GPS ficticio del conductor', () {
     final src = File(
       'lib/presentation/marketplace_customer_tracking.dart',
