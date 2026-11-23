@@ -29,6 +29,38 @@ void main() {
     expect(gps!.isFresh, isTrue);
   });
 
+  test('ultima posicion precisa permanece distinguible sin fingir tiempo real', () {
+    final cached = MarketplaceDriverLiveLocation.fromMap({
+      'latitude': 23.13,
+      'longitude': -82.36,
+      'accuracy_m': 14,
+      'captured_at': DateTime.now().toUtc()
+          .subtract(const Duration(minutes: 2)).toIso8601String(),
+    });
+    expect(cached, isNotNull);
+    expect(cached!.isFresh, isFalse);
+    expect(cached.isLastKnownUsable, isTrue);
+  });
+
+  test('no conserva posiciones mayores a diez minutos o imprecisas', () {
+    final expired = MarketplaceDriverLiveLocation(
+      latitude: 23.13,
+      longitude: -82.36,
+      capturedAt: DateTime.now().toUtc()
+          .subtract(const Duration(minutes: 11)),
+      accuracyM: 14,
+    );
+    final inaccurate = MarketplaceDriverLiveLocation(
+      latitude: 23.13,
+      longitude: -82.36,
+      capturedAt: DateTime.now().toUtc()
+          .subtract(const Duration(minutes: 2)),
+      accuracyM: 120,
+    );
+    expect(expired.isLastKnownUsable, isFalse);
+    expect(inaccurate.isLastKnownUsable, isFalse);
+  });
+
   test('GPS viejo o impreciso no aparece como posición actual', () {
     final older = MarketplaceDriverLiveLocation.fromMap({
       'latitude': 23.13,
