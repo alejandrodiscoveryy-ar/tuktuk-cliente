@@ -238,7 +238,9 @@ class _MarketplaceCustomerTrackingScreenState
     final gps = job.driverLocation;
     if (assignment != null &&
         gps != null &&
-        gps.isFresh &&
+        // El gateway puede devolver una posicion entre 60 y 120 segundos.
+        // Debe verse en gris incluso al abrir el seguimiento en ese instante.
+        gps.isLastKnownUsable &&
         (_lastKnownDriverGps?.capturedAt == null ||
             !gps.capturedAt!.isBefore(_lastKnownDriverGps!.capturedAt!))) {
       _lastKnownDriverGps = gps;
