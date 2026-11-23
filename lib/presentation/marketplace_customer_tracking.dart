@@ -62,6 +62,10 @@ class _MarketplaceCustomerTrackingScreenState
       ValueNotifier<LatLng?>(null);
   bool _followDriver = true;
   DateTime? _lastDriverPositionTime;
+  // Posicion recordada SOLO en esta pantalla y para este conductor asignado.
+  // Nunca guardar GPS preciso en Hive o en el mapa publico de flota.
+  MarketplaceDriverLiveLocation? _lastKnownDriverGps;
+  String? _lastKnownAssignment;
   double _trackingSheetFraction = .32;
 
   String? _error;
@@ -125,6 +129,7 @@ class _MarketplaceCustomerTrackingScreenState
 
       final previousStatus = _job?.status;
       setState(() {
+        _rememberConfirmedDriverPosition(job);
         _job = job;
         _error = null;
       });
@@ -221,6 +226,47 @@ class _MarketplaceCustomerTrackingScreenState
     }
   }
 
+  void _rememberConfirmedDriverPosition(MarketplaceCustomerJob job) {
+    final assignment = !job.isTerminal && job.hasAssignedDriver
+        ? '${job.vehicleId ?? ''}:${job.driverDisplayName ?? ''}'
+        : null;
+    if (assignment != _lastKnownAssignment) {
+      _lastKnownDriverGps = null;
+      _lastKnownAssignment = assignment;
+      _lastDriverPositionTime = null;
+    }
+    final gps = job.driverLocation;
+    if (assignment != null &&
+        gps != null &&
+        gps.isFresh &&
+        (_lastKnownDriverGps?.capturedAt == null ||
+            !gps.capturedAt!.isBefore(_lastKnownDriverGps!.capturedAt!))) {
+      _lastKnownDriverGps = gps;
+    }
+  }
+
+  MarketplaceDriverLiveLocation? _visibleDriverLocation() {
+    final job = _job;
+    if (job == null || job.isTerminal || !job.hasAssignedDriver) return null;
+    final current = job.driverLocation;
+    if (current != null && current.isFresh) return current;
+    final last = _lastKnownDriverGps;
+    return last?.isLastKnownUsable == true ? last : null;
+  }
+
+  String _driverLocationStatusText() {
+    if (_job?.driverLocation?.isFresh == true) {
+      return 'Ubicación del conductor actualizada';
+    }
+    final last = _visibleDriverLocation();
+    if (last?.capturedAt != null) {
+      final age = DateTime.now().toUtc().difference(last!.capturedAt!);
+      final minutes = max(1, age.inMinutes);
+      return 'Última ubicación conocida hace $minutes min · no es en directo';
+    }
+    return 'Ubicación del conductor sin señal reciente';
+  }
+
   void _updateDriverCamera(MarketplaceCustomerJob job) {
     if (!_followDriver) return;
     final gps = job.driverLocation;
@@ -231,9 +277,10 @@ class _MarketplaceCustomerTrackingScreenState
   }
 
   void _recenterOnDriver() {
-    final gps = _job?.driverLocation;
-    if (gps == null || !gps.isFresh) return;
-    setState(() => _followDriver = true);
+    final gps = _visibleDriverLocation();
+    if (gps == null) return;
+    // No seguir automaticamente una posicion historica.
+    setState(() => _followDriver = gps.isFresh);
     _lastDriverPositionTime = gps.capturedAt;
     _driverCameraTarget.value = LatLng(gps.latitude, gps.longitude);
   }
@@ -805,8 +852,8 @@ class _MarketplaceCustomerTrackingScreenState
                   .map((point) => MarketplaceMapPoint.fromMap(point))
                   .toList(growable: false)
               : <MarketplaceMapPoint>[];
-          final gps = _job?.driverLocation;
-          final driverPoint = gps != null && gps.isFresh
+          final gps = _visibleDriverLocation();
+          final driverPoint = gps != null
               ? MarketplaceMapPoint(
                   label: 'Conductor',
                   lat: gps.latitude,
@@ -831,6 +878,7 @@ class _MarketplaceCustomerTrackingScreenState
             requestedZoom: 14.0,
             onCenterMoved: _onCustomerMapMoved,
             driverPoint: driverPoint,
+            driverPointStale: gps != null && !gps.isFresh,
             originPoint: origin,
             destinationPoint: destination,
             routePoints: points,
@@ -1081,9 +1129,7 @@ class _MarketplaceCustomerTrackingScreenState
                           .contains(job.status)) ...[
                     const SizedBox(height: 6),
                     Text(
-                      job.driverLocation?.isFresh == true
-                          ? 'Ubicación del conductor actualizada'
-                          : 'Ubicación del conductor temporalmente no disponible',
+                      _driverLocationStatusText(),
                       style: const TextStyle(
                           color: TuktukTheme.muted, fontSize: 12),
                     ),
@@ -1274,7 +1320,7 @@ class _MarketplaceCustomerTrackingScreenState
                 ),
               ),
               if (job?.hasAssignedDriver == true &&
-                  job?.driverLocation?.isFresh == true)
+                  _visibleDriverLocation() != null)
                 Positioned(
                   top: 76,
                   right: 12,
@@ -1289,9 +1335,11 @@ class _MarketplaceCustomerTrackingScreenState
                         size: 18,
                       ),
                       label: Text(
-                        _followDriver
-                            ? 'Siguiendo conductor'
-                            : 'Seguir conductor',
+                        job?.driverLocation?.isFresh != true
+                            ? 'Ver última ubicación'
+                            : _followDriver
+                                ? 'Siguiendo conductor'
+                                : 'Seguir conductor',
                       ),
                     ),
                   ),

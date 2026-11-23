@@ -61,6 +61,22 @@ class MarketplaceDriverLiveLocation {
         delta <= const Duration(seconds: 60);
   }
 
+  // Solo para la carrera asignada: la ultima posicion exacta recibida puede
+  // mostrarse como HISTORICA (gris), nunca como seguimiento en directo.
+  // No se persiste en Hive ni se utiliza para disponibilidad de flota.
+  bool get isLastKnownUsable {
+    if (capturedAt == null ||
+        accuracyM == null ||
+        !accuracyM!.isFinite ||
+        accuracyM! < 0 ||
+        accuracyM! > 50) {
+      return false;
+    }
+    final age = DateTime.now().toUtc().difference(capturedAt!);
+    return age >= const Duration(seconds: -15) &&
+        age <= const Duration(minutes: 10);
+  }
+
   static MarketplaceDriverLiveLocation? fromMap(Object? raw) {
     if (raw is! Map) return null;
     final lat = double.tryParse('${raw['latitude']}');

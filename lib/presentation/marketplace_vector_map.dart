@@ -113,6 +113,7 @@ class MarketplaceVectorMap extends StatefulWidget {
     this.markerPoint,
     this.markerIsDestination = false,
     this.driverPoint,
+    this.driverPointStale = false,
     this.loadFleetPoints,
     this.originPoint,
     this.destinationPoint,
@@ -130,6 +131,7 @@ class MarketplaceVectorMap extends StatefulWidget {
   final MarketplaceMapPoint? markerPoint;
   final bool markerIsDestination;
   final MarketplaceMapPoint? driverPoint;
+  final bool driverPointStale;
   final Future<List<MarketplaceMapPoint>> Function()? loadFleetPoints;
   final MarketplaceMapPoint? originPoint;
   final MarketplaceMapPoint? destinationPoint;
@@ -146,6 +148,7 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
   static const _sourceOrigin = 'tuktuk-client-vector-origin';
   static const _sourceDestination = 'tuktuk-client-vector-destination';
   static const _sourceDriver = 'tuktuk-client-vector-driver';
+  static const _sourceDriverStale = 'tuktuk-client-vector-driver-stale';
   static const _sourceRoute = 'tuktuk-client-vector-route';
   static const _sourceFleet = 'tuktuk-client-vector-working-fleet';
   static const _sourceCoverage = 'tuktuk-client-vector-fleet-coverage';
@@ -192,7 +195,8 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
         oldWidget.routePoints != widget.routePoints) {
       unawaited(_refreshGeometry());
     }
-    if (oldWidget.driverPoint != widget.driverPoint) {
+    if (oldWidget.driverPoint != widget.driverPoint ||
+        oldWidget.driverPointStale != widget.driverPointStale) {
       unawaited(_refreshDriverPoint());
     }
     if ((oldWidget.loadFleetPoints == null) != (widget.loadFleetPoints == null)) {
@@ -586,7 +590,17 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
       await map.addSource(
         mbx.GeoJsonSource(
           id: _sourceDriver,
-          data: marketplaceVectorPointGeoJson(widget.driverPoint),
+          data: marketplaceVectorPointGeoJson(
+            widget.driverPointStale ? null : widget.driverPoint,
+          ),
+        ),
+      );
+      await map.addSource(
+        mbx.GeoJsonSource(
+          id: _sourceDriverStale,
+          data: marketplaceVectorPointGeoJson(
+            widget.driverPointStale ? widget.driverPoint : null,
+          ),
         ),
       );
       await _registerFleetIcons(map);
@@ -714,6 +728,17 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
           circleStrokeWidth: 3,
         ),
       );
+      // Gris = ultima ubicacion comprobada; no aparentar GPS en vivo.
+      await map.addLayer(
+        mbx.CircleLayer(
+          id: 'tuktuk-client-driver-last-known-position',
+          sourceId: _sourceDriverStale,
+          circleColor: 0xFF81909A,
+          circleRadius: 10,
+          circleStrokeColor: 0xFFFFFFFF,
+          circleStrokeWidth: 2,
+        ),
+      );
       if (!mounted || map != _map) return;
       setState(() {
         _layersReady = true;
@@ -743,7 +768,15 @@ class _MarketplaceVectorMapState extends State<MarketplaceVectorMap>
       // Actualización ligera, sin recrear mapa, estilo ni ruta.
       await _updateSource(
         _sourceDriver,
-        marketplaceVectorPointGeoJson(widget.driverPoint),
+        marketplaceVectorPointGeoJson(
+          widget.driverPointStale ? null : widget.driverPoint,
+        ),
+      );
+      await _updateSource(
+        _sourceDriverStale,
+        marketplaceVectorPointGeoJson(
+          widget.driverPointStale ? widget.driverPoint : null,
+        ),
       );
     } catch (_) {
       // Si falla la actualización GPS, preservar el mapa de la carrera.
