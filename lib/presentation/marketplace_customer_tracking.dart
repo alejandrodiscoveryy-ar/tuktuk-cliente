@@ -66,6 +66,11 @@ class _MarketplaceCustomerTrackingScreenState
   // Nunca guardar GPS preciso en Hive o en el mapa publico de flota.
   MarketplaceDriverLiveLocation? _lastKnownDriverGps;
   String? _lastKnownAssignment;
+  DateTime? _lastJobConfirmedAt;
+  DateTime? _pickupEtaLastAttemptAt;
+  DateTime? _pickupEtaConfirmedAt;
+  int? _pickupEtaSeconds;
+  bool _pickupEtaInFlight = false;
   double _trackingSheetFraction = .32;
 
   String? _error;
@@ -131,6 +136,7 @@ class _MarketplaceCustomerTrackingScreenState
       setState(() {
         _rememberConfirmedDriverPosition(job);
         _job = job;
+        _lastJobConfirmedAt = DateTime.now().toUtc();
         _error = null;
       });
       if (job.status == 'cancelled_by_driver' && previousStatus != 'cancelled_by_driver' && previousStatus != null) {
@@ -140,6 +146,7 @@ class _MarketplaceCustomerTrackingScreenState
       }
       _observeArrival(job);
       _updateDriverCamera(job);
+      unawaited(_updatePickupEta(job));
 
       final mediaSignature =
           '${job.driverPhotoAssetId ?? ''}:${job.vehicleMainPhotoAssetId ?? ''}';
@@ -234,6 +241,9 @@ class _MarketplaceCustomerTrackingScreenState
       _lastKnownDriverGps = null;
       _lastKnownAssignment = assignment;
       _lastDriverPositionTime = null;
+      _pickupEtaSeconds = null;
+      _pickupEtaConfirmedAt = null;
+      _pickupEtaLastAttemptAt = null;
     }
     final gps = job.driverLocation;
     if (assignment != null &&
@@ -267,6 +277,80 @@ class _MarketplaceCustomerTrackingScreenState
       return 'Última ubicación conocida hace $minutes min · no es en directo';
     }
     return 'Ubicación del conductor sin señal reciente';
+  }
+
+
+  // Mapbox calcula el recorrido por calles, no una velocidad inventada.
+  // Consultar como maximo una vez cada 45 segundos mientras hay GPS reciente.
+  Future<void> _updatePickupEta(MarketplaceCustomerJob job) async {
+    final pickupStage = job.status == 'accepted' || job.status == 'en_route';
+    if (!pickupStage || job.driverLocation?.isFresh != true) {
+      if (_pickupEtaSeconds != null && mounted) {
+        setState(() {
+          _pickupEtaSeconds = null;
+          _pickupEtaConfirmedAt = null;
+        });
+      }
+      return;
+    }
+    final now = DateTime.now().toUtc();
+    if (_pickupEtaInFlight ||
+        (_pickupEtaLastAttemptAt != null &&
+            now.difference(_pickupEtaLastAttemptAt!) <
+                const Duration(seconds: 45))) return;
+    _pickupEtaInFlight = true;
+    _pickupEtaLastAttemptAt = now;
+    final assignment = _lastKnownAssignment;
+    try {
+      final result = await widget.service.pickupArrivalEstimate(
+        sessionId: widget.session.sessionId,
+        sessionToken: widget.session.token,
+        jobId: widget.jobId,
+      );
+      if (!mounted ||
+          assignment != _lastKnownAssignment ||
+          _job?.driverLocation?.isFresh != true ||
+          !const {'accepted', 'en_route'}.contains(_job?.status)) return;
+      setState(() {
+        _pickupEtaSeconds = result?.durationSeconds;
+        _pickupEtaConfirmedAt = result == null ? null : DateTime.now().toUtc();
+      });
+    } catch (_) {
+      // El cálculo auxiliar nunca impide consultar, cancelar ni seguir
+      // la carrera. No mostrar la estimación anterior como si fuera nueva.
+      if (mounted && assignment == _lastKnownAssignment) {
+        setState(() {
+          _pickupEtaSeconds = null;
+          _pickupEtaConfirmedAt = null;
+        });
+      }
+    } finally {
+      _pickupEtaInFlight = false;
+    }
+  }
+
+  String? _pickupEtaText() {
+    final job = _job;
+    if (job == null ||
+        !const {'accepted', 'en_route'}.contains(job.status) ||
+        job.driverLocation?.isFresh != true ||
+        _pickupEtaSeconds == null ||
+        _pickupEtaConfirmedAt == null ||
+        DateTime.now().toUtc().difference(_pickupEtaConfirmedAt!) >
+            const Duration(seconds: 65)) return null;
+    final minutes = max(1, (_pickupEtaSeconds! / 60).ceil());
+    return 'Llegada estimada: ~$minutes min · por ruta, sin tráfico en vivo';
+  }
+
+  String? _offlineTrackingText() {
+    if (_error == null) return null;
+    final checked = _lastJobConfirmedAt;
+    if (checked == null) {
+      return 'No pudimos verificar el estado. Reintenta al recuperar internet.';
+    }
+    final age = DateTime.now().toUtc().difference(checked);
+    final minutes = max(1, age.inMinutes);
+    return 'Sin actualización del servidor · último estado comprobado hace $minutes min';
   }
 
   void _updateDriverCamera(MarketplaceCustomerJob job) {
@@ -1126,6 +1210,23 @@ class _MarketplaceCustomerTrackingScreenState
                       fontSize: 13,
                     ),
                   ),
+                  if (_offlineTrackingText() != null) ...[
+                    const SizedBox(height: 7),
+                    Row(
+                      children: [
+                        const Icon(Icons.wifi_off_rounded,
+                            color: TuktukTheme.gold, size: 16),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            _offlineTrackingText()!,
+                            style: const TextStyle(
+                                color: TuktukTheme.gold, fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   if (job.hasAssignedDriver &&
                       const {'accepted', 'en_route', 'pickup', 'in_progress'}
                           .contains(job.status)) ...[
@@ -1135,6 +1236,25 @@ class _MarketplaceCustomerTrackingScreenState
                       style: const TextStyle(
                           color: TuktukTheme.muted, fontSize: 12),
                     ),
+                    if (_pickupEtaText() != null) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(Icons.route_rounded,
+                              color: TuktukTheme.mint, size: 17),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              _pickupEtaText()!,
+                              style: const TextStyle(
+                                  color: TuktukTheme.mint,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                   if (_arrivalNotified &&
                       const {'accepted', 'en_route', 'pickup'}
