@@ -58,6 +58,19 @@ void main() {
     expect(source, isNot(contains('saveDriverGps(')));
   });
 
+  test('ETA se oculta sin GPS reciente y la desconexion mantiene el estado', () {
+    final s = File('lib/presentation/marketplace_customer_tracking.dart')
+        .readAsStringSync();
+    expect(s, contains('pickupArrivalEstimate('));
+    expect(s, contains('job.driverLocation?.isFresh != true'));
+    expect(s, contains('const Duration(seconds: 45)'));
+    expect(s, contains('const Duration(seconds: 65)'));
+    expect(s, contains('último estado comprobado'));
+    expect(s, contains('_offlineTrackingText()'));
+    expect(s, contains('_lastJobConfirmedAt'));
+    expect(s, contains('No pudimos actualizar el estado. Revisa tu conexión.'));
+  });
+
   test('la vista usa estados y mapa, sin GPS ficticio del conductor', () {
     final src = File(
       'lib/presentation/marketplace_customer_tracking.dart',
