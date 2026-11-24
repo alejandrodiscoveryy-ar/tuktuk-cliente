@@ -5,6 +5,42 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tuktuk_cliente/main.dart';
 
 void main() {
+  test('ETA de recogida se interpreta solo si el servidor confirma ruta', () {
+    final eta = MarketplacePickupArrivalEstimate.fromMap({
+      'stage': 'pickup',
+      'distance_km': 2.4,
+      'duration_seconds': 370,
+    });
+    expect(eta, isNotNull);
+    expect(eta!.durationSeconds, 370);
+    expect(eta.distanceKm, 2.4);
+    expect(MarketplacePickupArrivalEstimate.fromMap({
+      'stage': 'destination',
+      'distance_km': 2.4,
+      'duration_seconds': 370,
+    }), isNull);
+    expect(MarketplacePickupArrivalEstimate.fromMap({
+      'stage': 'pickup',
+      'distance_km': 0,
+      'duration_seconds': 0,
+    }), isNull);
+    expect(MarketplacePickupArrivalEstimate.fromMap({
+      'stage': 'pickup',
+      'distance_km': 2.4,
+      'duration_seconds': 25000,
+    }), isNull);
+  });
+
+  test('ETA depende de GPS autorizado sin coordenadas del navegador', () {
+    final source = File(
+      'lib/data/marketplace_customer_service.dart',
+    ).readAsStringSync();
+    expect(source, contains("'customer_tracking_route'"));
+    expect(source, contains("'target_session_id': sessionId"));
+    expect(source, contains("'target_session_token': sessionToken"));
+    expect(source, contains("'target_job_id': jobId"));
+  });
+
   test('customer session parses server contract', () {
     final session = MarketplaceCustomerSession.fromMap({
       'session_id': 'session-1',
