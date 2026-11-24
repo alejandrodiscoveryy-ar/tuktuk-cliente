@@ -71,6 +71,15 @@ void main() {
     expect(s, contains('No pudimos actualizar el estado. Revisa tu conexión.'));
   });
 
+  test('ETA vial no da minutos de automovil a bicitaxi o bicicleta', () {
+    final source = File('lib/presentation/marketplace_customer_tracking.dart')
+        .readAsStringSync();
+    expect(source, contains("'light_car', 'motorcycle', 'tricycle', 'van'"));
+    expect(source, contains('roadVehicle'));
+    expect(source, contains('!roadVehicle'));
+    expect(source, contains('Llegada orientativa'));
+  });
+
   test('la vista usa estados y mapa, sin GPS ficticio del conductor', () {
     final src = File(
       'lib/presentation/marketplace_customer_tracking.dart',

@@ -284,7 +284,11 @@ class _MarketplaceCustomerTrackingScreenState
   // Consultar como maximo una vez cada 45 segundos mientras hay GPS reciente.
   Future<void> _updatePickupEta(MarketplaceCustomerJob job) async {
     final pickupStage = job.status == 'accepted' || job.status == 'en_route';
-    if (!pickupStage || job.driverLocation?.isFresh != true) {
+    // Mapbox usa el perfil vial de automóvil: no atribuir sus minutos a
+    // bicicletas/bicitaxis ni a modalidades sin perfil de ruta validado.
+    final roadVehicle = const {'light_car', 'motorcycle', 'tricycle', 'van'}
+        .contains(job.vehicleCategoryCode);
+    if (!pickupStage || !roadVehicle || job.driverLocation?.isFresh != true) {
       if (_pickupEtaSeconds != null && mounted) {
         setState(() {
           _pickupEtaSeconds = null;
@@ -333,13 +337,15 @@ class _MarketplaceCustomerTrackingScreenState
     final job = _job;
     if (job == null ||
         !const {'accepted', 'en_route'}.contains(job.status) ||
+        !const {'light_car', 'motorcycle', 'tricycle', 'van'}
+            .contains(job.vehicleCategoryCode) ||
         job.driverLocation?.isFresh != true ||
         _pickupEtaSeconds == null ||
         _pickupEtaConfirmedAt == null ||
         DateTime.now().toUtc().difference(_pickupEtaConfirmedAt!) >
             const Duration(seconds: 65)) return null;
     final minutes = max(1, (_pickupEtaSeconds! / 60).ceil());
-    return 'Llegada estimada: ~$minutes min · por ruta, sin tráfico en vivo';
+    return 'Llegada orientativa: ~$minutes min · ruta vial, sin tráfico en vivo';
   }
 
   String? _offlineTrackingText() {
