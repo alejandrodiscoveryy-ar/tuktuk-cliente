@@ -508,10 +508,55 @@ List<MarketplaceMapPoint> marketplaceFleetPresencePoints(Object? value) {
   return List<MarketplaceMapPoint>.unmodifiable(points);
 }
 
+/// Estimacion vial del acercamiento para la carrera autorizada.
+class MarketplacePickupArrivalEstimate {
+  const MarketplacePickupArrivalEstimate({
+    required this.durationSeconds,
+    required this.distanceKm,
+  });
+
+  final int durationSeconds;
+  final double distanceKm;
+
+  static MarketplacePickupArrivalEstimate? fromMap(Object? raw) {
+    if (raw is! Map || raw['stage'] != 'pickup') return null;
+    final seconds = _marketNumber(raw['duration_seconds']);
+    final km = _marketNumber(raw['distance_km']);
+    if (!seconds.isFinite || !km.isFinite ||
+        seconds <= 0 || seconds > 7200 ||
+        km <= 0 || km > 200) return null;
+    return MarketplacePickupArrivalEstimate(
+      durationSeconds: seconds.ceil(),
+      distanceKm: km,
+    );
+  }
+}
+
 class MarketplaceCustomerService {
   MarketplaceCustomerService(this._client);
 
   final SupabaseClient _client;
+
+  /// El servidor valida propiedad de la carrera y el GPS antes de consultar
+  /// Mapbox. Nunca se envian coordenadas del conductor desde el navegador.
+  Future<MarketplacePickupArrivalEstimate?> pickupArrivalEstimate({
+    required String sessionId,
+    required String sessionToken,
+    required String jobId,
+  }) async {
+    final response = await _client.functions.invoke(
+      'marketplace-map-gateway',
+      body: {
+        'operation': 'customer_tracking_route',
+        'target_session_id': sessionId,
+        'target_session_token': sessionToken,
+        'target_job_id': jobId,
+      },
+    ).timeout(const Duration(seconds: 12));
+    final body = response.data;
+    if (body is! Map || body['error'] != null) return null;
+    return MarketplacePickupArrivalEstimate.fromMap(body['data']);
+  }
 
   Future<dynamic> _gateway(
     String operation, [
