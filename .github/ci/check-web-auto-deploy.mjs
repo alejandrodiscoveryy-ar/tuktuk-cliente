@@ -5,17 +5,26 @@ import { readFileSync } from 'node:fs';
 const deploy = readFileSync('.github/workflows/deploy-web-production.yml', 'utf8');
 const android = readFileSync('.github/workflows/cliente-android-aab.yml', 'utf8');
 
-test('la publicación solo se ejecuta manualmente y con confirmación en main', () => {
-  assert.match(deploy, /^on:\r?\n  workflow_dispatch:/m);
-  assert.doesNotMatch(deploy, /^  push:/m);
-  assert.match(deploy, /github\.ref == 'refs\/heads\/main' && github\.event_name == 'workflow_dispatch' && inputs\.confirm_production == true/);
-  assert.match(deploy, /confirm_production:/);
+test('fusionar un PR en main activa la publicación automática', () => {
+  assert.match(deploy, /^on:\\r?\\n  push:\\r?\\n    branches: \\[main\\]/m);
+  assert.match(deploy, /github\\.ref == 'refs\\/heads\\/main'/);
+  assert.match(deploy, /github\\.event_name == 'push'/);
+  assert.match(deploy, /Verify automatic main update comes from a merged PR/);
+  assert.match(deploy, /github\\.event_name == 'push' }}\\n        shell: bash/);
+  assert.match(deploy, /gh api "repos\\/\\$\\{GITHUB_REPOSITORY\\}\\/commits\\/\\$\\{GITHUB_SHA\\}\\/pulls"/);
+  assert.match(deploy, /pr\\.merged_at/);
+  assert.match(deploy, /pr\\.base\\?\\.ref === 'main'/);
+  assert.match(deploy, /pr\\.merge_commit_sha === process\\.env\\.GITHUB_SHA/);
+  assert.match(deploy, /AUTO_DEPLOY_REJECTED/);
+  assert.match(deploy, /^  contents: read$/m);
+  assert.match(deploy, /^  pull-requests: read$/m);
 });
 
-test('fusionar PR en main no publica automáticamente', () => {
-  assert.doesNotMatch(deploy, /github\.event_name == 'push'/);
-  assert.doesNotMatch(deploy, /Verify automatic main update comes from a merged PR/);
-  assert.match(deploy, /^  contents: read$/m);
+test('se conserva publicación manual solo con confirmación expresa', () => {
+  assert.match(deploy, /^  workflow_dispatch:$/m);
+  assert.match(deploy, /confirm_production:/);
+  assert.match(deploy, /github\\.event_name == 'workflow_dispatch' && inputs\\.confirm_production == true/);
+  assert.match(deploy, /github\\.ref == 'refs\\/heads\\/main'/);
 });
 
 test('no se publica codigo superado y se comprueba el artefacto web', () => {
