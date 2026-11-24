@@ -65,7 +65,7 @@ jobs:
         run: |
           set -euo pipefail
           gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
-            -H "Accept: application/vnd.github+json" \\
+            -H "Accept: application/vnd.github+json" \
             > "$RUNNER_TEMP/associated-merged-prs.json"
           node - "$RUNNER_TEMP/associated-merged-prs.json" <<'NODE'
           const fs = require('node:fs');
