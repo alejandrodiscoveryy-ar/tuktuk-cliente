@@ -2179,6 +2179,19 @@ class _MarketplaceCustomerBookingFlowState
           ),
           const SizedBox(height: 4),
           _ridePaymentSelector(),
+          if (flow.error != null) ...[
+            const SizedBox(height: 8),
+            Semantics(
+              liveRegion: true,
+              child: Text(
+                flow.error!,
+                style: const TextStyle(
+                  color: TuktukTheme.danger,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 7),
           TuktukPrimaryButton(
             onPressed: enabled ? _submit : null,
@@ -3013,7 +3026,10 @@ class _MarketplaceCustomerBookingFlowState
 
   Future<void> _submit() async {
     if (_publishing || flow.loading) return;
-    setState(() => _publishing = true);
+    setState(() {
+      _publishing = true;
+      flow.error = null;
+    });
     var requestCreated = false;
     try {
       final draft = await flow.submit();
