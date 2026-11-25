@@ -1321,6 +1321,32 @@ class _MarketplaceCustomerTrackingScreenState
                       backgroundColor: TuktukTheme.border,
                     ),
                   ],
+                  if (job.status == 'published' &&
+                      job.serviceCode == 'passenger' &&
+                      !job.hasAssignedDriver &&
+                      job.scheduledFor == null &&
+                      (job.publishedAt ?? job.createdAt) != null &&
+                      DateTime.now().toUtc().difference(
+                        (job.publishedAt ?? job.createdAt)!.toUtc(),
+                      ) >= const Duration(seconds: 60)) ...[
+                    const SizedBox(height: 10),
+                    const Text(
+                      '¿Prefieres otro tipo de vehículo?',
+                      key: ValueKey('long-search-alternatives-guidance'),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                        color: TuktukTheme.mint,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Puedes seguir buscando. Si prefieres cambiar de modalidad, '
+                      'confirma primero la cancelación y cotiza de nuevo. '
+                      'Tu solicitud no se cancela automáticamente.',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ],
                   if (job.hasAssignedDriver) ...[
                     const SizedBox(height: 12),
                     _liveDriverSummary(job),
